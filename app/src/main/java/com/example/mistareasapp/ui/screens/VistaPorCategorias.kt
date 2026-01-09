@@ -105,6 +105,8 @@ fun VistaPorCategorias(
                                         tarea = tarea,
                                         categorias = listaCategorias,
                                         onTaskToggle = onTaskToggle,
+                                        onDelete = { t -> viewModel.eliminarTarea(t) },
+                                        onArchive = { t -> viewModel.archivarTarea(t) },
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .clickable { onEditTask(tarea.id) }

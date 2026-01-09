@@ -354,6 +354,22 @@ class TareasViewModel(
             }
         }
     }
+    fun eliminarTarea(tarea: Tarea) {
+        viewModelScope.launch {
+            // Usamos tareaDao porque es lo que tienes definido arriba en tu constructor
+            tareaDao.eliminar(tarea)
+        }
+    }
 
+    fun archivarTarea(tarea: Tarea) {
+        viewModelScope.launch {
+            // Para archivar, normalmente marcamos la tarea como completada
+            // o podrías añadir un campo "archivada" a tu clase Tarea.
+            // Por ahora, vamos a marcarla como completada:
+            actualizar(tarea.copy(estaCompletada = true))
+
+            println("Tarea archivada: ${tarea.titulo}")
+        }
+    }
 }
 

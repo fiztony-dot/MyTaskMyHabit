@@ -55,6 +55,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.material3.Icon
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Archive
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Repeat // O el icono que hayas elegido
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.remember
@@ -63,6 +65,8 @@ import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.runtime.mutableStateOf
 import com.example.mistareasapp.viewmodel.TareasViewModel
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.SwipeToDismissBoxState
+import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.text.style.TextOverflow
@@ -70,6 +74,11 @@ import kotlin.collections.List // Esto quita el rojo de List<Categoria>
 import com.example.mistareasapp.data.Categoria // <--- ESTO ES LO QUE SUELE FALTAR
 import androidx.compose.runtime.collectAsState // <--- ESTE ES EL PRINCIPAL
 import androidx.compose.runtime.getValue     // Permite usar el 'by'
+import androidx.compose.material3.rememberSwipeToDismissBoxState
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
+
 
 // --- COMPONENTE: SELECTOR DE PRIORIDAD ---
 @OptIn(ExperimentalMaterial3Api::class)
@@ -116,10 +125,43 @@ fun CuerpoListaTareas(
 
     val listaCategorias by viewModel.todasLasCategorias.collectAsState(initial = emptyList())
 
+    // --- NUEVO: ESTADO PARA EL DIÁLOGO ---
+    var tareaAEliminar by remember { mutableStateOf<Tarea?>(null) }
+    var mostrarDialogo by remember { mutableStateOf(false) }
+
     // Función para inicializar o cambiar todas las secciones
     fun setTodas(abrir: Boolean) {
         val nombres = listOf("Vencidas", "Hoy", "Esta semana", "Este mes", "Más adelante", "Completadas")
         nombres.forEach { estadosSecciones[it] = abrir }
+    }
+
+    // --- BLOQUE DEL DIÁLOGO ---
+    if (mostrarDialogo && tareaAEliminar != null) {
+        AlertDialog(
+            onDismissRequest = {
+                mostrarDialogo = false
+                tareaAEliminar = null
+            },
+            title = { Text("¿Eliminar tarea?") },
+            text = { Text("¿Estás seguro de que quieres borrar \"${tareaAEliminar?.titulo}\"?") },
+            confirmButton = {
+                TextButton(onClick = {
+                    tareaAEliminar?.let { viewModel.eliminarTarea(it) }
+                    mostrarDialogo = false
+                    tareaAEliminar = null
+                }) {
+                    Text("Eliminar", color = Color.Red)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    mostrarDialogo = false
+                    tareaAEliminar = null
+                }) {
+                    Text("Cancelar")
+                }
+            }
+        )
     }
 
     // 2. REACCIÓN AL BOTÓN GLOBAL:
@@ -163,7 +205,12 @@ fun CuerpoListaTareas(
                             tarea = tarea,
                             categorias = listaCategorias,
                             onTaskToggle = onTaskToggle,
-                            // APLICAMOS UN OFFSET NEGATIVO AQUÍ
+                            // AÑADIMOS ESTAS DOS LÍNEAS:
+                            onDelete = { t ->
+                                tareaAEliminar = t
+                                mostrarDialogo = true // Activamos el diálogo
+                            },
+                            onArchive = { t -> viewModel.archivarTarea(t) },
                             modifier = Modifier
                                 .padding(top = 0.dp)
                                 .clickable { onEditTask(tarea.id) }
@@ -219,107 +266,158 @@ fun HeaderSeccionColapsable(
     }
 }
 // --- COMPONENTE: TARJETA DE TAREA INDIVIDUAL ---
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TareaCard(
     tarea: Tarea,
     categorias: List<Categoria>,
     onTaskToggle: (Tarea, Boolean) -> Unit,
+    onDelete: (Tarea) -> Unit,
+    onArchive: (Tarea) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val colorEstado = if (tarea.estaCompletada) PrioridadCompletada else when (tarea.prioridad) {
-        Prioridad.ALTA -> PrioridadAlta
-        Prioridad.MEDIA -> PrioridadMedia
-        Prioridad.BAJA -> PrioridadBaja
-    }
+    // 1. Estado del Swipe
+    val dismissState = rememberSwipeToDismissBoxState(
+        confirmValueChange = { value ->
+            when (value) {
+                SwipeToDismissBoxValue.StartToEnd -> {
+                    onDelete(tarea)
+                    false // El item desaparece de la lista
+                }
+                SwipeToDismissBoxValue.EndToStart -> {
+                    onArchive(tarea)
+                    false // Cambia a 'true' si quieres que el item desaparezca al archivar
+                }
+                else -> false
+            }
+        }
+    )
 
-    Card(
-        modifier = modifier.fillMaxWidth().padding(vertical = 4.dp),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = ColorCard),
-        elevation = CardDefaults.cardElevation(0.dp)
+    // 2. Contenedor del Swipe
+    SwipeToDismissBox(
+        state = dismissState,
+        modifier = modifier.padding(vertical = 4.dp),
+        backgroundContent = { DismissBackground(dismissState) }
     ) {
-        Row(
-            modifier = Modifier.height(IntrinsicSize.Min).fillMaxWidth()
-                .padding(start = 12.dp, end = 16.dp),
-            verticalAlignment = Alignment.CenterVertically
+        // 3. TU DISEÑO ORIGINAL (Dentro del bloque de contenido del Swipe)
+        val colorEstado = if (tarea.estaCompletada) PrioridadCompletada else when (tarea.prioridad) {
+            Prioridad.ALTA -> PrioridadAlta
+            Prioridad.MEDIA -> PrioridadMedia
+            Prioridad.BAJA -> PrioridadBaja
+        }
+
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = ColorCard),
+            elevation = CardDefaults.cardElevation(0.dp)
         ) {
-            Box(
-                modifier = Modifier.fillMaxHeight(0.6f).width(4.dp).background(
-                    colorEstado,
-                    RoundedCornerShape(2.dp)
-                )
-            )
-            Spacer(Modifier.width(8.dp))
-
-            Checkbox(
-                checked = tarea.estaCompletada,
-                onCheckedChange = { isChecked -> onTaskToggle(tarea, isChecked) },
-                colors = CheckboxDefaults.colors(checkedColor = PrioridadCompletada)
-            )
-
-            Column(
-                modifier = Modifier.weight(1f)
-                    .padding(vertical = 12.dp, horizontal = 8.dp)
+            Row(
+                modifier = Modifier
+                    .height(IntrinsicSize.Min)
+                    .fillMaxWidth()
+                    .padding(start = 12.dp, end = 16.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                // Fila del Título + Icono de repetición
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = tarea.titulo.lowercase().replaceFirstChar { it.uppercase() },
-                        style = MaterialTheme.typography.titleMedium,
-                        color = if (tarea.estaCompletada) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.onSurface,
-                        maxLines = 1,
-                        textDecoration = if (tarea.estaCompletada) TextDecoration.LineThrough else null,
-                        // 3. Si es muy largo, añade "..." al final
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f, fill = false) // Para que el icono no se desplace fuera
-                    )
+                Box(
+                    modifier = Modifier
+                        .fillMaxHeight(0.6f)
+                        .width(4.dp)
+                        .background(colorEstado, RoundedCornerShape(2.dp))
+                )
 
-                    // MARCA VISUAL DE REPETICIÓN
-                    if (tarea.repeticion != "Sin repetición") {
-                        Spacer(Modifier.width(6.dp))
-                        Icon(
-                            imageVector = Icons.Default.Repeat,
-                            contentDescription = "Repetitiva",
-                            modifier = Modifier.size(14.dp),
-                            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
+                Spacer(Modifier.width(8.dp))
+
+                Checkbox(
+                    checked = tarea.estaCompletada,
+                    onCheckedChange = { isChecked -> onTaskToggle(tarea, isChecked) },
+                    colors = CheckboxDefaults.colors(checkedColor = PrioridadCompletada)
+                )
+
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(vertical = 12.dp, horizontal = 8.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = tarea.titulo.lowercase().replaceFirstChar { it.uppercase() },
+                            style = MaterialTheme.typography.titleMedium,
+                            color = if (tarea.estaCompletada) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1,
+                            textDecoration = if (tarea.estaCompletada) TextDecoration.LineThrough else null,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false)
                         )
+
+                        if (tarea.repeticion != "Sin repetición") {
+                            Spacer(Modifier.width(6.dp))
+                            Icon(
+                                imageVector = Icons.Default.Repeat,
+                                contentDescription = "Repetitiva",
+                                modifier = Modifier.size(14.dp),
+                                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
+                            )
+                        }
                     }
+
+                    val fechaFmt = DateTimeFormatter.ofPattern("dd MMM")
+                    val textoFecha = tarea.fechaLimite?.format(fechaFmt) ?: "Sin fecha"
+                    val horaFmt = DateTimeFormatter.ofPattern("HH:mm")
+                    val textoHora = tarea.horaLimite?.format(horaFmt) ?: ""
+
+                    Text(
+                        text = "📅 $textoFecha ${if (textoHora.isNotEmpty()) " 🕒 $textoHora" else ""}",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.outline
+                    )
                 }
 
-                val fechaFmt = DateTimeFormatter.ofPattern("dd MMM")
-                val textoFecha = tarea.fechaLimite?.format(fechaFmt) ?: "Sin fecha"
-                val horaFmt = DateTimeFormatter.ofPattern("HH:mm")
-                val textoHora = tarea.horaLimite?.format(horaFmt) ?: ""
+                val categoriaAsociada = categorias.find { it.titulo == tarea.categoria }
+                val nombreIcono = categoriaAsociada?.icono ?: "list"
+                val iconoARenderizar = obtenerIcono(nombreIcono)
+                val colorARenderizar = obtenerColorIcono(nombreIcono)
 
-                Text(
-                    text = "📅 $textoFecha ${if (textoHora.isNotEmpty()) " 🕒 $textoHora" else ""}",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.outline
-                )
-            }
-
-            // Obtenemos el icono y el color usando los traductores que ya tienen los 20 tipos
-            // 1. Extraemos el nombre de la categoría (si es null, usamos "list")
-            // PASO 2: Buscar la categoría de la tarea dentro de la lista de categorías
-            val categoriaAsociada = categorias.find { it.titulo == tarea.categoria }
-
-            // PASO 3: Si la encontramos, usamos su icono. Si no, usamos "list"
-            val nombreIcono = categoriaAsociada?.icono ?: "list"
-            val iconoARenderizar = obtenerIcono(nombreIcono)
-            val colorARenderizar = obtenerColorIcono(nombreIcono)
-
-            // ... resto del código del Icon ...
-            if (tarea.categoria != null) {
-                Icon(
-                    imageVector = iconoARenderizar,
-                    contentDescription = null,
-                    tint = if (tarea.estaCompletada) Color.Gray else colorARenderizar
-                )
+                if (tarea.categoria != null) {
+                    Icon(
+                        imageVector = iconoARenderizar,
+                        contentDescription = null,
+                        tint = if (tarea.estaCompletada) Color.Gray else colorARenderizar
+                    )
+                }
             }
         }
     }
 }
 
+@Composable
+fun DismissBackground(dismissState: SwipeToDismissBoxState) {
+    val color = when (dismissState.dismissDirection) {
+        SwipeToDismissBoxValue.StartToEnd -> Color(0xFFEF5350) // Rojo para borrar
+        SwipeToDismissBoxValue.EndToStart -> Color(0xFF66BB6A) // Verde para archivar
+        else -> Color.Transparent
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(color, RoundedCornerShape(16.dp))
+            .padding(horizontal = 20.dp),
+        contentAlignment = when (dismissState.dismissDirection) {
+            SwipeToDismissBoxValue.StartToEnd -> Alignment.CenterStart
+            else -> Alignment.CenterEnd
+        }
+    ) {
+        val icon = if (dismissState.dismissDirection == SwipeToDismissBoxValue.StartToEnd)
+            Icons.Default.Delete else Icons.Default.Archive
+
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = Color.White
+        )
+    }
+}
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BotonSelectorDato(
