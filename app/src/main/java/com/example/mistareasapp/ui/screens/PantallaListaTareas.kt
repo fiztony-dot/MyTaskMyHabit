@@ -17,6 +17,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Sort
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.ui.platform.LocalContext
 
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -28,6 +29,7 @@ fun PantallaListaTareas(
 ) {
     val vistaCategorias by viewModel.tareasPorCategoria.collectAsStateWithLifecycle()
     val vistaVencimiento by viewModel.mapasVencimiento.collectAsStateWithLifecycle()
+    val context = LocalContext.current
 
     // 🔥 Nuevo: estado del orden seleccionado
     val ordenCategorias by viewModel.ordenCategorias.collectAsStateWithLifecycle()
@@ -76,7 +78,7 @@ fun PantallaListaTareas(
                 mapas = vistaVencimiento,
                 onEditTask = { id -> navController.navigate("editar_tarea/$id") },
                 onTaskToggle = { tarea, isChecked ->
-                    if (isChecked) viewModel.completarTarea(tarea)
+                    if (isChecked) viewModel.completarTarea(tarea, context)
                     else viewModel.actualizar(tarea.copy(estaCompletada = false))
                 },
                 viewModel = viewModel,
@@ -93,7 +95,7 @@ fun PantallaListaTareas(
                     .padding(horizontal = 16.dp),
                 onEditTask = { id -> navController.navigate("editar_tarea/$id") },
                 onTaskToggle = { tarea, isChecked ->
-                    if (isChecked) viewModel.completarTarea(tarea)
+                    if (isChecked) viewModel.completarTarea(tarea, context)
                     else viewModel.actualizar(tarea.copy(estaCompletada = false))
                 }
             )

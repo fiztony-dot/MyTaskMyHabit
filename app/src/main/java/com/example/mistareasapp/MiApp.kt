@@ -185,6 +185,7 @@ fun MisTareasApp() {
                     val sdfHoy = java.text.SimpleDateFormat("EEEE dd/MM/yyyy", java.util.Locale("es", "ES"))
                     val urlCorrecta = "https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash-lite:generateContent?key=$apiKey"
 
+
                     // 1. Obtenemos fecha y hora LOCAL del dispositivo
                     val ahora = java.time.LocalDateTime.now()
                     val fechaHoy = java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy").format(ahora)
@@ -370,18 +371,36 @@ fun MisTareasApp() {
                     }
                 } catch (e: Exception) {
                     Log.e("IA_REST", "Error: ${e.message}")
+                    // --- ESTO ES LO QUE TIENES QUE AÑADIR PARA QUE NO FALLE ---
+                    withContext(Dispatchers.Main) {
+                        val tareaSimple = Tarea(
+                            titulo = textoEscuchado.replaceFirstChar { it.uppercase() },
+                            descripcion = "Voz (Sin IA por error de red)",
+                            prioridad = Prioridad.MEDIA
+                        )
+                        viewModel.insertar(tareaSimple)
+                        Toast.makeText(context, "Guardado simple (Error de conexión)", Toast.LENGTH_SHORT).show()
+                    }
                 }
             }
         }
     }
 
     val lanzarEscucha = {
+        // 1. Preparamos el Intent
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
+            // Añade esto para que la ventana de voz no tarde tanto en cerrarse al terminar
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 1000)
         }
-        try { speechLauncher.launch(intent) } catch (e: Exception) {
-            Toast.makeText(context, "Micrófono no disponible", Toast.LENGTH_SHORT).show()
+
+        try {
+            // 2. IMPORTANTE: Intentar limpiar el foco antes de lanzar
+            // A veces ayuda a que el sistema no crea que el micro sigue en uso
+            speechLauncher.launch(intent)
+        } catch (e: Exception) {
+            Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
         }
     }
     var mostrarMenuPrincipal by remember { mutableStateOf(false) }
@@ -563,36 +582,30 @@ fun MisTareasApp() {
 }
 
 fun programarNotificacion(context: Context, tarea: Tarea) {
-    // 1. Verificación de seguridad básica
+    // 1. Verificación de seguridad: necesitamos al menos la fecha
     val fecha = tarea.fechaLimite ?: return
-    val hora = tarea.horaLimite ?: return
+
+    // 2. Lógica de hora: Si no tiene, usamos las 9:00 AM
+    val hora = tarea.horaLimite ?: java.time.LocalTime.of(9, 0)
 
     val momentoLimite = java.time.LocalDateTime.of(fecha, hora)
     val ahora = java.time.LocalDateTime.now()
 
-    // 2. Cálculo del retraso
+    // 3. Cálculo del retraso
     val delay = java.time.Duration.between(ahora, momentoLimite).toMillis()
 
-    android.util.Log.d("VIGILANTE", "--- REVISANDO TIEMPOS ---")
-    android.util.Log.d("VIGILANTE", "Tarea: ${tarea.titulo}")
-    android.util.Log.d("VIGILANTE", "Dispositivo: $ahora | Límite: $momentoLimite")
-    android.util.Log.d("VIGILANTE", "Diferencia: ${delay / 1000} segundos")
-
-    // 3. Lógica de disparo inteligente
+    // 4. Lógica de disparo inteligente
     val delayFinal: Long = when {
-        // Caso A: Es en el futuro (perfecto)
         delay > 0 -> delay
-
-        // Caso B: Ha pasado hace menos de 1 minuto (margen de error de la IA)
-        // Lo lanzamos en 2 segundos para que el usuario reciba el aviso de inmediato
-        delay > -60000 -> 2000L
-
-        // Caso C: Es una tarea de hace mucho tiempo, no avisamos
+        delay > -60000 -> 2000L // Si acaba de pasar hace poco, avisar ya
         else -> -1L
     }
 
     if (delayFinal >= 0) {
-        val data = androidx.work.workDataOf("titulo" to tarea.titulo)
+        val data = androidx.work.workDataOf(
+            "titulo" to tarea.titulo,
+            "id_tarea" to tarea.id
+        )
 
         val request = androidx.work.OneTimeWorkRequestBuilder<NotificacionWorker>()
             .setInitialDelay(delayFinal, java.util.concurrent.TimeUnit.MILLISECONDS)
@@ -600,16 +613,24 @@ fun programarNotificacion(context: Context, tarea: Tarea) {
             .addTag("notif_${tarea.id}")
             .build()
 
-        // Usamos REPLACE para que si dictas la misma tarea dos veces, no se duplique el aviso
         androidx.work.WorkManager.getInstance(context).enqueueUniqueWork(
             "notif_${tarea.id}",
             androidx.work.ExistingWorkPolicy.REPLACE,
             request
         )
 
-        val msg = if (delayFinal == 2000L) "Aviso inmediato (hora pasada)" else "Programada en ${delayFinal/1000}s"
-        android.util.Log.d("VIGILANTE", "✅ $msg")
-    } else {
-        android.util.Log.w("VIGILANTE", "⚠️ Tarea muy antigua, no se programa aviso.")
+        android.util.Log.d("VIGILANTE", "✅ Notificación para '${tarea.titulo}' programada a las $hora")
+    }
+} // Cierre de programarNotificacion
+
+private suspend fun guardarTareaSimple(texto: String, viewModel: TareasViewModel, context: android.content.Context) {
+    withContext(Dispatchers.Main) {
+        val tareaBasica = Tarea(
+            titulo = texto.replaceFirstChar { it.uppercase() },
+            descripcion = "Voz (IA no disponible)",
+            prioridad = Prioridad.MEDIA
+        )
+        viewModel.insertar(tareaBasica)
+        Toast.makeText(context, "Guardado simple (IA falló)", Toast.LENGTH_SHORT).show()
     }
 }

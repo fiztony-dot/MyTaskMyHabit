@@ -121,8 +121,11 @@ fun PantallaCrearTarea(navController: NavController) {
                     TextButton(
                         onClick = {
                             if (titulo.isNotBlank()) {
+                                val tituloFormateado = titulo.trim().replaceFirstChar {
+                                    if (it.isLowerCase()) it.titlecase(java.util.Locale.getDefault()) else it.toString()
+                                }
                                 val nuevaTarea = Tarea(
-                                    titulo = titulo,
+                                    titulo = tituloFormateado,
                                     descripcion = descripcion.ifBlank { null },
                                     prioridad = prioridad,
                                     fechaLimite = fechaLimite,

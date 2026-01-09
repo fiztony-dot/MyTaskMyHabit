@@ -218,17 +218,22 @@ class TareasViewModel(
         this.categoriaDao = nuevoCategoriaDao
         refrescarDatos()
     }
-    fun completarTarea(tarea: Tarea) {
+    fun completarTarea(tarea: Tarea, context: android.content.Context) {
         viewModelScope.launch {
             // 1. Marcar la tarea actual como completada
             actualizar(tarea.copy(estaCompletada = true))
+
+            // 2. CANCELAR LA NOTIFICACIÓN (Usamos el context que ahora recibe la función)
+            androidx.work.WorkManager.getInstance(context).cancelUniqueWork("notif_${tarea.id}")
+            android.util.Log.d("NOTIF_DEBUG", "Cancelando repetición para tarea ID: ${tarea.id}")
+            // ----------------------------------------------
 
             // 2. Si tiene repetición y fecha límite, crear la siguiente
             if (tarea.repeticion != "Sin repetición" && tarea.fechaLimite != null) {
                 val nuevaFecha = cuandoSeraLaSiguiente(tarea.fechaLimite, tarea.repeticion)
 
                 val nuevaTarea = tarea.copy(
-                    id = 0, // Importante: ID 0 para que Room cree un registro nuevo
+                    id = 0,
                     estaCompletada = false,
                     fechaLimite = nuevaFecha,
                     fechaCreacion = System.currentTimeMillis()
