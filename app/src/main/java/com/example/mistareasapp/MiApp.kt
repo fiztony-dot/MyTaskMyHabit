@@ -430,14 +430,27 @@ fun MisTareasApp() {
     var mostrarMenuPrincipal by remember { mutableStateOf(false) }
     var mostrarConfirmacionRestore by remember { mutableStateOf(false) }
 
-
+    val tareasActivas = listaTareas.count { !it.estaCompletada }
 
     MisTareasAppTheme { // Si sigue en rojo, asegúrate de que el import de arriba sea correcto
         Scaffold(
             topBar = {
                 if (rutaActual == Rutas.PantallaTareas.ruta || rutaActual == Rutas.PantallaHabitos.ruta) {
                     TopAppBar(
-                        title = { Text(obtenerTitulo(rutaActual).uppercase(), fontWeight = FontWeight.Bold) },
+                        title = {
+                            val tituloBase = obtenerTitulo(rutaActual).uppercase()
+                            // Si estamos en la pantalla principal y hay tareas, añadimos el número
+                            val tituloFinal = if (tareasActivas > 0) {
+                                "$tituloBase ($tareasActivas)"
+                            } else {
+                                tituloBase
+                            }
+
+                            Text(
+                                text = tituloFinal,
+                                fontWeight = FontWeight.Bold
+                            )
+                        },
                         navigationIcon = {
                             Box {
                                 IconButton(onClick = { mostrarMenuPrincipal = true }) {
@@ -616,6 +629,7 @@ fun programarNotificacion(context: android.content.Context, tarea: Tarea) {
     // 1. DETERMINAMOS EL INTERVALO DE REPETICIÓN SEGÚN TU SOLICITUD
     val tiempoRepeticion = when (tarea.prioridad) {
         Prioridad.ALTA -> 60 * 60 * 1000L           // 60 minutos
+        /*Prioridad.ALTA -> 5 * 60 * 1000L           // 60 minutos*/
         Prioridad.MEDIA -> 24 * 60 * 60 * 1000L      // 24 horas
         Prioridad.BAJA -> 3 * 24 * 60 * 60 * 1000L  // 3 días
         else -> 0L

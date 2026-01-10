@@ -224,10 +224,15 @@ class TareasViewModel(
             // 1. Marcar la tarea actual como completada
             actualizar(tarea.copy(estaCompletada = true))
 
-            // 2. CANCELAR LA NOTIFICACIÓN (Usamos el context que ahora recibe la función)
-            androidx.work.WorkManager.getInstance(context).cancelUniqueWork("notif_${tarea.id}")
-            android.util.Log.d("NOTIF_DEBUG", "Cancelando repetición para tarea ID: ${tarea.id}")
-            // ----------------------------------------------
+            // 2. CANCELACIÓN TOTAL DE NOTIFICACIONES
+            val wm = androidx.work.WorkManager.getInstance(context)
+
+            // Cancelamos todas las posibles etiquetas para esta tarea
+            wm.cancelUniqueWork("notif_${tarea.id}")            // Tag antiguo/directo
+            wm.cancelUniqueWork("notif_${tarea.id}_principal")  // Tag nuevo principal
+            wm.cancelUniqueWork("notif_${tarea.id}_repeticion") // Tag nuevo repetición
+
+            android.util.Log.d("LOG- NOTIF_DEBUG", "🚫 Notificaciones canceladas para ID: ${tarea.id}")
 
             // 2. Si tiene repetición y fecha límite, crear la siguiente
             if (tarea.repeticion != "Sin repetición" && tarea.fechaLimite != null) {

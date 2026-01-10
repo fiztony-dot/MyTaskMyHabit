@@ -281,49 +281,84 @@ fun PantallaEditarTarea(navController: NavController, tareaId: Int, viewModel: T
             SelectorPrioridad(prioridadSeleccionada = prioridad, onPrioridadCambiada = { prioridad = it })
 
             // 4. Estado completada
-            Row(
+            /*Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text("Tarea completada", style = MaterialTheme.typography.titleMedium)
                 Switch(checked = estaCompletada, onCheckedChange = { estaCompletada = it })
-            }
-
-
+            }*/
 
             // 5. Vencimiento y Repetición
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Vencimiento", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
 
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    // 1. Forzamos la lectura directa para el LOG
-                    val fechaParaMostrar = fechaLimite ?: tareaDb?.fechaLimite
-
-                    val textoBoton = remember(fechaParaMostrar) {
-                        fechaParaMostrar?.format(DateTimeFormatter.ofPattern("dd/MM/yy")) ?: "Fecha"
-                    }
-
-                    // LOG
-                    println("BBDD: El texto del botón es [$textoBoton]")
-                    println("BBDD cargad (fecha Exhibida): ${textoBoton}")
-
+                // --- FILA DE BOTONES (Igual que en Nueva Tarea) ---
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    // Selector de Fecha
+                    val textoFecha = fechaLimite?.format(DateTimeFormatter.ofPattern("dd/MM/yy")) ?: "Fecha"
                     BotonSelectorDato(
-                        label = textoBoton,
+                        label = textoFecha,
                         icon = Icons.Default.DateRange,
                         onClick = { mostrarCalendario = true },
                         modifier = Modifier.weight(1f)
                     )
 
+                    // Selector de Hora
+                    val textoHora = horaLimite?.format(DateTimeFormatter.ofPattern("HH:mm")) ?: "Hora"
                     BotonSelectorDato(
-                        label = (horaLimite ?: tareaDb?.horaLimite)?.format(DateTimeFormatter.ofPattern("HH:mm")) ?: "Hora",
+                        label = textoHora,
                         icon = Icons.Default.AccessTime,
-                        onClick = { if (fechaParaMostrar != null) mostrarRelojNativo() },
-                        modifier = Modifier.weight(1f)
+                        onClick = { if (fechaLimite != null) mostrarRelojNativo() },
+                        modifier = Modifier.weight(1f),
+                        enabled = fechaLimite != null
                     )
                 }
 
-                // NUEVO: SELECTOR DE REPETICIÓN EN EDICIÓN
+                // --- FILA DE TEXTOS "QUITAR" (Justo debajo) ---
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 32.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    // Quitar Fecha
+                    if (fechaLimite != null) {
+                        TextButton(
+                            onClick = {
+                                fechaLimite = null
+                                horaLimite = null
+                                repeticionSeleccionada = opcionesRepeticion[0]
+                            },
+                            contentPadding = PaddingValues(0.dp)
+                        ) {
+                            Icon(Icons.Default.Clear, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("Quitar fecha", style = MaterialTheme.typography.labelSmall)
+                        }
+                    } else {
+                        // Espaciador para mantener la hora a la derecha si no hay fecha
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
+
+                    // Quitar Hora
+                    if (horaLimite != null) {
+                        TextButton(
+                            onClick = { horaLimite = null },
+                            contentPadding = PaddingValues(0.dp)
+                        ) {
+                            Icon(Icons.Default.Clear, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("Quitar hora", style = MaterialTheme.typography.labelSmall)
+                        }
+                    }
+                }
+
+                // --- SELECTOR DE REPETICIÓN (Solo si hay fecha) ---
                 if (fechaLimite != null) {
                     Spacer(modifier = Modifier.height(8.dp))
                     Text("Repetición", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
@@ -353,19 +388,6 @@ fun PantallaEditarTarea(navController: NavController, tareaId: Int, viewModel: T
                                 )
                             }
                         }
-                    }
-
-                    TextButton(
-                        onClick = {
-                            fechaLimite = null
-                            horaLimite = null
-                            repeticionSeleccionada = opcionesRepeticion[0]
-                        },
-                        modifier = Modifier.align(Alignment.End)
-                    ) {
-                        Icon(Icons.Default.Clear, null, modifier = Modifier.size(16.dp))
-                        Spacer(Modifier.width(4.dp))
-                        Text("Quitar límites")
                     }
                 }
             }

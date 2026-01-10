@@ -94,6 +94,8 @@ import androidx.compose.material.icons.rounded.BusinessCenter
 import androidx.compose.material.icons.rounded.FitnessCenter
 import androidx.compose.material.icons.rounded.AccessTimeFilled
 import androidx.compose.material.icons.rounded.KeyboardDoubleArrowDown
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.CircleShape
 
 
 // --- COMPONENTE: SELECTOR DE PRIORIDAD ---
@@ -314,10 +316,10 @@ fun TareaCard(
         backgroundContent = { DismissBackground(dismissState) }
     ) {
         // Colores y Iconos de Prioridad (Mantenemos tus variables de color)
-        val (colorPrioridad, iconoPrioridad) = when (tarea.prioridad) {
-            Prioridad.ALTA -> PrioridadAlta to Icons.Default.PriorityHigh
-            Prioridad.MEDIA -> PrioridadMedia to Icons.Default.Remove
-            Prioridad.BAJA -> PrioridadBaja to Icons.Default.KeyboardArrowDown
+        val colorPrioridad = when (tarea.prioridad) {
+            Prioridad.ALTA -> PrioridadAlta
+            Prioridad.MEDIA -> PrioridadMedia
+            Prioridad.BAJA -> PrioridadBaja
         }
 
         Card(
@@ -329,31 +331,16 @@ fun TareaCard(
             elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
         ) {
             Row(modifier = Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
-
-                // --- AQUI ESTÁ EL CAMBIO: BARRA LATERAL ---
-                val (colorPrioridad, iconoPrioridad) = when (tarea.prioridad) {
-                    Prioridad.ALTA -> PrioridadAlta to Icons.Rounded.Whatshot
-                    Prioridad.MEDIA -> PrioridadMedia to Icons.Rounded.AccessTimeFilled
-                    Prioridad.BAJA -> PrioridadBaja to Icons.Rounded.KeyboardDoubleArrowDown
-                }
-                // --- 1. BARRA DE PRIORIDAD IZQUIERDA ---
+                // --- 1. BARRA LATERAL IZQUIERDA ---
                 Box(
                     modifier = Modifier
                         .fillMaxHeight()
-                        .width(38.dp) // Ancho fijo para que no baile
+                        .width(30.dp) // Volvemos al ancho generoso de la imagen original
                         .background(
                             if (tarea.estaCompletada) Color.Gray.copy(alpha = 0.2f)
-                            else colorPrioridad.copy(alpha = 0.15f)
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = if (tarea.estaCompletada) Icons.Default.CheckCircle else iconoPrioridad,
-                        contentDescription = null,
-                        tint = if (tarea.estaCompletada) Color.Gray else colorPrioridad,
-                        modifier = Modifier.size(22.dp)
-                    )
-                }
+                            else colorPrioridad.copy(alpha = 0.30f) // Restauramos la transparencia suave
+                        )
+                 )
 
                 // --- 2. INFORMACIÓN CENTRAL ---
                 Column(
@@ -454,6 +441,7 @@ fun BotonSelectorDato(
     icon: ImageVector,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    enabled: Boolean = true,
     colorTexto: Color = MaterialTheme.colorScheme.onSurface
 ) {
     OutlinedCard(
@@ -461,23 +449,24 @@ fun BotonSelectorDato(
             println("DEBUG: Botón pulsado")
             onClick()
         },
-        modifier = modifier.height(56.dp),
-        shape = RoundedCornerShape(12.dp),
+        modifier = modifier.height(44.dp),
+        enabled = enabled, // 2. Lo pasamos al botón real
+        // shape = RoundedCornerShape(12.dp),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)),
         colors = CardDefaults.outlinedCardColors(containerColor = Color.Transparent)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 12.dp),
+                .padding(horizontal = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Start
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(20.dp)
+                tint = if (enabled) MaterialTheme.colorScheme.primary else Color.Gray.copy(alpha = 0.5f),
+                modifier = Modifier.size(18.dp)
             )
             Spacer(modifier = Modifier.width(8.dp))
 
@@ -486,7 +475,7 @@ fun BotonSelectorDato(
             Text(
                 text = label,
                 style = MaterialTheme.typography.bodyMedium,
-                color = colorTexto
+                color = if (enabled) colorTexto else colorTexto.copy(alpha = 0.5f)
             )
         }
     }
