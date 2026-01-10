@@ -77,6 +77,7 @@ class TareasViewModel(
             flowOf(emptyList())
         }
     }
+    val todasLasTareas = listaTareas
 
     // 4. Clasificacion por Vencimiento
     @OptIn(ExperimentalCoroutinesApi::class)

@@ -56,6 +56,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.material3.Icon
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Archive
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Repeat // O el icono que hayas elegido
 import androidx.compose.runtime.mutableStateMapOf
@@ -78,6 +79,21 @@ import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.Surface
+import androidx.compose.material.icons.filled.PriorityHigh
+import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.material.icons.rounded.Whatshot
+import androidx.compose.material.icons.rounded.Alarm
+import androidx.compose.material.icons.rounded.LowPriority
+import androidx.compose.material.icons.rounded.RocketLaunch
+import androidx.compose.material.icons.rounded.ShoppingCart
+import androidx.compose.material.icons.rounded.BusinessCenter
+import androidx.compose.material.icons.rounded.FitnessCenter
+import androidx.compose.material.icons.rounded.AccessTimeFilled
+import androidx.compose.material.icons.rounded.KeyboardDoubleArrowDown
 
 
 // --- COMPONENTE: SELECTOR DE PRIORIDAD ---
@@ -276,73 +292,81 @@ fun TareaCard(
     onArchive: (Tarea) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    // 1. Estado del Swipe
     val dismissState = rememberSwipeToDismissBoxState(
         confirmValueChange = { value ->
             when (value) {
                 SwipeToDismissBoxValue.StartToEnd -> {
                     onDelete(tarea)
-                    false // El item desaparece de la lista
+                    false // Rebote para diálogo
                 }
                 SwipeToDismissBoxValue.EndToStart -> {
                     onArchive(tarea)
-                    false // Cambia a 'true' si quieres que el item desaparezca al archivar
+                    false // Rebote para marcar completada
                 }
                 else -> false
             }
         }
     )
 
-    // 2. Contenedor del Swipe
     SwipeToDismissBox(
         state = dismissState,
         modifier = modifier.padding(vertical = 4.dp),
         backgroundContent = { DismissBackground(dismissState) }
     ) {
-        // 3. TU DISEÑO ORIGINAL (Dentro del bloque de contenido del Swipe)
-        val colorEstado = if (tarea.estaCompletada) PrioridadCompletada else when (tarea.prioridad) {
-            Prioridad.ALTA -> PrioridadAlta
-            Prioridad.MEDIA -> PrioridadMedia
-            Prioridad.BAJA -> PrioridadBaja
+        // Colores y Iconos de Prioridad (Mantenemos tus variables de color)
+        val (colorPrioridad, iconoPrioridad) = when (tarea.prioridad) {
+            Prioridad.ALTA -> PrioridadAlta to Icons.Default.PriorityHigh
+            Prioridad.MEDIA -> PrioridadMedia to Icons.Default.Remove
+            Prioridad.BAJA -> PrioridadBaja to Icons.Default.KeyboardArrowDown
         }
 
         Card(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(IntrinsicSize.Min), // Ajusta la altura al contenido
             shape = RoundedCornerShape(16.dp),
             colors = CardDefaults.cardColors(containerColor = ColorCard),
-            elevation = CardDefaults.cardElevation(0.dp)
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
         ) {
-            Row(
-                modifier = Modifier
-                    .height(IntrinsicSize.Min)
-                    .fillMaxWidth()
-                    .padding(start = 12.dp, end = 16.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+            Row(modifier = Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
+
+                // --- AQUI ESTÁ EL CAMBIO: BARRA LATERAL ---
+                val (colorPrioridad, iconoPrioridad) = when (tarea.prioridad) {
+                    Prioridad.ALTA -> PrioridadAlta to Icons.Rounded.Whatshot
+                    Prioridad.MEDIA -> PrioridadMedia to Icons.Rounded.AccessTimeFilled
+                    Prioridad.BAJA -> PrioridadBaja to Icons.Rounded.KeyboardDoubleArrowDown
+                }
+                // --- 1. BARRA DE PRIORIDAD IZQUIERDA ---
                 Box(
                     modifier = Modifier
-                        .fillMaxHeight(0.6f)
-                        .width(4.dp)
-                        .background(colorEstado, RoundedCornerShape(2.dp))
-                )
+                        .fillMaxHeight()
+                        .width(38.dp) // Ancho fijo para que no baile
+                        .background(
+                            if (tarea.estaCompletada) Color.Gray.copy(alpha = 0.2f)
+                            else colorPrioridad.copy(alpha = 0.15f)
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = if (tarea.estaCompletada) Icons.Default.CheckCircle else iconoPrioridad,
+                        contentDescription = null,
+                        tint = if (tarea.estaCompletada) Color.Gray else colorPrioridad,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
 
-                Spacer(Modifier.width(8.dp))
-
-                Checkbox(
-                    checked = tarea.estaCompletada,
-                    onCheckedChange = { isChecked -> onTaskToggle(tarea, isChecked) },
-                    colors = CheckboxDefaults.colors(checkedColor = PrioridadCompletada)
-                )
-
+                // --- 2. INFORMACIÓN CENTRAL ---
                 Column(
                     modifier = Modifier
                         .weight(1f)
-                        .padding(vertical = 12.dp, horizontal = 8.dp)
+                        .padding(start = 12.dp, end = 8.dp, top = 12.dp, bottom = 12.dp)
                 ) {
+                    // Fila de Título y Repetición
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
                             text = tarea.titulo.lowercase().replaceFirstChar { it.uppercase() },
                             style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
                             color = if (tarea.estaCompletada) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.onSurface,
                             maxLines = 1,
                             textDecoration = if (tarea.estaCompletada) TextDecoration.LineThrough else null,
@@ -354,35 +378,40 @@ fun TareaCard(
                             Spacer(Modifier.width(6.dp))
                             Icon(
                                 imageVector = Icons.Default.Repeat,
-                                contentDescription = "Repetitiva",
+                                contentDescription = null,
                                 modifier = Modifier.size(14.dp),
                                 tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
                             )
                         }
                     }
 
+                    Spacer(Modifier.height(4.dp))
+
+                    // Fila de Fecha y Hora (Tu lógica original)
                     val fechaFmt = DateTimeFormatter.ofPattern("dd MMM")
                     val textoFecha = tarea.fechaLimite?.format(fechaFmt) ?: "Sin fecha"
                     val horaFmt = DateTimeFormatter.ofPattern("HH:mm")
                     val textoHora = tarea.horaLimite?.format(horaFmt) ?: ""
 
                     Text(
-                        text = "📅 $textoFecha ${if (textoHora.isNotEmpty()) " 🕒 $textoHora" else ""}",
+                        text = "📅 $textoFecha ${if (textoHora.isNotEmpty()) "  🕒 $textoHora" else ""}",
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.outline
                     )
                 }
 
+                // --- 3. ICONO DE CATEGORÍA (DERECHA) ---
                 val categoriaAsociada = categorias.find { it.titulo == tarea.categoria }
                 val nombreIcono = categoriaAsociada?.icono ?: "list"
-                val iconoARenderizar = obtenerIcono(nombreIcono)
-                val colorARenderizar = obtenerColorIcono(nombreIcono)
 
-                if (tarea.categoria != null) {
+                Box(
+                    modifier = Modifier.padding(end = 16.dp)
+                ) {
                     Icon(
-                        imageVector = iconoARenderizar,
+                        imageVector = obtenerIcono(nombreIcono),
                         contentDescription = null,
-                        tint = if (tarea.estaCompletada) Color.Gray else colorARenderizar
+                        tint = if (tarea.estaCompletada) Color.Gray.copy(0.4f) else obtenerColorIcono(nombreIcono),
+                        modifier = Modifier.size(24.dp)
                     )
                 }
             }

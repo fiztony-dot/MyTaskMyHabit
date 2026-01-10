@@ -51,6 +51,10 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.LaunchedEffect
+
 
 
 @Serializable
@@ -111,15 +115,35 @@ fun obtenerTitulo(ruta: String?): String {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MisTareasApp() {
-    val navController = rememberNavController()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+
+    // --- 1. PRIMERO CREAMOS LA BASE DE DATOS Y EL VIEWMODEL ---
+    // (Esto tiene que ir arriba para que 'listaTareas' lo pueda usar)
     val db = TareasDatabase.getDatabase(context)
     val factory = TareasViewModelFactory(
         tareaDao = db.tareaDao(),
         categoriaDao = db.categoriaDao()
     )
     val viewModel: TareasViewModel = viewModel(factory = factory)
+
+    // --- 2. AHORA DEFINIMOS LA LISTA Y EL VIGILANTE ---
+    // (Ya no darán rojo porque el viewModel ya existe arriba)
+    val navController = rememberNavController()
+    val listaTareas by viewModel.todasLasTareas.collectAsState(initial = emptyList())
+
+    LaunchedEffect(listaTareas) {
+        Log.d("LOG-NOTIFICACION", "🔔 La lista ha cambiado. Tareas totales: ${listaTareas.size}")
+
+        listaTareas.forEach { tarea ->
+            if (!tarea.estaCompletada && tarea.fechaLimite != null) {
+                Log.d("LOG-NOTIFICACION", "🔎 Analizando tarea: ${tarea.titulo} (Fecha: ${tarea.fechaLimite})")
+                programarNotificacion(context, tarea)
+            }
+        }
+    }
+
+
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val rutaActual = navBackStackEntry?.destination?.route
 
@@ -128,7 +152,7 @@ fun MisTareasApp() {
         contract = ActivityResultContracts.RequestPermission()
     ) { isGranted ->
         if (isGranted) {
-            Log.d("PERMISOS", "Permiso de notificaciones concedido")
+            Log.d("LOG", "Permiso de notificaciones concedido")
         } else {
             Toast.makeText(context, "Debes activar las notificaciones en Ajustes", Toast.LENGTH_LONG).show()
         }
@@ -193,9 +217,9 @@ fun MisTareasApp() {
                     val anyoHoy = java.time.format.DateTimeFormatter.ofPattern("yyyy").format(ahora)
 
                     // 3. LOGS PARA VER QUÉ ESTÁ PASANDO (Copia esto justo después de donde obtienes la respuesta de la IA)
-                    android.util.Log.d("TONY", "=== DATOS ENVIADOS ===")
-                    android.util.Log.d("TONY", "Texto escuchado: $textoEscuchado")
-                    android.util.Log.d("TONY", "Fecha Hoy: $fechaHoy | Hora Hoy: $horaHoy")
+                    android.util.Log.d("LOG", "=== DATOS ENVIADOS ===")
+                    android.util.Log.d("LOG", "Texto escuchado: $textoEscuchado")
+                    android.util.Log.d("LOG", "Fecha Hoy: $fechaHoy | Hora Hoy: $horaHoy")
 
                     val response = client.post(urlCorrecta) {
                         contentType(ContentType.Application.Json)
@@ -258,8 +282,8 @@ fun MisTareasApp() {
                         val objetoTarea = Json.decodeFromString<TareaIA>(jsonLimpio)
 
                         // --- AÑADE ESTOS LOGS AQUÍ ---
-                        android.util.Log.d("TONY_IA", "1. JSON RECIBIDO DE GEMINI: $jsonLimpio")
-                        android.util.Log.d("TONY_IA", "2. OBJETO DESERIALIZADO: Tarea=${objetoTarea.tarea}, Fecha=${objetoTarea.fecha}, Hora=${objetoTarea.hora}")
+                        android.util.Log.d("LOG_IA", "1. JSON RECIBIDO DE GEMINI: $jsonLimpio")
+                        android.util.Log.d("LOG_IA", "2. OBJETO DESERIALIZADO: Tarea=${objetoTarea.tarea}, Fecha=${objetoTarea.fecha}, Hora=${objetoTarea.hora}")
                         // -----------------------------
                         withContext(Dispatchers.Main) {
                             try {
@@ -296,14 +320,14 @@ fun MisTareasApp() {
                                         // 2. Validación final contra "Alucinaciones"
                                         val hoy = java.time.LocalDate.now()
                                         if (fechaParseada != null && fechaParseada.isBefore(hoy)) {
-                                            android.util.Log.w("VIGILANTE", "⚠️ IA envió fecha pasada: $fechaParseada. Ajustando a hoy.")
+                                            android.util.Log.w("LOG", "⚠️ IA envió fecha pasada: $fechaParseada. Ajustando a hoy.")
                                             hoy
                                         } else {
                                             fechaParseada
                                         }
                                     }
                                 } catch (e: Exception) {
-                                    android.util.Log.e("VIGILANTE", "❌ Error fatal parseando fecha: ${objetoTarea.fecha}")
+                                    android.util.Log.e("LOG", "❌ Error fatal parseando fecha: ${objetoTarea.fecha}")
                                     java.time.LocalDate.now()
                                 }
 
@@ -316,7 +340,7 @@ fun MisTareasApp() {
                                         java.time.LocalTime.parse(horaLimpia)
                                     } else null
                                 } catch (e: Exception) {
-                                    android.util.Log.e("VIGILANTE", "Error en hora: ${objetoTarea.hora}")
+                                    android.util.Log.e("LOG", "Error en hora: ${objetoTarea.hora}")
                                     null
                                 }
 
@@ -333,7 +357,7 @@ fun MisTareasApp() {
                                         // Si la IA dio una hora que está a más de 1 hora de diferencia de "ahora + minutos"
                                         val calculoLocal = java.time.LocalTime.now().plusMinutes(minutos.toLong())
                                         horaFinal = calculoLocal
-                                        android.util.Log.d("VIGILANTE", "🕒 Corrección local: Sumados $minutos min. Hora: $horaFinal")
+                                        android.util.Log.d("LOG", "🕒 Corrección local: Sumados $minutos min. Hora: $horaFinal")
                                     }
                                 }
 
@@ -355,7 +379,7 @@ fun MisTareasApp() {
                                 )
 
                                 // --- ESTO ES LO QUE QUEREMOS VER EN EL LOGCAT ---
-                                android.util.Log.d("PROGRAMAR", "Ejecutando guardado para: ${nuevaTarea.titulo}")
+                                android.util.Log.d("LOG", "Ejecutando guardado para: ${nuevaTarea.titulo}")
 
                                 viewModel.insertar(nuevaTarea)
                                 programarNotificacion(context, nuevaTarea)
@@ -364,13 +388,13 @@ fun MisTareasApp() {
 
                             } catch (e: Exception) {
                                 // Si algo falla catastróficamente, lo veremos aquí
-                                android.util.Log.e("PROGRAMAR", "Error crítico en el bloque Main: ${e.message}")
+                                android.util.Log.e("LOG", "Error crítico en el bloque Main: ${e.message}")
                                 e.printStackTrace()
                             }
                         }
                     }
                 } catch (e: Exception) {
-                    Log.e("IA_REST", "Error: ${e.message}")
+                    Log.e("LOG", "Error: ${e.message}")
                     // --- ESTO ES LO QUE TIENES QUE AÑADIR PARA QUE NO FALLE ---
                     withContext(Dispatchers.Main) {
                         val tareaSimple = Tarea(
@@ -405,6 +429,7 @@ fun MisTareasApp() {
     }
     var mostrarMenuPrincipal by remember { mutableStateOf(false) }
     var mostrarConfirmacionRestore by remember { mutableStateOf(false) }
+
 
 
     MisTareasAppTheme { // Si sigue en rojo, asegúrate de que el import de arriba sea correcto
@@ -580,48 +605,68 @@ fun MisTareasApp() {
         }
     }
 }
-
-fun programarNotificacion(context: Context, tarea: Tarea) {
-    // 1. Verificación de seguridad: necesitamos al menos la fecha
+fun programarNotificacion(context: android.content.Context, tarea: Tarea) {
     val fecha = tarea.fechaLimite ?: return
-
-    // 2. Lógica de hora: Si no tiene, usamos las 9:00 AM
     val hora = tarea.horaLimite ?: java.time.LocalTime.of(9, 0)
-
-    val momentoLimite = java.time.LocalDateTime.of(fecha, hora)
+    val fechaHoraLimite = java.time.LocalDateTime.of(fecha, hora)
     val ahora = java.time.LocalDateTime.now()
 
-    // 3. Cálculo del retraso
-    val delay = java.time.Duration.between(ahora, momentoLimite).toMillis()
+    val delayBase = java.time.Duration.between(ahora, fechaHoraLimite).toMillis()
 
-    // 4. Lógica de disparo inteligente
-    val delayFinal: Long = when {
-        delay > 0 -> delay
-        delay > -60000 -> 2000L // Si acaba de pasar hace poco, avisar ya
-        else -> -1L
+    // 1. DETERMINAMOS EL INTERVALO DE REPETICIÓN SEGÚN TU SOLICITUD
+    val tiempoRepeticion = when (tarea.prioridad) {
+        Prioridad.ALTA -> 60 * 60 * 1000L           // 60 minutos
+        Prioridad.MEDIA -> 24 * 60 * 60 * 1000L      // 24 horas
+        Prioridad.BAJA -> 3 * 24 * 60 * 60 * 1000L  // 3 días
+        else -> 0L
     }
 
-    if (delayFinal >= 0) {
-        val data = androidx.work.workDataOf(
-            "titulo" to tarea.titulo,
-            "id_tarea" to tarea.id
-        )
+    if (delayBase > 0) {
+        // A. AVISO PRINCIPAL (A la hora de la tarea)
+        programarTareaEnWorkManager(context, tarea, delayBase, "principal")
+        android.util.Log.d("LOG-NOTIFICACION", "✅ ALARMA PRINCIPAL: '${tarea.titulo}' a las $hora")
 
-        val request = androidx.work.OneTimeWorkRequestBuilder<NotificacionWorker>()
-            .setInitialDelay(delayFinal, java.util.concurrent.TimeUnit.MILLISECONDS)
-            .setInputData(data)
-            .addTag("notif_${tarea.id}")
-            .build()
+        // B. AVISO DE REPETICIÓN (Según prioridad)
+        if (tiempoRepeticion > 0) {
+            programarTareaEnWorkManager(context, tarea, delayBase + tiempoRepeticion, "repeticion")
+            val info = when(tarea.prioridad) {
+                Prioridad.ALTA -> "60 min"
+                Prioridad.MEDIA -> "24 horas"
+                Prioridad.BAJA -> "3 días"
+                else -> ""
+            }
+            android.util.Log.d("LOG-NOTIFICACION", "➕ REPETICIÓN PROGRAMADA (cada $info) para: '${tarea.titulo}'")
+        }
 
-        androidx.work.WorkManager.getInstance(context).enqueueUniqueWork(
-            "notif_${tarea.id}",
-            androidx.work.ExistingWorkPolicy.REPLACE,
-            request
-        )
-
-        android.util.Log.d("VIGILANTE", "✅ Notificación para '${tarea.titulo}' programada a las $hora")
+    } else {
+        android.util.Log.d("LOG-NOTIFICACION", "❌ NO PROGRAMADA: '${tarea.titulo}' ya pasó.")
     }
-} // Cierre de programarNotificacion
+}
+
+// Esta es la función que "empaqueta" el código que preguntaste antes
+private fun programarTareaEnWorkManager(
+    context: android.content.Context,
+    tarea: Tarea,
+    delayMs: Long,
+    tipo: String
+) {
+    val data = androidx.work.workDataOf(
+        "titulo" to tarea.titulo,
+        "id_tarea" to tarea.id
+    )
+
+    val request = androidx.work.OneTimeWorkRequestBuilder<NotificacionWorker>()
+        .setInitialDelay(delayMs, java.util.concurrent.TimeUnit.MILLISECONDS)
+        .setInputData(data)
+        .addTag("notif_${tarea.id}_$tipo") // Tag: notif_ID_principal o notif_ID_repeticion
+        .build()
+
+    androidx.work.WorkManager.getInstance(context).enqueueUniqueWork(
+        "notif_${tarea.id}_$tipo",
+        androidx.work.ExistingWorkPolicy.REPLACE,
+        request
+    )
+}
 
 private suspend fun guardarTareaSimple(texto: String, viewModel: TareasViewModel, context: android.content.Context) {
     withContext(Dispatchers.Main) {
