@@ -90,9 +90,7 @@ fun PantallaListaTareas(
             VistaPorCategorias(
                 viewModel = viewModel,
                 categorias = vistaCategoriasOrdenadas,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 16.dp),
+                modifier = Modifier.fillMaxSize(), // Solo fillMaxSize, sin paddings aquí
                 onEditTask = { id -> navController.navigate("editar_tarea/$id") },
                 onTaskToggle = { tarea, isChecked ->
                     if (isChecked) viewModel.completarTarea(tarea, context)

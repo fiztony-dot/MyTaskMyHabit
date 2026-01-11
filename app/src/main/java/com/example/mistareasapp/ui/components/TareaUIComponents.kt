@@ -136,11 +136,9 @@ fun CuerpoListaTareas(
     onTaskToggle: (Tarea, Boolean) -> Unit,
     onEditTask: (Int) -> Unit,
     viewModel: TareasViewModel,
-    esVistaCategorias: Boolean // <-- Añadimos este parámetro
+    esVistaCategorias: Boolean
 ) {
-    // CAMBIO CLAVE: En lugar de 6 variables, usamos un Mapa que las controla todas
     val estadosSecciones = remember { mutableStateMapOf<String, Boolean>() }
-
     val listaCategorias by viewModel.todasLasCategorias.collectAsState(initial = emptyList())
 
     // --- NUEVO: ESTADO PARA EL DIÁLOGO ---
@@ -196,25 +194,32 @@ fun CuerpoListaTareas(
     }
     LazyColumn(
         modifier = modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
+        contentPadding = PaddingValues(
+            top = 0.dp,       // <-- Esto hace que el título suba hasta arriba
+            start = 16.dp,    // Mantiene el margen a la izquierda
+            end = 16.dp,      // Mantiene el margen a la derecha
+            bottom = 100.dp   // Deja espacio abajo para que la última tarea no quede tras la barra inferior
+        ),
+        verticalArrangement = Arrangement.spacedBy(0.dp)
+    ){
 
 
         // --- FUNCIÓN INTERNA ---
         fun seccion(titulo: String, lista: List<Tarea>, color: Color) {
             if (lista.isNotEmpty()) {
-                // Si no está en el mapa, por defecto la ponemos abierta (true)
                 val abierto = estadosSecciones.getOrDefault(titulo, true)
 
                 item(key = "header_$titulo") {
-                    HeaderSeccionColapsable(
-                        titulo = titulo,
-                        color = color,
-                        cantidad = lista.size,
-                        abierto = abierto,
-                        onToggle = { estadosSecciones[titulo] = !abierto } // Sigue funcionando individual
-                    )
+                    // Usamos un Box para controlar el espacio sin tocar HeaderSeccionColapsable
+                    Box(modifier = Modifier.padding(top = if (titulo == "Vencidas" || titulo == "Hoy") 0.dp else 12.dp)) {
+                        HeaderSeccionColapsable(
+                            titulo = titulo,
+                            color = color,
+                            cantidad = lista.size,
+                            abierto = abierto,
+                            onToggle = { estadosSecciones[titulo] = !abierto }
+                        )
+                    }
                 }
 
                 if (abierto) {
@@ -223,15 +228,12 @@ fun CuerpoListaTareas(
                             tarea = tarea,
                             categorias = listaCategorias,
                             onTaskToggle = onTaskToggle,
-                            // AÑADIMOS ESTAS DOS LÍNEAS:
                             onDelete = { t ->
                                 tareaAEliminar = t
-                                mostrarDialogo = true // Activamos el diálogo
+                                mostrarDialogo = true
                             },
                             onArchive = { t -> viewModel.archivarTarea(t) },
-                            modifier = Modifier
-                                .padding(top = 0.dp)
-                                .clickable { onEditTask(tarea.id) }
+                            modifier = Modifier.clickable { onEditTask(tarea.id) }
                         )
                     }
                 }

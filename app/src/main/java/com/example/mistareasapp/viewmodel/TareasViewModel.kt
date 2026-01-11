@@ -20,6 +20,7 @@ import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit // Opcional, pero útil si quieres hacer cálculos avanzados
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 import com.example.mistareasapp.OrdenCategorias
@@ -57,6 +58,35 @@ class TareasViewModel(
     fun cambiarVisibilidadCompletadas(mostrar: Boolean) {
         mostrarCompletadas = mostrar
     }
+
+
+    // Estado de expansión de categorías (en el ViewModel no se borra)
+    // En TareasViewModel.kt
+
+    // 1. Cambia la declaración del mapa
+// Usamos mutableStateMapOf para que sea reactivo
+// --- DENTRO DE TareasViewModel.kt ---
+
+    // 1. Declaramos el estado de expansiones como un Flow
+    private val _categoriasExpandidas = MutableStateFlow<Map<String, Boolean>>(emptyMap())
+    val categoriasExpandidas = _categoriasExpandidas.asStateFlow()
+
+    // 2. Función para alternar el estado
+    // En TareasViewModel.kt
+    fun alternarCategoria(nombreCat: String) {
+        val mapaActual = _categoriasExpandidas.value
+        val estadoActual = mapaActual[nombreCat] ?: true
+
+        // Creamos una copia completa del mapa con el nuevo valor
+        // El operador '+' en mapas de Kotlin genera un objeto nuevo
+        _categoriasExpandidas.value = mapaActual.toMutableMap().apply {
+            this[nombreCat] = !estadoActual
+        }
+    }
+
+
+
+
 
     // 2. EL RELOJ: Emite la fecha/hora actual cada minuto
     private val _reloj = flow {
@@ -213,6 +243,15 @@ class TareasViewModel(
         categoriaDao.actualizar(categoria)
     }
 
+    private val _categoriaSeleccionada = MutableStateFlow<String?>(null)
+    val categoriaSeleccionada = _categoriaSeleccionada.asStateFlow()
+
+    var mostrarBarraFiltro by mutableStateOf(false) // Controla la animación de apertura
+
+    fun filtrarPor(categoria: String?) {
+        _categoriaSeleccionada.value = categoria
+    }
+
     // Esta es la función que llama MiApp.kt tras el backup
     fun actualizarDaos(nuevoTareaDao: TareaDao, nuevoCategoriaDao: CategoriaDao) {
         this.tareaDao = nuevoTareaDao
@@ -278,9 +317,21 @@ class TareasViewModel(
         private set
 
     // La función que llama el botón de la barra superior
+    // --- DENTRO DE TareasViewModel.kt ---
+
     fun cambiarEstadoGlobalSecciones(abierto: Boolean) {
         todasSeccionesAbiertas = abierto
+
+        // ✨ LA CLAVE: Cuando el usuario pulsa el botón global (Expandir/Contraer Todo),
+        // debemos actualizar el mapa de expansiones para que la UI se entere.
+        viewModelScope.launch {
+            // Obtenemos los nombres de las categorías actuales
+            val nombres = tareasPorCategoria.value.keys
+            val nuevoMapa = nombres.associateWith { abierto }
+            _categoriasExpandidas.value = nuevoMapa
+        }
     }
+
 
     // Mapa de Categorías
     val mapasCategorias: StateFlow<MapasDeTareas> = listaTareas
