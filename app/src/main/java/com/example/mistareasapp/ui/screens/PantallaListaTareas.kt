@@ -18,17 +18,24 @@ import androidx.compose.material.icons.filled.Sort
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.ui.platform.LocalContext
+// Para arreglar NavHostController
+import androidx.navigation.NavHostController
 
+// Para arreglar MapasDeTareas (ajusta el paquete si el tuyo es distinto)
+import com.example.mistareasapp.viewmodel.MapasDeTareas
+
+// Para arreglar collectAsStateWithLifecycle (por si acaso)
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PantallaListaTareas(
-    navController: NavController,
+    navController: NavHostController,
     viewModel: TareasViewModel,
+    mapas: MapasDeTareas, // <--- Añade esta línea
     modifier: Modifier = Modifier
 ) {
     val vistaCategorias by viewModel.tareasPorCategoria.collectAsStateWithLifecycle()
-    val vistaVencimiento by viewModel.mapasVencimiento.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     // 🔥 Nuevo: estado del orden seleccionado
@@ -52,7 +59,7 @@ fun PantallaListaTareas(
         }
     }
 
-    Column(modifier = modifier) {
+    Column(modifier = modifier.fillMaxSize()) {
 
         SecondaryTabRow(
             selectedTabIndex = if (viewModel.vistaActual == TipoVista.VENCIMIENTO) 0 else 1,
@@ -72,25 +79,27 @@ fun PantallaListaTareas(
 
         if (viewModel.vistaActual == TipoVista.VENCIMIENTO) {
             CuerpoListaTareas(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(WindowInsets.safeDrawing.asPaddingValues()),
-                mapas = vistaVencimiento,
-                onEditTask = { id -> navController.navigate("editar_tarea/$id") },
-                onTaskToggle = { tarea, isChecked ->
-                    if (isChecked) viewModel.completarTarea(tarea, context)
-                    else viewModel.actualizar(tarea.copy(estaCompletada = false))
+                // CAMBIO AQUÍ: Usamos weight(1f) para que no haya huecos y quitamos el padding duplicado
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+                mapas = mapas,
+                viewModel = viewModel,         // <--- 1. ESTO ES OBLIGATORIO
+                esVistaCategorias = false,      // <--- 2. ESTO TAMBIÉN
+                onTaskToggle = { tarea, check ->
+                    // 3. Usamos 'context' (LocalContext.current) que ya tienes definido
+                    viewModel.completarTarea(tarea, context)
                 },
-                viewModel = viewModel,
-                esVistaCategorias = false // <--- PASAMOS FALSE PORQUE ESTAMOS EN VISTA VENCIMIENTO
+                onEditTask = { id ->
+                    navController.navigate("editar_tarea/$id")
+                }
             )
-        }else {
+        } else {
 
             // 🔥 Aquí enviamos las categorías ya ordenadas
             VistaPorCategorias(
                 viewModel = viewModel,
                 categorias = vistaCategoriasOrdenadas,
-                modifier = Modifier.fillMaxSize(), // Solo fillMaxSize, sin paddings aquí
+                // CAMBIO AQUÍ: Usamos weight(1f) para que use el mismo espacio que Vencimiento
+                modifier = Modifier.weight(1f).fillMaxWidth(),
                 onEditTask = { id -> navController.navigate("editar_tarea/$id") },
                 onTaskToggle = { tarea, isChecked ->
                     if (isChecked) viewModel.completarTarea(tarea, context)
@@ -100,4 +109,3 @@ fun PantallaListaTareas(
         }
     }
 }
-

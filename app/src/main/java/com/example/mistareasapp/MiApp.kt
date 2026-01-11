@@ -54,7 +54,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.LaunchedEffect
-
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import com.example.mistareasapp.ui.components.BarraFiltros
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 
 
 @Serializable
@@ -130,7 +137,7 @@ fun MisTareasApp() {
     // --- 2. AHORA DEFINIMOS LA LISTA Y EL VIGILANTE ---
     // (Ya no darán rojo porque el viewModel ya existe arriba)
     val navController = rememberNavController()
-    val listaTareas by viewModel.todasLasTareas.collectAsState(initial = emptyList())
+    val listaTareas by viewModel.listaTareas.collectAsState(initial = emptyList())
 
     LaunchedEffect(listaTareas) {
         Log.d("LOG-NOTIFICACION", "🔔 La lista ha cambiado. Tareas totales: ${listaTareas.size}")
@@ -436,141 +443,144 @@ fun MisTareasApp() {
         Scaffold(
             topBar = {
                 if (rutaActual == Rutas.PantallaTareas.ruta || rutaActual == Rutas.PantallaHabitos.ruta) {
-                    TopAppBar(
-                        title = {
-                            val tituloBase = obtenerTitulo(rutaActual).uppercase()
-                            // Si estamos en la pantalla principal y hay tareas, añadimos el número
-                            val tituloFinal = if (tareasActivas > 0) {
-                                "$tituloBase ($tareasActivas)"
-                            } else {
-                                tituloBase
-                            }
+                    val filtroActual by viewModel.categoriaSeleccionada.collectAsState()
+                    val listaCategoriasUI by viewModel.todasLasCategorias.collectAsState(initial = emptyList())
 
-                            Text(
-                                text = tituloFinal,
-                                fontWeight = FontWeight.Bold
-                            )
-                        },
-                        navigationIcon = {
-                            Box {
-                                IconButton(onClick = { mostrarMenuPrincipal = true }) {
-                                    Icon(Icons.Default.Menu, contentDescription = "Menú")
-                                }
-                                DropdownMenu(
-                                    expanded = mostrarMenuPrincipal,
-                                    onDismissRequest = { mostrarMenuPrincipal = false }
-                                ) {
-                                    DropdownMenuItem(
-                                        text = { Text("Backup") },
-                                        onClick = {
-                                            mostrarMenuPrincipal = false
-                                            exportarLauncher.launch("backup_tareas_${System.currentTimeMillis()}.db")
-                                        },
-                                        leadingIcon = { Icon(Icons.Default.Backup, null) }
-                                    )
-                                    DropdownMenuItem(
-                                        text = { Text("Restore") },
-                                        onClick = {
-                                            mostrarMenuPrincipal = false
-                                            mostrarConfirmacionRestore = true
-                                        },
-                                        leadingIcon = { Icon(Icons.Default.Restore, null) }
-                                    )
-                                    HorizontalDivider()
-                                    DropdownMenuItem(
-                                        text = { Text("Tablas de Referencia") },
-                                        onClick = {
-                                            mostrarMenuPrincipal = false
-                                            navController.navigate("categorias")
-                                        },
-                                        leadingIcon = { Icon(Icons.Default.TableChart, null) }
-                                    )
-                                    HorizontalDivider()
-                                    DropdownMenuItem(
-                                        text = { Text("Mostrar completadas") },
-                                        onClick = {
-                                            viewModel.cambiarVisibilidadCompletadas(!viewModel.mostrarCompletadas)
-                                        },
-                                        leadingIcon = { Icon(Icons.Default.CheckCircle, null,
-                                            tint = if (viewModel.mostrarCompletadas) MaterialTheme.colorScheme.primary
-                                            else Color.Transparent) // Solo se ve si está activo
-                                        },
-                                        trailingIcon = {
-                                            // Un punto sutil o nada, para mantener limpieza
-                                        }
-                                    )
-                                }
-                            }
-                        },
-
-                        // 🔥🔥🔥 AQUÍ VIENE TU NUEVO BOTÓN ÚNICO 🔥🔥🔥
-                        actions = {
-                            if (rutaActual == Rutas.PantallaTareas.ruta) {
-
-                                var expanded by remember { mutableStateOf(false) }
-
-                                // Animación de rotación del icono
-                                val rotation by animateFloatAsState(
-                                    targetValue = if (expanded) 45f else 0f,
-                                    animationSpec = tween(durationMillis = 200),
-                                    label = "rotation"
-                                )
-                                // Botón Maestro para Colapsar/Expandir
-                                IconButton(onClick = {
-                                    val nuevoEstado = !viewModel.todasSeccionesAbiertas
-                                    viewModel.cambiarEstadoGlobalSecciones(nuevoEstado)
-                                }) {
-                                    Icon(
-                                        imageVector = if (viewModel.todasSeccionesAbiertas)
-                                            Icons.Default.UnfoldLess else Icons.Default.UnfoldMore,
-                                        contentDescription = "Contraer/Expandir todo"
-                                    )
-                                }
+                    // Usamos Column para que la TopBar y el Filtro convivan verticalmente
+                    Column(modifier = Modifier.background(MaterialTheme.colorScheme.surface)) {
+                        TopAppBar(
+                            title = {
+                                val tituloBase = obtenerTitulo(rutaActual).uppercase()
+                                val tituloFinal = if (tareasActivas > 0) "$tituloBase ($tareasActivas)" else tituloBase
+                                Text(text = tituloFinal, fontWeight = FontWeight.Bold)
+                            },
+                            navigationIcon = {
                                 Box {
-                                    IconButton(onClick = { expanded = true }) {
-                                        Surface(
-                                            shape = CircleShape,
-                                            color = MaterialTheme.colorScheme.secondary,
-                                            modifier = Modifier.size(40.dp)
+                                    IconButton(onClick = { mostrarMenuPrincipal = true }) {
+                                        Icon(Icons.Default.Menu, contentDescription = "Menú")
+                                    }
+                                    DropdownMenu(
+                                        expanded = mostrarMenuPrincipal,
+                                        onDismissRequest = { mostrarMenuPrincipal = false }
+                                    ) {
+                                        DropdownMenuItem(
+                                            text = { Text("Backup") },
+                                            onClick = {
+                                                mostrarMenuPrincipal = false
+                                                exportarLauncher.launch("backup_tareas_${System.currentTimeMillis()}.db")
+                                            },
+                                            leadingIcon = { Icon(Icons.Default.Backup, null) }
+                                        )
+                                        DropdownMenuItem(
+                                            text = { Text("Restore") },
+                                            onClick = {
+                                                mostrarMenuPrincipal = false
+                                                mostrarConfirmacionRestore = true
+                                            },
+                                            leadingIcon = { Icon(Icons.Default.Restore, null) }
+                                        )
+                                        HorizontalDivider()
+                                        DropdownMenuItem(
+                                            text = { Text("Tablas de Referencia") },
+                                            onClick = {
+                                                mostrarMenuPrincipal = false
+                                                navController.navigate("categorias")
+                                            },
+                                            leadingIcon = { Icon(Icons.Default.TableChart, null) }
+                                        )
+                                        HorizontalDivider()
+                                        DropdownMenuItem(
+                                            text = { Text("Mostrar completadas") },
+                                            onClick = {
+                                                viewModel.cambiarVisibilidadCompletadas(!viewModel.mostrarCompletadas)
+                                            },
+                                            leadingIcon = {
+                                                Icon(
+                                                    Icons.Default.CheckCircle, null,
+                                                    tint = if (viewModel.mostrarCompletadas) MaterialTheme.colorScheme.primary else Color.Transparent
+                                                )
+                                            }
+                                        )
+                                    }
+                                }
+                            },
+                            actions = {
+                                if (rutaActual == Rutas.PantallaTareas.ruta) {
+                                    // --- 1. NUEVO BOTÓN DE FILTRO ---
+                                    IconButton(onClick = { viewModel.mostrarBarraFiltro = !viewModel.mostrarBarraFiltro }) {
+                                        Icon(
+                                            imageVector = if (filtroActual == null) Icons.Default.FilterList else Icons.Default.FilterListOff,
+                                            contentDescription = "Filtrar",
+                                            tint = if (filtroActual != null) MaterialTheme.colorScheme.primary else LocalContentColor.current
+                                        )
+                                    }
+
+                                    // --- 2. BOTÓN MAESTRO EXPANDIR/COLAPSAR ---
+                                    IconButton(onClick = {
+                                        val nuevoEstado = !viewModel.todasSeccionesAbiertas
+                                        viewModel.cambiarEstadoGlobalSecciones(nuevoEstado)
+                                    }) {
+                                        Icon(
+                                            imageVector = if (viewModel.todasSeccionesAbiertas) Icons.Default.UnfoldLess else Icons.Default.UnfoldMore,
+                                            contentDescription = "Contraer/Expandir todo"
+                                        )
+                                    }
+
+                                    // --- 3. BOTÓN AÑADIR (Con tu lógica original) ---
+                                    var expandedAdd by remember { mutableStateOf(false) }
+                                    val rotation by animateFloatAsState(
+                                        targetValue = if (expandedAdd) 45f else 0f,
+                                        animationSpec = tween(durationMillis = 200),
+                                        label = "rotation"
+                                    )
+                                    Box {
+                                        IconButton(onClick = { expandedAdd = true }) {
+                                            Surface(
+                                                shape = CircleShape,
+                                                color = MaterialTheme.colorScheme.secondary,
+                                                modifier = Modifier.size(40.dp)
+                                            ) {
+                                                Icon(
+                                                    Icons.Default.Add,
+                                                    contentDescription = "Nueva tarea",
+                                                    tint = Color.Black,
+                                                    modifier = Modifier
+                                                        .padding(8.dp)
+                                                        .graphicsLayer { rotationZ = rotation }
+                                                )
+                                            }
+                                        }
+                                        DropdownMenu(
+                                            expanded = expandedAdd,
+                                            onDismissRequest = { expandedAdd = false }
                                         ) {
-                                            Icon(
-                                                Icons.Default.Add,
-                                                contentDescription = "Nueva tarea",
-                                                tint = Color.Black,
-                                                modifier = Modifier
-                                                    .padding(8.dp)
-                                                    .graphicsLayer {
-                                                        rotationZ = rotation   // ← animación aquí
-                                                    }
+                                            DropdownMenuItem(
+                                                text = { Text("🗣️ Por voz") },
+                                                onClick = { expandedAdd = false; lanzarEscucha() }
+                                            )
+                                            DropdownMenuItem(
+                                                text = { Text("📝 Escribir") },
+                                                onClick = { expandedAdd = false; navController.navigate(Rutas.PantallaCrearTarea.ruta) }
                                             )
                                         }
                                     }
-
-                                    DropdownMenu(
-                                        expanded = expanded,
-                                        onDismissRequest = { expanded = false }
-                                    ) {
-                                        DropdownMenuItem(
-                                            text = { Text("🗣️ Por voz") },
-                                            onClick = {
-                                                expanded = false
-                                                lanzarEscucha()
-                                            }
-                                        )
-                                        DropdownMenuItem(
-                                            text = { Text("📝 Escribir") },
-                                            onClick = {
-                                                expanded = false
-                                                navController.navigate(Rutas.PantallaCrearTarea.ruta)
-                                            }
-                                        )
-                                    }
                                 }
                             }
+                        )
 
+                        // --- BARRA DE FILTROS ANIMADA ---
+                        AnimatedVisibility(
+                            visible = viewModel.mostrarBarraFiltro && rutaActual == Rutas.PantallaTareas.ruta,
+                            enter = expandVertically() + fadeIn(),
+                            exit = shrinkVertically() + fadeOut()
+                        ) {
+                            BarraFiltros(
+                                categorias = listaCategoriasUI,
+                                seleccionada = filtroActual,
+                                onSeleccionar = { viewModel.filtrarPor(it) }
+                            )
                         }
-
-                    )
+                    }
                 }
             }
             ,
@@ -585,11 +595,13 @@ fun MisTareasApp() {
                 modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)
             ) {
                 composable(Rutas.PantallaTareas.ruta) {
+                    // Recolectamos los datos (esto lo tienes bien)
                     val mapasDeTareas by viewModel.tareasClasificadas.collectAsStateWithLifecycle()
+
                     PantallaListaTareas(
                         navController = navController,
                         viewModel = viewModel,
-                        // Aquí sí pasamos el padding para que la lista no quede debajo de la BottomBar
+                        mapas = mapasDeTareas, // <--- ¡ESTA ES LA LÍNEA QUE FALTA!
                         modifier = Modifier.padding(innerPadding).fillMaxSize()
                     )
                 }

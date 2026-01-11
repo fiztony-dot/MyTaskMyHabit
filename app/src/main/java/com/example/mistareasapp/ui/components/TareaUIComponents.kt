@@ -96,6 +96,7 @@ import androidx.compose.material.icons.rounded.AccessTimeFilled
 import androidx.compose.material.icons.rounded.KeyboardDoubleArrowDown
 import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.lazy.LazyRow
 
 
 // --- COMPONENTE: SELECTOR DE PRIORIDAD ---
@@ -250,6 +251,50 @@ fun CuerpoListaTareas(
         if (viewModel.mostrarCompletadas && mapas.completadas.isNotEmpty()) {
             item { HorizontalDivider(Modifier.padding(vertical = 12.dp)) }
             seccion("Completadas", mapas.completadas, Color.Gray)
+        }
+    }
+}
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun BarraFiltros(
+    categorias: List<Categoria>,
+    seleccionada: String?,
+    onSeleccionar: (String?) -> Unit
+) {
+    LazyRow(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        contentPadding = PaddingValues(horizontal = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        // Opción para limpiar el filtro
+        item {
+            FilterChip(
+                selected = seleccionada == null,
+                onClick = { onSeleccionar(null) },
+                label = { Text("Todas") },
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = MaterialTheme.colorScheme.primaryContainer
+                )
+            )
+        }
+
+        // Botones para cada categoría
+        items(categorias) { cat ->
+            FilterChip(
+                selected = seleccionada == cat.titulo,
+                onClick = { onSeleccionar(cat.titulo) },
+                label = { Text(cat.titulo) },
+                leadingIcon = {
+                    // Aquí usamos tu función obtenerIcono que ya tienes en el proyecto
+                    Icon(
+                        imageVector = obtenerIcono(cat.icono),
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            )
         }
     }
 }
