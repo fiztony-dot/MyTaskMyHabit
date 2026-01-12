@@ -1,78 +1,85 @@
 package com.example.mistareasapp
 
+// --- 1. Android Framework Base y Utilidades ---
 import android.content.Intent
+import android.os.Build
 import android.speech.RecognizerIntent
 import android.util.Log
 import android.widget.Toast
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.navigation.*
-import androidx.navigation.compose.*
-import com.example.mistareasapp.data.*
-import com.example.mistareasapp.ui.screens.*
-import com.example.mistareasapp.viewmodel.*
-import com.example.mistareasapp.ui.theme.MisTareasAppTheme
+import java.util.Locale
 
-// Ktor y Red
+// --- 2. Kotlin Core: Corrutinas y Serialización ---
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.*
+
+// --- 3. Networking (Ktor Client) ---
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
 
-// Serialización y Corrutinas
-import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.*
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import kotlinx.coroutines.Dispatchers
-import java.util.Locale
-import androidx.navigation.NavGraph.Companion.findStartDestination
-import android.content.Context
-import android.os.Build
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.ui.text.font.FontWeight
+// --- 4. AndroidX & Lifecycle (Integración con el SO) ---
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.example.mistareasapp.data.TareasDatabase
+import androidx.lifecycle.viewmodel.compose.viewModel
+
+// --- 5. Jetpack Compose: Navegación ---
+import androidx.navigation.*
+import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.compose.*
+
+// --- 6. Jetpack Compose: Animaciones ---
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import com.example.mistareasapp.ui.components.BarraFiltros
+import androidx.compose.animation.shrinkVertically
+
+// --- 7. Jetpack Compose: UI, Material Design y Gráficos ---
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+
+// --- 8. Jetpack Compose: Runtime y Estado ---
+import androidx.compose.runtime.*
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 
+// --- 9. Clases del Proyecto (Local) ---
+import com.example.mistareasapp.data.*
+import com.example.mistareasapp.data.TareasDatabase
+import com.example.mistareasapp.ui.components.BarraFiltros
+import com.example.mistareasapp.ui.screens.*
+import com.example.mistareasapp.ui.theme.MisTareasAppTheme
+import com.example.mistareasapp.viewmodel.*
 
+
+
+//Estructura de la Respuesta de la IA
 @Serializable
 data class TareaIA(
     val tarea: String,
     val fecha: String?=null,
-    val hora: String? = null, // ¡Esta es la que le faltaba el nombre correcto!
-    val prioridad: String? = null // Nuevo campo para recibir "ALTA", "MEDIA" o "BAJA"
+    val hora: String? = null,
+    val prioridad: String? = null
 )
-
-// 1. OBJETO DE CONFIGURACIÓN (Fuera de la función para que sea global)
+//Constantes de Configuración y Credenciales
 object DatosIA {
     const val MI_LLAVE = "AIzaSyCcZTsOCkF6dpM-eTZ-DstBsCdGRq_YWcg"
 }
