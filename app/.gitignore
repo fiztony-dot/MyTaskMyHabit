@@ -1,0 +1,18 @@
+# Archivos específicos de Android Studio / IntelliJ
+.idea/
+.gradle/
+build/
+app/build/
+*.iml
+local.properties
+
+# Archivos del sistema operativo
+.DS_Store
+Thumbs.db
+
+# Archivos de logs y temporales
+*.log
+Captures/
+
+# Secretos (si tuvieras archivos de claves, se ponen aquí)
+google-services.json
