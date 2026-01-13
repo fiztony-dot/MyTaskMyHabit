@@ -1,20 +1,40 @@
-package com.example.mistareasapp.viewmodel
+package com.example.mistareasapp.viewmodel.Tasks
 
 import android.content.Context
 import android.util.Log
-import androidx.compose.runtime.getValue
+import android.widget.Toast
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.work.WorkManager
 import com.example.mistareasapp.OrdenCategorias
-import com.example.mistareasapp.data.*
+import com.example.mistareasapp.data.tasks.Categoria
+import com.example.mistareasapp.data.tasks.CategoriaDao
+import com.example.mistareasapp.data.tasks.Prioridad
+import com.example.mistareasapp.data.tasks.Tarea
+import com.example.mistareasapp.data.tasks.TareaDao
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.LocalDateTime
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 // --- DATA CLASS PARA LA ESTRUCTURA DE LA UI ---
 data class MapasDeTareas(
@@ -64,7 +84,7 @@ class TareasViewModel(
             emit(LocalDateTime.now())
             delay(60_000)
         }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), LocalDateTime.now())
+    }.stateIn(viewModelScope, SharingStarted.Companion.WhileSubscribed(5000), LocalDateTime.now())
 
     // --- 3. FLUJOS DE DATOS (DATA FLOWS) ---
 
@@ -118,6 +138,7 @@ class TareasViewModel(
                         false
                     }
                 }
+
                 else -> false
             }
         }.sortedBy { it.toComparableDateTime() }
@@ -137,7 +158,9 @@ class TareasViewModel(
         // 4. Tareas para este Mes
         val esteMes = lista.filter {
             !it.estaCompletada && it.fechaLimite != null &&
-                    it.fechaLimite!!.isAfter(finDeSemanaActual) && !it.fechaLimite!!.isAfter(finDeMesActual)
+                    it.fechaLimite!!.isAfter(finDeSemanaActual) && !it.fechaLimite!!.isAfter(
+                finDeMesActual
+            )
         }.sortedBy { it.fechaLimite }
 
         // 5. Tareas Completadas
@@ -151,7 +174,7 @@ class TareasViewModel(
         )
 
         MapasDeTareas(vencidas, esHoy, estaSemana, esteMes, resto, completadas)
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), MapasDeTareas())
+    }.stateIn(viewModelScope, SharingStarted.Companion.WhileSubscribed(5000), MapasDeTareas())
 
     // --- 5. CLASIFICACIÓN POR CATEGORÍAS (VISTA POR CATEGORÍAS) ---
     val tareasPorCategoria: StateFlow<Map<String, List<Tarea>>> =
@@ -173,7 +196,7 @@ class TareasViewModel(
                         )
                     }
             }
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
+            .stateIn(viewModelScope, SharingStarted.Companion.WhileSubscribed(5000), emptyMap())
 
     // --- 6. OPERACIONES DE TAREAS (CRUD) ---
 
@@ -190,7 +213,7 @@ class TareasViewModel(
             actualizar(tarea.copy(estaCompletada = true))
 
             // Cancelación de notificaciones en WorkManager
-            val wm = androidx.work.WorkManager.getInstance(context)
+            val wm = WorkManager.getInstance(context)
             wm.cancelUniqueWork("notif_${tarea.id}")
             wm.cancelUniqueWork("notif_${tarea.id}_principal")
             wm.cancelUniqueWork("notif_${tarea.id}_repeticion")
@@ -319,6 +342,17 @@ class TareasViewModel(
             todasLasCategorias.collect { lista ->
                 Log.d("DEBUG", "Categorías cargadas: ${lista.size}")
             }
+        }
+    }
+    private suspend fun guardarTareaSimple(texto: String, viewModel: TareasViewModel, context: android.content.Context) {
+        withContext(Dispatchers.Main) {
+            val tareaBasica = Tarea(
+                titulo = texto.replaceFirstChar { it.uppercase() },
+                descripcion = "Voz (IA no disponible)",
+                prioridad = Prioridad.MEDIA
+            )
+            viewModel.insertar(tareaBasica)
+            Toast.makeText(context, "Guardado simple (IA falló)", Toast.LENGTH_SHORT).show()
         }
     }
 }

@@ -8,6 +8,18 @@ plugins {
 
     // AÑADE ESTA LÍNEA AQUÍ ABAJO:
     kotlin("plugin.serialization") version "1.9.0" // Usa la versión de tu Kotlin
+    id("io.gitlab.arturbosch.detekt")
+}
+
+detekt {
+    buildUponDefaultConfig = true
+    allRules = false
+    reports {
+        html.required.set(true)
+        xml.required.set(false)
+        txt.required.set(false)
+        sarif.required.set(false)
+    }
 }
 
 android {
@@ -97,4 +109,10 @@ dependencies {
     // Para implementar notificaciones en Android que se activen exactamente en la fecha y hora límite, necesitamos usar WorkManager
     implementation("androidx.work:work-runtime-ktx:2.9.0")
     implementation("androidx.compose.material:material-icons-extended:1.7.6")
+
+    implementation("androidx.glance:glance-appwidget:1.1.0")
+    implementation("androidx.glance:glance-appwidget:1.1.0")
+    implementation("androidx.glance:glance-material3:1.1.0")
+
+
 }

@@ -17,4 +17,9 @@ plugins {
 
     // ✨ AÑADIDO: También debes declarar el plugin de KSP aquí
     alias(libs.plugins.google.ksp) apply false
+
+    id("io.gitlab.arturbosch.detekt") version "1.23.0" apply false
+
+
+
 }

@@ -1,34 +1,70 @@
-package com.example.mistareasapp.ui.screens
+package com.example.mistareasapp.ui.screens.Tasks
 
-import androidx.activity.compose.BackHandler
 import android.app.TimePickerDialog
-import androidx.compose.foundation.layout.*
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
+import androidx.compose.material.icons.filled.AccessTime
+import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.LabelOff
+import androidx.compose.material.icons.filled.Repeat
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.rememberDatePickerState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
-import com.example.mistareasapp.ui.components.BotonSelectorDato
-import com.example.mistareasapp.ui.components.SelectorPrioridad
-import com.example.mistareasapp.data.Tarea
-import com.example.mistareasapp.data.Prioridad
-import com.example.mistareasapp.data.Categoria
-import com.example.mistareasapp.viewmodel.TareasViewModel
-import java.time.LocalDate
+import com.example.mistareasapp.data.tasks.Categoria
+import com.example.mistareasapp.data.tasks.Prioridad
+import com.example.mistareasapp.data.tasks.Tarea
+import com.example.mistareasapp.ui.components.Tasks.BotonSelectorDato
+import com.example.mistareasapp.ui.components.Tasks.SelectorPrioridad
+import com.example.mistareasapp.ui.components.Tasks.obtenerColorIcono
+import com.example.mistareasapp.ui.components.Tasks.obtenerIcono
+import com.example.mistareasapp.viewmodel.Tasks.TareasViewModel
+import java.time.Instant
 import java.time.LocalTime
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
-import androidx.compose.material3.rememberDatePickerState
-import com.example.mistareasapp.ui.components.obtenerIcono
-import com.example.mistareasapp.ui.components.obtenerColorIcono
+import java.util.Calendar
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -64,7 +100,7 @@ fun PantallaEditarTarea(navController: NavController, tareaId: Int, viewModel: T
 
     val datePickerState = rememberDatePickerState(
         initialSelectedDateMillis = remember(tareaOriginal) {
-            fechaLimite?.atStartOfDay(java.time.ZoneId.systemDefault())
+            fechaLimite?.atStartOfDay(ZoneId.systemDefault())
                 ?.toInstant()
                 ?.toEpochMilli()
         }
@@ -86,7 +122,8 @@ fun PantallaEditarTarea(navController: NavController, tareaId: Int, viewModel: T
 
                 // 3. Lógica de búsqueda para la Categoría
                 // Buscamos el objeto Categoria que coincida con el nombre guardado en la tarea
-                categoriaSeleccionada = listaCategorias.find { it.titulo == tareaEncontrada.categoria }
+                categoriaSeleccionada =
+                    listaCategorias.find { it.titulo == tareaEncontrada.categoria }
 
                 // LOG DE CONTROL: Esto confirmará en consola que los datos han llegado
                 println("DEBUG: LaunchedEffect completado. Fecha encontrada: ${tareaEncontrada.fechaLimite}")
@@ -106,9 +143,9 @@ fun PantallaEditarTarea(navController: NavController, tareaId: Int, viewModel: T
             )
 
     val mostrarRelojNativo = {
-        val calendario = java.util.Calendar.getInstance()
-        val horaActual = horaLimite?.hour ?: calendario.get(java.util.Calendar.HOUR_OF_DAY)
-        val minutoActual = horaLimite?.minute ?: calendario.get(java.util.Calendar.MINUTE)
+        val calendario = Calendar.getInstance()
+        val horaActual = horaLimite?.hour ?: calendario.get(Calendar.HOUR_OF_DAY)
+        val minutoActual = horaLimite?.minute ?: calendario.get(Calendar.MINUTE)
 
         TimePickerDialog(contexto, { _, hora, minuto ->
             horaLimite = LocalTime.of(hora, minuto)
@@ -142,8 +179,8 @@ fun PantallaEditarTarea(navController: NavController, tareaId: Int, viewModel: T
                     // 1. Obtenemos la selección del calendario
                     datePickerState.selectedDateMillis?.let { millis ->
                         // 2. 🔥 ACTUALIZAMOS la variable que usa el botón para pintar el texto
-                        fechaLimite = java.time.Instant.ofEpochMilli(millis)
-                            .atZone(java.time.ZoneId.systemDefault())
+                        fechaLimite = Instant.ofEpochMilli(millis)
+                            .atZone(ZoneId.systemDefault())
                             .toLocalDate()
                     }
                     mostrarCalendario = false
@@ -160,10 +197,11 @@ fun PantallaEditarTarea(navController: NavController, tareaId: Int, viewModel: T
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("EDITAR TAREA", fontWeight = FontWeight.Bold) },
+                title = { Text("EDITAR TAREA", fontWeight = FontWeight.Companion.Bold) },
                 navigationIcon = {
                     IconButton(onClick = {
-                        if (tieneCambios) mostrarDialogoAlerta = true else navController.popBackStack()
+                        if (tieneCambios) mostrarDialogoAlerta =
+                            true else navController.popBackStack()
                     }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver")
                     }
@@ -193,9 +231,9 @@ fun PantallaEditarTarea(navController: NavController, tareaId: Int, viewModel: T
                         Text(
                             text = "GUARDAR",
                             style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.Bold,
+                            fontWeight = FontWeight.Companion.Bold,
                             // Usamos un color que resalte o el color primario
-                            color = if (nombre.isNotBlank()) MaterialTheme.colorScheme.primary else Color.Gray
+                            color = if (nombre.isNotBlank()) MaterialTheme.colorScheme.primary else Color.Companion.Gray
                         )
                     }
                 }
@@ -203,7 +241,7 @@ fun PantallaEditarTarea(navController: NavController, tareaId: Int, viewModel: T
         }
     ) { padding ->
         Column(
-            modifier = Modifier
+            modifier = Modifier.Companion
                 .verticalScroll(rememberScrollState())
                 .padding(padding)
                 .imePadding() // <--- Añade esto para que el teclado no oculte los campos
@@ -217,21 +255,25 @@ fun PantallaEditarTarea(navController: NavController, tareaId: Int, viewModel: T
                     value = nombre,
                     onValueChange = { nombre = it },
                     label = { Text("Título") },
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.Companion.fillMaxWidth(),
                     singleLine = true
                 )
                 OutlinedTextField(
                     value = descripcion,
                     onValueChange = { descripcion = it },
                     label = { Text("Descripción") },
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.Companion.fillMaxWidth(),
                     minLines = 3
                 )
             }
 
             // 2. Categoría
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Categoría", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                Text(
+                    "Categoría",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Companion.SemiBold
+                )
                 ExposedDropdownMenuBox(
                     expanded = menuExpandido,
                     onExpandedChange = { menuExpandido = !menuExpandido }
@@ -249,7 +291,7 @@ fun PantallaEditarTarea(navController: NavController, tareaId: Int, viewModel: T
                             )
                         },
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = menuExpandido) },
-                        modifier = Modifier.menuAnchor().fillMaxWidth()
+                        modifier = Modifier.Companion.menuAnchor().fillMaxWidth()
                     )
                     ExposedDropdownMenu(
                         expanded = menuExpandido,
@@ -278,7 +320,9 @@ fun PantallaEditarTarea(navController: NavController, tareaId: Int, viewModel: T
             }
 
             // 3. Prioridad
-            SelectorPrioridad(prioridadSeleccionada = prioridad, onPrioridadCambiada = { prioridad = it })
+            SelectorPrioridad(
+                prioridadSeleccionada = prioridad,
+                onPrioridadCambiada = { prioridad = it })
 
             // 4. Estado completada
             /*Row(
@@ -292,36 +336,42 @@ fun PantallaEditarTarea(navController: NavController, tareaId: Int, viewModel: T
 
             // 5. Vencimiento y Repetición
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Vencimiento", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                Text(
+                    "Vencimiento",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Companion.SemiBold
+                )
 
                 // --- FILA DE BOTONES (Igual que en Nueva Tarea) ---
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.Companion.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     // Selector de Fecha
-                    val textoFecha = fechaLimite?.format(DateTimeFormatter.ofPattern("dd/MM/yy")) ?: "Fecha"
+                    val textoFecha =
+                        fechaLimite?.format(DateTimeFormatter.ofPattern("dd/MM/yy")) ?: "Fecha"
                     BotonSelectorDato(
                         label = textoFecha,
                         icon = Icons.Default.DateRange,
                         onClick = { mostrarCalendario = true },
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.Companion.weight(1f)
                     )
 
                     // Selector de Hora
-                    val textoHora = horaLimite?.format(DateTimeFormatter.ofPattern("HH:mm")) ?: "Hora"
+                    val textoHora =
+                        horaLimite?.format(DateTimeFormatter.ofPattern("HH:mm")) ?: "Hora"
                     BotonSelectorDato(
                         label = textoHora,
                         icon = Icons.Default.AccessTime,
                         onClick = { if (fechaLimite != null) mostrarRelojNativo() },
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier.Companion.weight(1f),
                         enabled = fechaLimite != null
                     )
                 }
 
                 // --- FILA DE TEXTOS "QUITAR" (Justo debajo) ---
                 Row(
-                    modifier = Modifier
+                    modifier = Modifier.Companion
                         .fillMaxWidth()
                         .heightIn(min = 32.dp),
                     horizontalArrangement = Arrangement.SpaceBetween
@@ -336,13 +386,17 @@ fun PantallaEditarTarea(navController: NavController, tareaId: Int, viewModel: T
                             },
                             contentPadding = PaddingValues(0.dp)
                         ) {
-                            Icon(Icons.Default.Clear, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(Modifier.width(4.dp))
+                            Icon(
+                                Icons.Default.Clear,
+                                contentDescription = null,
+                                modifier = Modifier.Companion.size(16.dp)
+                            )
+                            Spacer(Modifier.Companion.width(4.dp))
                             Text("Quitar fecha", style = MaterialTheme.typography.labelSmall)
                         }
                     } else {
                         // Espaciador para mantener la hora a la derecha si no hay fecha
-                        Spacer(modifier = Modifier.weight(1f))
+                        Spacer(modifier = Modifier.Companion.weight(1f))
                     }
 
                     // Quitar Hora
@@ -351,8 +405,12 @@ fun PantallaEditarTarea(navController: NavController, tareaId: Int, viewModel: T
                             onClick = { horaLimite = null },
                             contentPadding = PaddingValues(0.dp)
                         ) {
-                            Icon(Icons.Default.Clear, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(Modifier.width(4.dp))
+                            Icon(
+                                Icons.Default.Clear,
+                                contentDescription = null,
+                                modifier = Modifier.Companion.size(16.dp)
+                            )
+                            Spacer(Modifier.Companion.width(4.dp))
                             Text("Quitar hora", style = MaterialTheme.typography.labelSmall)
                         }
                     }
@@ -360,8 +418,12 @@ fun PantallaEditarTarea(navController: NavController, tareaId: Int, viewModel: T
 
                 // --- SELECTOR DE REPETICIÓN (Solo si hay fecha) ---
                 if (fechaLimite != null) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text("Repetición", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                    Spacer(modifier = Modifier.Companion.height(8.dp))
+                    Text(
+                        "Repetición",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Companion.SemiBold
+                    )
                     ExposedDropdownMenuBox(
                         expanded = menuRepeticionExpandido,
                         onExpandedChange = { menuRepeticionExpandido = !menuRepeticionExpandido }
@@ -372,7 +434,7 @@ fun PantallaEditarTarea(navController: NavController, tareaId: Int, viewModel: T
                             readOnly = true,
                             leadingIcon = { Icon(Icons.Default.Repeat, null) },
                             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = menuRepeticionExpandido) },
-                            modifier = Modifier.menuAnchor().fillMaxWidth()
+                            modifier = Modifier.Companion.menuAnchor().fillMaxWidth()
                         )
                         ExposedDropdownMenu(
                             expanded = menuRepeticionExpandido,
@@ -394,6 +456,3 @@ fun PantallaEditarTarea(navController: NavController, tareaId: Int, viewModel: T
         }
     }
 }
-
-
-

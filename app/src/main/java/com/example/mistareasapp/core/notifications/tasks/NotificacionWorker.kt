@@ -1,17 +1,16 @@
-package com.example.mistareasapp
+package com.example.mistareasapp.core.notifications.tasks
 
+import android.Manifest
+import android.R
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
+import android.content.pm.PackageManager
 import android.os.Build
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.work.Worker
 import androidx.work.WorkerParameters
-import androidx.work.OneTimeWorkRequestBuilder
-import androidx.work.WorkManager
-import androidx.work.ExistingWorkPolicy
-import androidx.work.workDataOf
 
 class NotificacionWorker(context: Context, params: WorkerParameters) : Worker(context, params) {
 
@@ -41,7 +40,7 @@ class NotificacionWorker(context: Context, params: WorkerParameters) : Worker(co
         }
 
         val notification = NotificationCompat.Builder(applicationContext, channelId)
-            .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
+            .setSmallIcon(R.drawable.ic_lock_idle_alarm)
             .setContentTitle("¡Recordatorio de Tarea!")
             .setContentText(titulo)
             .setPriority(NotificationCompat.PRIORITY_MAX)
@@ -53,7 +52,7 @@ class NotificacionWorker(context: Context, params: WorkerParameters) : Worker(co
 
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                val hasPermission = applicationContext.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                val hasPermission = applicationContext.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
                 if (hasPermission) {
                     notificationManager.notify(idTarea.takeIf { it != -1 } ?: System.currentTimeMillis().toInt(), notification)
                     Log.d("WORKER_DEBUG", "Notificación enviada con éxito")

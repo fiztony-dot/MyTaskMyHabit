@@ -1,4 +1,4 @@
-package com.example.mistareasapp.ui.screens
+package com.example.mistareasapp.ui.screens.Habits
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -16,11 +16,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavController
 import com.example.mistareasapp.Rutas
-import com.example.mistareasapp.viewmodel.TareasViewModel
+import com.example.mistareasapp.viewmodel.Tasks.TareasViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PantallaHabitos(navController: NavController,viewModel: TareasViewModel, modifier: Modifier = Modifier) {
+fun PantallaHabitos(navController: NavController, viewModel: TareasViewModel, modifier: Modifier = Modifier.Companion) {
     Scaffold(
         floatingActionButton = {
             FloatingActionButton(
@@ -33,7 +33,7 @@ fun PantallaHabitos(navController: NavController,viewModel: TareasViewModel, mod
         Column(
             modifier = modifier.padding(innerPadding).fillMaxSize(),
             verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally
+            horizontalAlignment = Alignment.Companion.CenterHorizontally
         ) {
             Text("Pantalla de Hábitos en construcción")
         }

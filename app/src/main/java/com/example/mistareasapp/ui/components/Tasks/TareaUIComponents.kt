@@ -1,4 +1,4 @@
-package com.example.mistareasapp.ui.components
+package com.example.mistareasapp.ui.components.Tasks
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -18,86 +18,58 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Archive
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.Repeat
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Checkbox
-import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedCard
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxState
+import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.produceState
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.mistareasapp.data.Prioridad
-import com.example.mistareasapp.data.Tarea
+import com.example.mistareasapp.data.tasks.Categoria
+import com.example.mistareasapp.data.tasks.Prioridad
+import com.example.mistareasapp.data.tasks.Tarea
 import com.example.mistareasapp.ui.theme.ColorCard
 import com.example.mistareasapp.ui.theme.PrioridadAlta
 import com.example.mistareasapp.ui.theme.PrioridadBaja
-import com.example.mistareasapp.ui.theme.PrioridadCompletada
 import com.example.mistareasapp.ui.theme.PrioridadMedia
-import com.example.mistareasapp.viewmodel.MapasDeTareas
-import kotlinx.coroutines.delay
+import com.example.mistareasapp.viewmodel.Tasks.MapasDeTareas
+import com.example.mistareasapp.viewmodel.Tasks.TareasViewModel
 import java.time.format.DateTimeFormatter
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
-import androidx.compose.material3.Icon
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Archive
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Repeat // O el icono que hayas elegido
-import androidx.compose.runtime.mutableStateMapOf
-import androidx.compose.runtime.remember
-import androidx.compose.material.icons.filled.ExpandLess
-import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.runtime.mutableStateOf
-import com.example.mistareasapp.viewmodel.TareasViewModel
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.SwipeToDismissBoxState
-import androidx.compose.material3.SwipeToDismissBoxValue
-import androidx.compose.material3.TextButton
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.ui.text.style.TextOverflow
-import kotlin.collections.List // Esto quita el rojo de List<Categoria>
-import com.example.mistareasapp.data.Categoria // <--- ESTO ES LO QUE SUELE FALTAR
-import androidx.compose.runtime.collectAsState // <--- ESTE ES EL PRINCIPAL
-import androidx.compose.runtime.getValue     // Permite usar el 'by'
-import androidx.compose.material3.rememberSwipeToDismissBoxState
-import androidx.compose.material3.SwipeToDismissBox
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.Surface
-import androidx.compose.material.icons.filled.PriorityHigh
-import androidx.compose.material.icons.filled.Remove
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.material.icons.rounded.Whatshot
-import androidx.compose.material.icons.rounded.Alarm
-import androidx.compose.material.icons.rounded.LowPriority
-import androidx.compose.material.icons.rounded.RocketLaunch
-import androidx.compose.material.icons.rounded.ShoppingCart
-import androidx.compose.material.icons.rounded.BusinessCenter
-import androidx.compose.material.icons.rounded.FitnessCenter
-import androidx.compose.material.icons.rounded.AccessTimeFilled
-import androidx.compose.material.icons.rounded.KeyboardDoubleArrowDown
-import androidx.compose.foundation.background
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.lazy.LazyRow
-
 
 // --- COMPONENTE: SELECTOR DE PRIORIDAD ---
 @OptIn(ExperimentalMaterial3Api::class)
@@ -132,7 +104,7 @@ fun SelectorPrioridad(
 // --- COMPONENTE: LISTA PRINCIPAL (CUERPO) ---
 @Composable
 fun CuerpoListaTareas(
-    modifier: Modifier = Modifier,
+    modifier: Modifier = Modifier.Companion,
     mapas: MapasDeTareas,
     onTaskToggle: (Tarea, Boolean) -> Unit,
     onEditTask: (Int) -> Unit,
@@ -167,7 +139,7 @@ fun CuerpoListaTareas(
                     mostrarDialogo = false
                     tareaAEliminar = null
                 }) {
-                    Text("Eliminar", color = Color.Red)
+                    Text("Eliminar", color = Color.Companion.Red)
                 }
             },
             dismissButton = {
@@ -188,7 +160,8 @@ fun CuerpoListaTareas(
         estadosSecciones.clear()
 
         // Ponemos todas las secciones al mismo estado que el botón de arriba
-        val secciones = listOf("Vencidas", "Hoy", "Esta semana", "Este mes", "Más adelante", "Completadas")
+        val secciones =
+            listOf("Vencidas", "Hoy", "Esta semana", "Este mes", "Más adelante", "Completadas")
         secciones.forEach { nombre ->
             estadosSecciones[nombre] = viewModel.todasSeccionesAbiertas
         }
@@ -202,7 +175,7 @@ fun CuerpoListaTareas(
             bottom = 100.dp   // Deja espacio abajo para que la última tarea no quede tras la barra inferior
         ),
         verticalArrangement = Arrangement.spacedBy(0.dp)
-    ){
+    ) {
 
 
         // --- FUNCIÓN INTERNA ---
@@ -212,7 +185,7 @@ fun CuerpoListaTareas(
 
                 item(key = "header_$titulo") {
                     // Usamos un Box para controlar el espacio sin tocar HeaderSeccionColapsable
-                    Box(modifier = Modifier.padding(top = if (titulo == "Vencidas" || titulo == "Hoy") 0.dp else 12.dp)) {
+                    Box(modifier = Modifier.Companion.padding(top = if (titulo == "Vencidas" || titulo == "Hoy") 0.dp else 12.dp)) {
                         HeaderSeccionColapsable(
                             titulo = titulo,
                             color = color,
@@ -234,7 +207,7 @@ fun CuerpoListaTareas(
                                 mostrarDialogo = true
                             },
                             onArchive = { t -> viewModel.archivarTarea(t) },
-                            modifier = Modifier.clickable { onEditTask(tarea.id) }
+                            modifier = Modifier.Companion.clickable { onEditTask(tarea.id) }
                         )
                     }
                 }
@@ -249,11 +222,12 @@ fun CuerpoListaTareas(
         seccion("Más adelante", mapas.resto, Color(0xFF9E9E9E))
 
         if (viewModel.mostrarCompletadas && mapas.completadas.isNotEmpty()) {
-            item { HorizontalDivider(Modifier.padding(vertical = 12.dp)) }
-            seccion("Completadas", mapas.completadas, Color.Gray)
+            item { HorizontalDivider(Modifier.Companion.padding(vertical = 12.dp)) }
+            seccion("Completadas", mapas.completadas, Color.Companion.Gray)
         }
     }
 }
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BarraFiltros(
@@ -262,7 +236,7 @@ fun BarraFiltros(
     onSeleccionar: (String?) -> Unit
 ) {
     LazyRow(
-        modifier = Modifier
+        modifier = Modifier.Companion
             .fillMaxWidth()
             .padding(vertical = 8.dp),
         contentPadding = PaddingValues(horizontal = 16.dp),
@@ -291,13 +265,14 @@ fun BarraFiltros(
                     Icon(
                         imageVector = obtenerIcono(cat.icono),
                         contentDescription = null,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.Companion.size(18.dp)
                     )
                 }
             )
         }
     }
 }
+
 @Composable
 fun HeaderSeccionColapsable(
     titulo: String,
@@ -307,11 +282,11 @@ fun HeaderSeccionColapsable(
     onToggle: () -> Unit
 ) {
     Row(
-        modifier = Modifier
+        modifier = Modifier.Companion
             .fillMaxWidth()
             .clickable { onToggle() }
             .padding(vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
+        verticalAlignment = Alignment.Companion.CenterVertically
     ) {
         // ICONO A LA IZQUIERDA
         Icon(
@@ -320,16 +295,17 @@ fun HeaderSeccionColapsable(
             tint = color
         )
 
-        Spacer(modifier = Modifier.width(8.dp))
+        Spacer(modifier = Modifier.Companion.width(8.dp))
 
         // TEXTO A LA DERECHA
         Text(
             text = "$titulo ($cantidad)",
-            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Companion.Bold),
             color = color
         )
     }
 }
+
 // --- COMPONENTE: TARJETA DE TAREA INDIVIDUAL ---
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -339,7 +315,7 @@ fun TareaCard(
     onTaskToggle: (Tarea, Boolean) -> Unit,
     onDelete: (Tarea) -> Unit,
     onArchive: (Tarea) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier.Companion
 ) {
     val dismissState = rememberSwipeToDismissBoxState(
         confirmValueChange = { value ->
@@ -348,10 +324,12 @@ fun TareaCard(
                     onDelete(tarea)
                     false // Rebote para diálogo
                 }
+
                 SwipeToDismissBoxValue.EndToStart -> {
                     onArchive(tarea)
                     false // Rebote para marcar completada
                 }
+
                 else -> false
             }
         }
@@ -370,56 +348,59 @@ fun TareaCard(
         }
 
         Card(
-            modifier = Modifier
+            modifier = Modifier.Companion
                 .fillMaxWidth()
                 .height(IntrinsicSize.Min), // Ajusta la altura al contenido
             shape = RoundedCornerShape(16.dp),
             colors = CardDefaults.cardColors(containerColor = ColorCard),
             elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
         ) {
-            Row(modifier = Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                modifier = Modifier.Companion.fillMaxSize(),
+                verticalAlignment = Alignment.Companion.CenterVertically
+            ) {
                 // --- 1. BARRA LATERAL IZQUIERDA ---
                 Box(
-                    modifier = Modifier
+                    modifier = Modifier.Companion
                         .fillMaxHeight()
                         .width(30.dp) // Volvemos al ancho generoso de la imagen original
                         .background(
-                            if (tarea.estaCompletada) Color.Gray.copy(alpha = 0.2f)
+                            if (tarea.estaCompletada) Color.Companion.Gray.copy(alpha = 0.2f)
                             else colorPrioridad.copy(alpha = 0.30f) // Restauramos la transparencia suave
                         )
-                 )
+                )
 
                 // --- 2. INFORMACIÓN CENTRAL ---
                 Column(
-                    modifier = Modifier
+                    modifier = Modifier.Companion
                         .weight(1f)
                         .padding(start = 12.dp, end = 8.dp, top = 12.dp, bottom = 12.dp)
                 ) {
                     // Fila de Título y Repetición
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(verticalAlignment = Alignment.Companion.CenterVertically) {
                         Text(
                             text = tarea.titulo.lowercase().replaceFirstChar { it.uppercase() },
                             style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold,
+                            fontWeight = FontWeight.Companion.SemiBold,
                             color = if (tarea.estaCompletada) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.onSurface,
                             maxLines = 1,
-                            textDecoration = if (tarea.estaCompletada) TextDecoration.LineThrough else null,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f, fill = false)
+                            textDecoration = if (tarea.estaCompletada) TextDecoration.Companion.LineThrough else null,
+                            overflow = TextOverflow.Companion.Ellipsis,
+                            modifier = Modifier.Companion.weight(1f, fill = false)
                         )
 
                         if (tarea.repeticion != "Sin repetición") {
-                            Spacer(Modifier.width(6.dp))
+                            Spacer(Modifier.Companion.width(6.dp))
                             Icon(
                                 imageVector = Icons.Default.Repeat,
                                 contentDescription = null,
-                                modifier = Modifier.size(14.dp),
+                                modifier = Modifier.Companion.size(14.dp),
                                 tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
                             )
                         }
                     }
 
-                    Spacer(Modifier.height(4.dp))
+                    Spacer(Modifier.Companion.height(4.dp))
 
                     // Fila de Fecha y Hora (Tu lógica original)
                     val fechaFmt = DateTimeFormatter.ofPattern("dd MMM")
@@ -439,13 +420,15 @@ fun TareaCard(
                 val nombreIcono = categoriaAsociada?.icono ?: "list"
 
                 Box(
-                    modifier = Modifier.padding(end = 16.dp)
+                    modifier = Modifier.Companion.padding(end = 16.dp)
                 ) {
                     Icon(
                         imageVector = obtenerIcono(nombreIcono),
                         contentDescription = null,
-                        tint = if (tarea.estaCompletada) Color.Gray.copy(0.4f) else obtenerColorIcono(nombreIcono),
-                        modifier = Modifier.size(24.dp)
+                        tint = if (tarea.estaCompletada) Color.Companion.Gray.copy(0.4f) else obtenerColorIcono(
+                            nombreIcono
+                        ),
+                        modifier = Modifier.Companion.size(24.dp)
                     )
                 }
             }
@@ -458,17 +441,17 @@ fun DismissBackground(dismissState: SwipeToDismissBoxState) {
     val color = when (dismissState.dismissDirection) {
         SwipeToDismissBoxValue.StartToEnd -> Color(0xFFEF5350) // Rojo para borrar
         SwipeToDismissBoxValue.EndToStart -> Color(0xFF66BB6A) // Verde para archivar
-        else -> Color.Transparent
+        else -> Color.Companion.Transparent
     }
 
     Box(
-        modifier = Modifier
+        modifier = Modifier.Companion
             .fillMaxSize()
-            .background(color, RoundedCornerShape(16.dp))
+            .background(color, androidx.compose.foundation.shape.RoundedCornerShape(16.dp))
             .padding(horizontal = 20.dp),
         contentAlignment = when (dismissState.dismissDirection) {
-            SwipeToDismissBoxValue.StartToEnd -> Alignment.CenterStart
-            else -> Alignment.CenterEnd
+            SwipeToDismissBoxValue.StartToEnd -> Alignment.Companion.CenterStart
+            else -> Alignment.Companion.CenterEnd
         }
     ) {
         val icon = if (dismissState.dismissDirection == SwipeToDismissBoxValue.StartToEnd)
@@ -477,17 +460,18 @@ fun DismissBackground(dismissState: SwipeToDismissBoxState) {
         Icon(
             imageVector = icon,
             contentDescription = null,
-            tint = Color.White
+            tint = Color.Companion.White
         )
     }
 }
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BotonSelectorDato(
     label: String,
     icon: ImageVector,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier,
+    modifier: Modifier = Modifier.Companion,
     enabled: Boolean = true,
     colorTexto: Color = MaterialTheme.colorScheme.onSurface
 ) {
@@ -500,22 +484,24 @@ fun BotonSelectorDato(
         enabled = enabled, // 2. Lo pasamos al botón real
         // shape = RoundedCornerShape(12.dp),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)),
-        colors = CardDefaults.outlinedCardColors(containerColor = Color.Transparent)
+        colors = CardDefaults.outlinedCardColors(containerColor = Color.Companion.Transparent)
     ) {
         Row(
-            modifier = Modifier
+            modifier = Modifier.Companion
                 .fillMaxSize()
                 .padding(horizontal = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
+            verticalAlignment = Alignment.Companion.CenterVertically,
             horizontalArrangement = Arrangement.Start
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = if (enabled) MaterialTheme.colorScheme.primary else Color.Gray.copy(alpha = 0.5f),
-                modifier = Modifier.size(18.dp)
+                tint = if (enabled) MaterialTheme.colorScheme.primary else Color.Companion.Gray.copy(
+                    alpha = 0.5f
+                ),
+                modifier = Modifier.Companion.size(18.dp)
             )
-            Spacer(modifier = Modifier.width(8.dp))
+            Spacer(modifier = Modifier.Companion.width(8.dp))
 
             // ESTA ES LA LÍNEA CLAVE:
             // Debe usar 'label' directamente. Si usas un remember aquí, se rompe.

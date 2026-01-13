@@ -1,4 +1,4 @@
-package com.example.mistareasapp.data
+package com.example.mistareasapp.data.tasks
 
 import androidx.room.Dao
 import androidx.room.Delete

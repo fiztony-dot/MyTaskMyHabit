@@ -1,29 +1,56 @@
-package com.example.mistareasapp.ui.screens
+package com.example.mistareasapp.ui.screens.Tasks
 
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Card
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.ListItem
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
-import com.example.mistareasapp.data.Categoria
-import com.example.mistareasapp.viewmodel.TareasViewModel
-import com.example.mistareasapp.ui.components.obtenerIcono
-import com.example.mistareasapp.ui.components.obtenerColorIcono
+import com.example.mistareasapp.data.tasks.Categoria
+import com.example.mistareasapp.ui.components.Tasks.obtenerColorIcono
+import com.example.mistareasapp.ui.components.Tasks.obtenerIcono
+import com.example.mistareasapp.viewmodel.Tasks.TareasViewModel
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun PantallaGestionCategorias(
     navController: NavController,
     viewModel: TareasViewModel,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier.Companion
 ) {
     val categorias by viewModel.todasLasCategorias.collectAsState(initial = emptyList())
     var nombreTexto by remember { mutableStateOf("") }
@@ -53,7 +80,7 @@ fun PantallaGestionCategorias(
             )
         }
     ) { padding ->
-        Column(modifier = Modifier.padding(padding).padding(16.dp)) {
+        Column(modifier = Modifier.Companion.padding(padding).padding(16.dp)) {
 
             /**
              * BLOQUE 3: FORMULARIO DE TEXTO
@@ -62,7 +89,7 @@ fun PantallaGestionCategorias(
                 value = nombreTexto,
                 onValueChange = { nombreTexto = it },
                 label = { Text(if (categoriaEnEdicion == null) "Nueva Categoría" else "Renombrar categoría") },
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.Companion.fillMaxWidth(),
                 trailingIcon = {
                     Row {
                         if (categoriaEnEdicion != null) {
@@ -81,12 +108,17 @@ fun PantallaGestionCategorias(
                                 }
                                 nombreTexto = ""
                             }
-                        }) { Icon(if (categoriaEnEdicion == null) Icons.Default.Add else Icons.Default.Check, null) }
+                        }) {
+                            Icon(
+                                if (categoriaEnEdicion == null) Icons.Default.Add else Icons.Default.Check,
+                                null
+                            )
+                        }
                     }
                 }
             )
 
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.Companion.height(20.dp))
 
             /**
              * BLOQUE 4: LISTA DE CATEGORÍAS CON COLORES DINÁMICOS
@@ -94,7 +126,7 @@ fun PantallaGestionCategorias(
             LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(categorias) { categoria ->
                     Card(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.Companion.fillMaxWidth(),
                         onClick = {
                             categoriaEnEdicion = categoria
                             nombreTexto = categoria.titulo
@@ -115,13 +147,19 @@ fun PantallaGestionCategorias(
                             },
                             headlineContent = { Text(categoria.titulo) },
                             trailingContent = {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                Row(verticalAlignment = Alignment.Companion.CenterVertically) {
                                     Switch(
                                         checked = categoria.activa,
-                                        onCheckedChange = { viewModel.actualizarCategoria(categoria.copy(activa = it)) }
+                                        onCheckedChange = {
+                                            viewModel.actualizarCategoria(
+                                                categoria.copy(
+                                                    activa = it
+                                                )
+                                            )
+                                        }
                                     )
                                     IconButton(onClick = { viewModel.eliminarCategoria(categoria) }) {
-                                        Icon(Icons.Default.Delete, null, tint = Color.Red)
+                                        Icon(Icons.Default.Delete, null, tint = Color.Companion.Red)
                                     }
                                 }
                             }
@@ -142,7 +180,7 @@ fun PantallaGestionCategorias(
             text = {
                 // FlowRow organiza los iconos automáticamente en filas
                 FlowRow(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.Companion.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                     maxItemsInEachRow = 4
                 ) {

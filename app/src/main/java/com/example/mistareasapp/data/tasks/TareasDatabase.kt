@@ -1,6 +1,6 @@
 // Archivo: TareasDatabase.kt
 
-package com.example.mistareasapp.data
+package com.example.mistareasapp.data.tasks
 
 import android.content.Context
 import androidx.room.Database

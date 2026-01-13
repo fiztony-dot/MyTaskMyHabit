@@ -1,5 +1,5 @@
 // Fichero: Converters.kt
-package com.example.mistareasapp.data
+package com.example.mistareasapp.data.tasks
 
 import androidx.room.TypeConverter
 import java.time.LocalDate

@@ -60,16 +60,24 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.*
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
+import com.example.mistareasapp.core.notifications.tasks.NotificacionWorker
 
 // --- 9. Clases del Proyecto (Local) ---
-import com.example.mistareasapp.data.*
-import com.example.mistareasapp.data.TareasDatabase
-import com.example.mistareasapp.ui.components.BarraFiltros
-import com.example.mistareasapp.ui.screens.*
+import com.example.mistareasapp.data.tasks.TareasDatabase
+import com.example.mistareasapp.data.tasks.Prioridad
+import com.example.mistareasapp.data.tasks.Tarea
+import com.example.mistareasapp.ui.components.Tasks.BarraFiltros
+import com.example.mistareasapp.ui.screens.Habits.PantallaHabitos
+import com.example.mistareasapp.ui.screens.Tasks.PantallaCrearTarea
+import com.example.mistareasapp.ui.screens.Tasks.PantallaEditarTarea
+import com.example.mistareasapp.ui.screens.Tasks.PantallaGestionCategorias
+import com.example.mistareasapp.ui.screens.Tasks.PantallaListaTareas
 import com.example.mistareasapp.ui.theme.MisTareasAppTheme
-import com.example.mistareasapp.viewmodel.*
+import com.example.mistareasapp.viewmodel.Tasks.TareasViewModel
+import com.example.mistareasapp.viewmodel.Tasks.TareasViewModelFactory
 
 
+import com.example.mistareasapp.core.notifications.tasks.NotificationHelper
 
 //Estructura de la Respuesta de la IA
 @Serializable
@@ -152,7 +160,7 @@ fun MisTareasApp() {
         listaTareas.forEach { tarea ->
             if (!tarea.estaCompletada && tarea.fechaLimite != null) {
                 Log.d("LOG-NOTIFICACION", "🔎 Analizando tarea: ${tarea.titulo} (Fecha: ${tarea.fechaLimite})")
-                programarNotificacion(context, tarea)
+                NotificationHelper.programarNotificacion(context, tarea)
             }
         }
     }
@@ -396,7 +404,7 @@ fun MisTareasApp() {
                                 android.util.Log.d("LOG", "Ejecutando guardado para: ${nuevaTarea.titulo}")
 
                                 viewModel.insertar(nuevaTarea)
-                                programarNotificacion(context, nuevaTarea)
+                                NotificationHelper.programarNotificacion(context, nuevaTarea)
 
                                 Toast.makeText(context, "Tarea guardada: $tituloFormateado", Toast.LENGTH_SHORT).show()
 
@@ -594,6 +602,40 @@ fun MisTareasApp() {
             bottomBar = { if (rutaActual != Rutas.PantallaCrearTarea.ruta) MiBottomBar(navController) }
         ) { innerPadding ->
             // (Mantén aquí tus diálogos de seguridad: mostrarConfirmacionRestore, etc.)
+            if (mostrarConfirmacionRestore) {
+                AlertDialog(
+                    onDismissRequest = { mostrarConfirmacionRestore = false },
+                    title = { Text("¿Restaurar copia de seguridad?") },
+                    text = { Text("Esto borrará las tareas actuales y las reemplazará por las de la copia. ¿Deseas continuar?") },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            mostrarConfirmacionRestore = false
+                            // Esto es lo que realmente abre el buscador de archivos
+                            importarLauncher.launch(arrayOf("application/octet-stream", "application/x-sqlite3"))
+                        }) {
+                            Text("RESTAURAR", color = Color.Red)
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { mostrarConfirmacionRestore = false }) {
+                            Text("CANCELAR")
+                        }
+                    }
+                )
+            }
+
+            if (mostrarInstruccionesPostRestore) {
+                AlertDialog(
+                    onDismissRequest = { mostrarInstruccionesPostRestore = false },
+                    title = { Text("Restauración completada") },
+                    text = { Text("Para que los datos se carguen correctamente, por favor cierra la aplicación por completo y vuelve a abrirla.") },
+                    confirmButton = {
+                        Button(onClick = { mostrarInstruccionesPostRestore = false }) {
+                            Text("ENTENDIDO")
+                        }
+                    }
+                )
+            }
 
             NavHost(
                 navController = navController,
@@ -614,7 +656,11 @@ fun MisTareasApp() {
                 }
 
                 composable(Rutas.PantallaHabitos.ruta) {
-                    PantallaHabitos(navController, viewModel, modifier = Modifier.padding(innerPadding).fillMaxSize())
+                    PantallaHabitos(
+                        navController,
+                        viewModel,
+                        modifier = Modifier.padding(innerPadding).fillMaxSize()
+                    )
                 }
 
                 composable(Rutas.PantallaCrearTarea.ruta) {
@@ -631,84 +677,13 @@ fun MisTareasApp() {
                 }
 
                 composable("categorias") {
-                    PantallaGestionCategorias(navController, viewModel, modifier = Modifier.padding(innerPadding).fillMaxSize())
+                    PantallaGestionCategorias(
+                        navController,
+                        viewModel,
+                        modifier = Modifier.padding(innerPadding).fillMaxSize()
+                    )
                 }
             }
         }
-    }
-}
-fun programarNotificacion(context: android.content.Context, tarea: Tarea) {
-    val fecha = tarea.fechaLimite ?: return
-    val hora = tarea.horaLimite ?: java.time.LocalTime.of(9, 0)
-    val fechaHoraLimite = java.time.LocalDateTime.of(fecha, hora)
-    val ahora = java.time.LocalDateTime.now()
-
-    val delayBase = java.time.Duration.between(ahora, fechaHoraLimite).toMillis()
-
-    // 1. DETERMINAMOS EL INTERVALO DE REPETICIÓN SEGÚN TU SOLICITUD
-    val tiempoRepeticion = when (tarea.prioridad) {
-        Prioridad.ALTA -> 60 * 60 * 1000L           // 60 minutos
-        /*Prioridad.ALTA -> 5 * 60 * 1000L           // 60 minutos*/
-        Prioridad.MEDIA -> 24 * 60 * 60 * 1000L      // 24 horas
-        Prioridad.BAJA -> 3 * 24 * 60 * 60 * 1000L  // 3 días
-        else -> 0L
-    }
-
-    if (delayBase > 0) {
-        // A. AVISO PRINCIPAL (A la hora de la tarea)
-        programarTareaEnWorkManager(context, tarea, delayBase, "principal")
-        android.util.Log.d("LOG-NOTIFICACION", "✅ ALARMA PRINCIPAL: '${tarea.titulo}' a las $hora")
-
-        // B. AVISO DE REPETICIÓN (Según prioridad)
-        if (tiempoRepeticion > 0) {
-            programarTareaEnWorkManager(context, tarea, delayBase + tiempoRepeticion, "repeticion")
-            val info = when(tarea.prioridad) {
-                Prioridad.ALTA -> "60 min"
-                Prioridad.MEDIA -> "24 horas"
-                Prioridad.BAJA -> "3 días"
-                else -> ""
-            }
-            android.util.Log.d("LOG-NOTIFICACION", "➕ REPETICIÓN PROGRAMADA (cada $info) para: '${tarea.titulo}'")
-        }
-
-    } else {
-        android.util.Log.d("LOG-NOTIFICACION", "❌ NO PROGRAMADA: '${tarea.titulo}' ya pasó.")
-    }
-}
-
-// Esta es la función que "empaqueta" el código que preguntaste antes
-private fun programarTareaEnWorkManager(
-    context: android.content.Context,
-    tarea: Tarea,
-    delayMs: Long,
-    tipo: String
-) {
-    val data = androidx.work.workDataOf(
-        "titulo" to tarea.titulo,
-        "id_tarea" to tarea.id
-    )
-
-    val request = androidx.work.OneTimeWorkRequestBuilder<NotificacionWorker>()
-        .setInitialDelay(delayMs, java.util.concurrent.TimeUnit.MILLISECONDS)
-        .setInputData(data)
-        .addTag("notif_${tarea.id}_$tipo") // Tag: notif_ID_principal o notif_ID_repeticion
-        .build()
-
-    androidx.work.WorkManager.getInstance(context).enqueueUniqueWork(
-        "notif_${tarea.id}_$tipo",
-        androidx.work.ExistingWorkPolicy.REPLACE,
-        request
-    )
-}
-
-private suspend fun guardarTareaSimple(texto: String, viewModel: TareasViewModel, context: android.content.Context) {
-    withContext(Dispatchers.Main) {
-        val tareaBasica = Tarea(
-            titulo = texto.replaceFirstChar { it.uppercase() },
-            descripcion = "Voz (IA no disponible)",
-            prioridad = Prioridad.MEDIA
-        )
-        viewModel.insertar(tareaBasica)
-        Toast.makeText(context, "Guardado simple (IA falló)", Toast.LENGTH_SHORT).show()
     }
 }

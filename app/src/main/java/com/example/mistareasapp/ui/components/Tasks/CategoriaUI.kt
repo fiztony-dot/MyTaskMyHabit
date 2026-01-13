@@ -1,4 +1,4 @@
-package com.example.mistareasapp.ui.components
+package com.example.mistareasapp.ui.components.Tasks
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Build
@@ -46,6 +46,7 @@ fun obtenerEstiloCategoria(nombre: String?): EstiloCategoria {
         else       -> EstiloCategoria(Icons.Default.Label, Color.Companion.Cyan) // <-- CAMBIA ESTO A CYAN PARA PROBAR
     }
 }
+
 /**
  * BLOQUE 1: TRADUCTOR DE ICONOS (Los iconos que sabe pintar la aplicacion)
  * Su función no es crear iconos nuevos, sino servir de puente entre un nombre (String) que

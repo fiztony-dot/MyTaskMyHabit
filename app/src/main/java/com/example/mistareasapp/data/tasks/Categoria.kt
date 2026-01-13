@@ -1,12 +1,7 @@
-package com.example.mistareasapp.data
+package com.example.mistareasapp.data.tasks
 
 import androidx.room.Entity
 import androidx.room.PrimaryKey
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 
 @Entity(tableName = "categorias_table")
 data class Categoria(
