@@ -594,6 +594,40 @@ fun MisTareasApp() {
             bottomBar = { if (rutaActual != Rutas.PantallaCrearTarea.ruta) MiBottomBar(navController) }
         ) { innerPadding ->
             // (Mantén aquí tus diálogos de seguridad: mostrarConfirmacionRestore, etc.)
+            if (mostrarConfirmacionRestore) {
+                AlertDialog(
+                    onDismissRequest = { mostrarConfirmacionRestore = false },
+                    title = { Text("¿Restaurar copia de seguridad?") },
+                    text = { Text("Esto borrará las tareas actuales y las reemplazará por las de la copia. ¿Deseas continuar?") },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            mostrarConfirmacionRestore = false
+                            // Esto es lo que realmente abre el buscador de archivos
+                            importarLauncher.launch(arrayOf("application/octet-stream", "application/x-sqlite3"))
+                        }) {
+                            Text("RESTAURAR", color = Color.Red)
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { mostrarConfirmacionRestore = false }) {
+                            Text("CANCELAR")
+                        }
+                    }
+                )
+            }
+
+            if (mostrarInstruccionesPostRestore) {
+                AlertDialog(
+                    onDismissRequest = { mostrarInstruccionesPostRestore = false },
+                    title = { Text("Restauración completada") },
+                    text = { Text("Para que los datos se carguen correctamente, por favor cierra la aplicación por completo y vuelve a abrirla.") },
+                    confirmButton = {
+                        Button(onClick = { mostrarInstruccionesPostRestore = false }) {
+                            Text("ENTENDIDO")
+                        }
+                    }
+                )
+            }
 
             NavHost(
                 navController = navController,

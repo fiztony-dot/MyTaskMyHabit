@@ -3,7 +3,7 @@
 
 [versions]
 # --- Plugins ---
-agp = "8.7.2"                # Actualizado para mejor soporte con Kotlin 2.x
+agp = "8.13.2"                # Actualizado para mejor soporte con Kotlin 2.x
 kotlin = "2.1.0"              # Subimos a 2.1.0 para solucionar la incompatibilidad
 googleKsp = "2.1.0-1.0.29"    # Versión de KSP exacta para Kotlin 2.1.0
 

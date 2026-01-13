@@ -97,4 +97,10 @@ dependencies {
     // Para implementar notificaciones en Android que se activen exactamente en la fecha y hora límite, necesitamos usar WorkManager
     implementation("androidx.work:work-runtime-ktx:2.9.0")
     implementation("androidx.compose.material:material-icons-extended:1.7.6")
+
+    implementation("androidx.glance:glance-appwidget:1.1.0")
+    implementation("androidx.glance:glance-appwidget:1.1.0")
+    implementation("androidx.glance:glance-material3:1.1.0")
+
+
 }
