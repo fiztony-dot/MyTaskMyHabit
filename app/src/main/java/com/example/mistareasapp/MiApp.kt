@@ -78,19 +78,8 @@ import com.example.mistareasapp.viewmodel.Tasks.TareasViewModelFactory
 
 
 import com.example.mistareasapp.core.notifications.tasks.NotificationHelper
-
-//Estructura de la Respuesta de la IA
-@Serializable
-data class TareaIA(
-    val tarea: String,
-    val fecha: String?=null,
-    val hora: String? = null,
-    val prioridad: String? = null
-)
-//Constantes de Configuración y Credenciales
-object DatosIA {
-    const val MI_LLAVE = "AIzaSyCcZTsOCkF6dpM-eTZ-DstBsCdGRq_YWcg"
-}
+import com.example.mistareasapp.core.ai.tasks.DatosIA
+import com.example.mistareasapp.core.ai.tasks.TareaIA
 
 @Composable
 fun MiBottomBar(navController: NavController) {

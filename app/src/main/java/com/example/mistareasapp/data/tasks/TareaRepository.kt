@@ -1,6 +1,8 @@
 package com.example.mistareasapp.data.Tasks
 
 import android.content.Context
+import com.example.mistareasapp.data.tasks.Tarea
+import com.example.mistareasapp.data.tasks.TareasDatabase
 
 object TareaRepository {
 

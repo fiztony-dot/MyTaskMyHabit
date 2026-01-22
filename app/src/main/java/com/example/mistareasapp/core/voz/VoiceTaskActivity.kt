@@ -8,8 +8,8 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.lifecycle.lifecycleScope
-import com.example.mistareasapp.DatosIA
-import com.example.mistareasapp.TareaIA
+import com.example.mistareasapp.core.ai.tasks.DatosIA
+import com.example.mistareasapp.core.ai.tasks.TareaIA
 import com.example.mistareasapp.data.tasks.Prioridad
 import com.example.mistareasapp.data.tasks.Tarea
 import com.example.mistareasapp.data.tasks.TareasDatabase

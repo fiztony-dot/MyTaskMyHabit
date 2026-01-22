@@ -1,14 +1,26 @@
 package com.example.mistareasapp.core.ai.tasks
 
-import com.example.mistareasapp.data.DatosIA
-import com.example.mistareasapp.data.TareaIA
 import io.ktor.client.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.*
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
+
+//Estructura de la Respuesta de la IA
+@Serializable
+data class TareaIA(
+    val tarea: String,
+    val fecha: String?=null,
+    val hora: String? = null,
+    val prioridad: String? = null
+)
+//Constantes de Configuración y Credenciales
+object DatosIA {
+    const val MI_LLAVE = "AIzaSyCcZTsOCkF6dpM-eTZ-DstBsCdGRq_YWcg"
+}
 
 object AiTaskService {
 
