@@ -21,6 +21,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
+
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -33,6 +36,13 @@ import com.example.mistareasapp.ui.components.Tasks.obtenerEstiloCategoria
 import com.example.mistareasapp.viewmodel.Tasks.TareasViewModel
 import java.time.LocalDate
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import com.example.mistareasapp.ui.components.Tasks.CuerpoListaTareas
+import com.example.mistareasapp.viewmodel.Tasks.MapasDeTareas
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.Text
+
 
 @Composable
 fun VistaPorCategorias(
@@ -74,6 +84,12 @@ fun VistaPorCategorias(
             }
         }
     }
+// --- ESTADOS PARA DIÁLOGOS ---
+    var tareaAEliminar by remember { mutableStateOf<Tarea?>(null) }
+    var mostrarDialogoEliminar by remember { mutableStateOf(false) }
+
+    var tareaACompletar by remember { mutableStateOf<Tarea?>(null) }
+    var mostrarDialogoCompletar by remember { mutableStateOf(false) }
 
     LazyColumn(
         modifier = modifier
@@ -116,15 +132,21 @@ fun VistaPorCategorias(
 
             if (abierta) {
                 items(
-                    items = tareas, // Aquí las tareas ya vienen ordenadas
+                    items = tareas,
                     key = { tarea -> "cat_${nombreCat}_id_${tarea.id}" }
                 ) { tarea ->
                     TareaCard(
                         tarea = tarea,
                         categorias = listaCategoriasUI,
                         onTaskToggle = onTaskToggle,
-                        onDelete = { viewModel.eliminar(tarea) },
-                        onArchive = { /* lógica de archivar */ },
+                        onDelete = { t ->
+                            tareaAEliminar = t
+                            mostrarDialogoEliminar = true
+                        },
+                        onArchive = { t ->
+                            tareaACompletar = t
+                            mostrarDialogoCompletar = true
+                        },
                         modifier = Modifier.Companion
                             .fillMaxWidth()
                             .clickable { onEditTask(tarea.id) }
@@ -132,5 +154,40 @@ fun VistaPorCategorias(
                 }
             }
         }
+    }
+    // Diálogo para Eliminar
+    if (mostrarDialogoEliminar && tareaAEliminar != null) {
+        AlertDialog(
+            onDismissRequest = { mostrarDialogoEliminar = false },
+            title = { Text("¿Eliminar tarea?") },
+            text = { Text("¿Estás seguro de que quieres borrar \"${tareaAEliminar?.titulo}\"?") },
+            confirmButton = {
+                TextButton(onClick = {
+                    tareaAEliminar?.let { viewModel.eliminarTarea(it) }
+                    mostrarDialogoEliminar = false
+                }) { Text("Eliminar", color = Color.Red) }
+            },
+            dismissButton = {
+                TextButton(onClick = { mostrarDialogoEliminar = false }) { Text("Cancelar") }
+            }
+        )
+    }
+
+// Diálogo para Completar
+    if (mostrarDialogoCompletar && tareaACompletar != null) {
+        AlertDialog(
+            onDismissRequest = { mostrarDialogoCompletar = false },
+            title = { Text("¿Completar tarea?") },
+            text = { Text("¿Quieres marcar como terminada \"${tareaACompletar?.titulo}\"?") },
+            confirmButton = {
+                TextButton(onClick = {
+                    tareaACompletar?.let { viewModel.archivarTarea(it) }
+                    mostrarDialogoCompletar = false
+                }) { Text("Completar") }
+            },
+            dismissButton = {
+                TextButton(onClick = { mostrarDialogoCompletar = false }) { Text("Cancelar") }
+            }
+        )
     }
 }

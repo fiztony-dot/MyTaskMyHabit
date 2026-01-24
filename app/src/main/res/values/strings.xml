@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">MisTareasApp</string>
+    <string name="app_name">TaskHabit</string>
     <string name="appwidget_text">EXAMPLE</string>
     <string name="configure">Configure</string>
     <string name="add_widget">Add widget</string>
