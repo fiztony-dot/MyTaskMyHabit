@@ -46,6 +46,7 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -447,6 +448,8 @@ fun MisTareasApp() {
     var mostrarConfirmacionRestore by remember { mutableStateOf(false) }
 
     val tareasActivas = listaTareas.count { !it.estaCompletada }
+// Asegúrate de recoger el estado del texto del buscador
+    val textoBusqueda by viewModel.textoBusqueda.collectAsStateWithLifecycle()
 
     MisTareasAppTheme { // Si sigue en rojo, asegúrate de que el import de arriba sea correcto
         Scaffold(
@@ -515,6 +518,17 @@ fun MisTareasApp() {
                             },
                             actions = {
                                 if (rutaActual == Rutas.PantallaTareas.ruta) {
+                                    // --- NUEVO BOTÓN DE BÚSQUEDA ---
+                                    IconButton(onClick = {
+                                        viewModel.buscadorVisible = !viewModel.buscadorVisible
+                                        if (!viewModel.buscadorVisible) viewModel.actualizarBusqueda("") // Limpia al cerrar
+                                    }) {
+                                        Icon(
+                                            imageVector = if (viewModel.buscadorVisible) Icons.Default.Close else Icons.Default.Search,
+                                            contentDescription = "Buscar",
+                                            tint = if (textoBusqueda.isNotEmpty()) MaterialTheme.colorScheme.primary else LocalContentColor.current
+                                        )
+                                    }
                                     // --- 1. NUEVO BOTÓN DE FILTRO ---
                                     IconButton(onClick = { viewModel.mostrarBarraFiltro = !viewModel.mostrarBarraFiltro }) {
                                         Icon(
@@ -577,17 +591,48 @@ fun MisTareasApp() {
                             }
                         )
 
-                        // --- BARRA DE FILTROS ANIMADA ---
-                        AnimatedVisibility(
-                            visible = viewModel.mostrarBarraFiltro && rutaActual == Rutas.PantallaTareas.ruta,
-                            enter = expandVertically() + fadeIn(),
-                            exit = shrinkVertically() + fadeOut()
-                        ) {
-                            BarraFiltros(
-                                categorias = listaCategoriasUI,
-                                seleccionada = filtroActual,
-                                onSeleccionar = { viewModel.filtrarPor(it) }
-                            )
+
+
+// --- SECCIÓN DE FILTROS Y BÚSQUEDA ---
+                        Column {
+                            // 1. Buscador (Se activa con la lupa)
+                            AnimatedVisibility(
+                                visible = viewModel.buscadorVisible && rutaActual == Rutas.PantallaTareas.ruta,
+                                enter = expandVertically() + fadeIn(),
+                                exit = shrinkVertically() + fadeOut()
+                            ) {
+                                OutlinedTextField(
+                                    value = textoBusqueda,
+                                    onValueChange = { viewModel.actualizarBusqueda(it) },
+                                    placeholder = { Text("Buscar en mis tareas...") },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                                    shape = RoundedCornerShape(12.dp),
+                                    singleLine = true,
+                                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                                    trailingIcon = {
+                                        if (textoBusqueda.isNotEmpty()) {
+                                            IconButton(onClick = { viewModel.actualizarBusqueda("") }) {
+                                                Icon(Icons.Default.Clear, contentDescription = "Limpiar")
+                                            }
+                                        }
+                                    }
+                                )
+                            }
+
+                            // 2. Tu Barra de Filtros actual (Se activa con el botón de filtro)
+                            AnimatedVisibility(
+                                visible = viewModel.mostrarBarraFiltro && rutaActual == Rutas.PantallaTareas.ruta,
+                                enter = expandVertically() + fadeIn(),
+                                exit = shrinkVertically() + fadeOut()
+                            ) {
+                                BarraFiltros(
+                                    categorias = listaCategoriasUI,
+                                    seleccionada = filtroActual,
+                                    onSeleccionar = { viewModel.filtrarPor(it) }
+                                )
+                            }
                         }
                     }
                 }

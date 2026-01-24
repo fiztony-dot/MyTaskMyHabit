@@ -86,6 +86,14 @@ class TareasViewModel(
         }
     }.stateIn(viewModelScope, SharingStarted.Companion.WhileSubscribed(5000), LocalDateTime.now())
 
+    private val _textoBusqueda = MutableStateFlow("")
+    val textoBusqueda = _textoBusqueda.asStateFlow()
+    var buscadorVisible by mutableStateOf(false)
+
+    fun actualizarBusqueda(nuevoTexto: String) {
+        _textoBusqueda.value = nuevoTexto
+    }
+
     // --- 3. FLUJOS DE DATOS (DATA FLOWS) ---
 
     // Exponemos las categorías directamente desde el DAO
@@ -104,10 +112,18 @@ class TareasViewModel(
     @OptIn(ExperimentalCoroutinesApi::class)
     val tareasFiltradas: Flow<List<Tarea>> = combine(
         listaTareas,
-        _categoriaSeleccionada
-    ) { lista, filtro ->
-        if (filtro == null) lista
-        else lista.filter { it.categoria == filtro }
+        _categoriaSeleccionada,
+        _textoBusqueda // <--- Añadimos el tercer flujo
+    ) { lista, filtro, texto ->
+        lista.filter { tarea ->
+            // Filtro por categoría
+            val coincideCategoria = filtro == null || tarea.categoria == filtro
+            // Filtro por texto
+            val coincideTexto = tarea.titulo.contains(texto, ignoreCase = true) ||
+                    tarea.descripcion?.contains(texto, ignoreCase = true) == true
+
+            coincideCategoria && coincideTexto
+        }
     }
 
     // --- 4. CLASIFICACIÓN POR VENCIMIENTO (VISTA PRINCIPAL) ---
