@@ -81,6 +81,10 @@ import com.example.mistareasapp.core.notifications.tasks.NotificationHelper
 import com.example.mistareasapp.core.ai.tasks.DatosIA
 import com.example.mistareasapp.core.ai.tasks.TareaIA
 
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+
+
 @Composable
 fun MiBottomBar(navController: NavController) {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
@@ -142,6 +146,7 @@ fun MisTareasApp() {
     // (Ya no darán rojo porque el viewModel ya existe arriba)
     val navController = rememberNavController()
     val listaTareas by viewModel.listaTareas.collectAsState(initial = emptyList())
+
 
     LaunchedEffect(listaTareas) {
         Log.d("LOG-NOTIFICACION", "🔔 La lista ha cambiado. Tareas totales: ${listaTareas.size}")
@@ -639,7 +644,7 @@ fun MisTareasApp() {
                     PantallaListaTareas(
                         navController = navController,
                         viewModel = viewModel,
-                        mapas = mapasDeTareas, // <--- ¡ESTA ES LA LÍNEA QUE FALTA!
+                        mapas = mapasDeTareas,
                         modifier = Modifier.padding(innerPadding).fillMaxSize()
                     )
                 }

@@ -118,6 +118,10 @@ fun CuerpoListaTareas(
     var tareaAEliminar by remember { mutableStateOf<Tarea?>(null) }
     var mostrarDialogo by remember { mutableStateOf(false) }
 
+    // --- NUEVOS ESTADOS PARA COMPLETAR ---
+    var tareaACompletar by remember { mutableStateOf<Tarea?>(null) }
+    var mostrarDialogoCompletar by remember { mutableStateOf(false) }
+
     // Función para inicializar o cambiar todas las secciones
     fun setTodas(abrir: Boolean) {
         val nombres = listOf("Vencidas", "Hoy", "Esta semana", "Este mes", "Más adelante", "Completadas")
@@ -146,6 +150,34 @@ fun CuerpoListaTareas(
                 TextButton(onClick = {
                     mostrarDialogo = false
                     tareaAEliminar = null
+                }) {
+                    Text("Cancelar")
+                }
+            }
+        )
+    }
+
+    if (mostrarDialogoCompletar && tareaACompletar != null) {
+        AlertDialog(
+            onDismissRequest = {
+                mostrarDialogoCompletar = false
+                tareaACompletar = null
+            },
+            title = { Text("¿Completar tarea?") },
+            text = { Text("¿Quieres marcar como terminada \"${tareaACompletar?.titulo}\"?") },
+            confirmButton = {
+                TextButton(onClick = {
+                    tareaACompletar?.let { viewModel.archivarTarea(it) } // Llama al viewModel
+                    mostrarDialogoCompletar = false
+                    tareaACompletar = null
+                }) {
+                    Text("Completar", color = MaterialTheme.colorScheme.primary)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    mostrarDialogoCompletar = false
+                    tareaACompletar = null
                 }) {
                     Text("Cancelar")
                 }
@@ -206,7 +238,10 @@ fun CuerpoListaTareas(
                                 tareaAEliminar = t
                                 mostrarDialogo = true
                             },
-                            onArchive = { t -> viewModel.archivarTarea(t) },
+                            onArchive = { t ->
+                                tareaACompletar = t
+                                mostrarDialogoCompletar = true
+                            },
                             modifier = Modifier.Companion.clickable { onEditTask(tarea.id) }
                         )
                     }

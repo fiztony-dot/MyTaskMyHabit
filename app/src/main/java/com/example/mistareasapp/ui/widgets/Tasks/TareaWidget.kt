@@ -17,7 +17,10 @@ import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
 import com.example.mistareasapp.core.voz.VoiceTaskActivity
-
+import androidx.glance.Image
+import androidx.glance.ImageProvider
+import androidx.glance.action.clickable
+import com.example.mistareasapp.R
 
 @SuppressLint("RestrictedApi") // Añade esta línea
 class TareaWidget : GlanceAppWidget() {
@@ -25,18 +28,17 @@ class TareaWidget : GlanceAppWidget() {
         provideContent {
             Column(
                 modifier = GlanceModifier.fillMaxSize()
-                    .background(Color.White), // O el color que prefieras
+                    .clickable(onClick = actionStartActivity<VoiceTaskActivity>()),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                Image(
+                    provider = ImageProvider(R.drawable.widget_icon),
+                    contentDescription = "Icono del widget"
+                )
                 Text(
                     text = "Acceso Rápido",
                     style = TextStyle(color = ColorProvider(Color.Black))
-                )
-                // Este botón lanza la actividad de voz que acabamos de terminar
-                Button(
-                    text = "🎙️ Dictar Tarea",
-                    onClick = actionStartActivity<VoiceTaskActivity>()
                 )
             }
         }
