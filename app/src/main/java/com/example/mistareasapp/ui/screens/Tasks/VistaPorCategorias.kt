@@ -44,6 +44,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.Text
 
 
+@Suppress("FunctionNaming", "LongMethod", "LongParameterList")
 @Composable
 fun VistaPorCategorias(
     viewModel: TareasViewModel,

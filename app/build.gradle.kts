@@ -5,29 +5,25 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.compose.compiler)
     alias(libs.plugins.google.ksp)
-
-    // AÑADE ESTA LÍNEA AQUÍ ABAJO:
-    kotlin("plugin.serialization") version "1.9.0" // Usa la versión de tu Kotlin
+    kotlin("plugin.serialization") version "1.9.0"
+    // Aquí NO ponemos versión porque ya la pusimos arriba
     id("io.gitlab.arturbosch.detekt")
 }
 
 detekt {
+    toolVersion = "1.23.5"
     buildUponDefaultConfig = true
     allRules = false
+    // Nota: HEMOS QUITADO jvmTarget de aquí porque ya no existe en este nivel
+}
 
+// 3. ESTA ES LA CLAVE: Configuramos el jvmTarget dentro de todas las tareas de detekt
+tasks.withType<io.gitlab.arturbosch.detekt.Detekt>().configureEach {
+    jvmTarget = "1.8" // O "17" si prefieres, pero esto ya no saldrá en rojo
     reports {
-        html {
-            required.set(true)
-        }
-        xml {
-            required.set(false)
-        }
-        txt {
-            required.set(false)
-        }
-        sarif {
-            required.set(false)
-        }
+        html.required.set(true)
+        xml.required.set(false)
+        txt.required.set(false)
     }
 }
 
@@ -123,6 +119,7 @@ dependencies {
 
     implementation("androidx.glance:glance-appwidget:1.1.0")
     implementation("androidx.glance:glance-material3:1.1.0")
+
 
 
 }

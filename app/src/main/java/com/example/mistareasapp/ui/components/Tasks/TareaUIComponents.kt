@@ -342,6 +342,7 @@ fun HeaderSeccionColapsable(
 }
 
 // --- COMPONENTE: TARJETA DE TAREA INDIVIDUAL ---
+@Suppress("FunctionNaming", "LongMethod", "LongParameterList")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TareaCard(

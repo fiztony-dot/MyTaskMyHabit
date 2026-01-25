@@ -27,6 +27,7 @@ import androidx.compose.runtime.setValue
 import com.example.mistareasapp.data.tasks.Tarea
 
 
+@Suppress("FunctionNaming", "LongMethod", "LongParameterList")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PantallaListaTareas(
