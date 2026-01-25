@@ -1,4 +1,4 @@
-package com.example.mistareasapp.ui.screens.Tasks
+package com.example.mistareasapp.ui.screens.tasks
 
 import android.app.TimePickerDialog
 import androidx.activity.compose.BackHandler
@@ -53,10 +53,10 @@ import androidx.navigation.NavController
 import com.example.mistareasapp.data.tasks.Categoria
 import com.example.mistareasapp.data.tasks.Prioridad
 import com.example.mistareasapp.data.tasks.Tarea
-import com.example.mistareasapp.ui.components.Tasks.BotonSelectorDato
-import com.example.mistareasapp.ui.components.Tasks.SelectorPrioridad
-import com.example.mistareasapp.ui.components.Tasks.obtenerColorIcono
-import com.example.mistareasapp.ui.components.Tasks.obtenerIcono
+import com.example.mistareasapp.ui.components.tasks.BotonSelectorDato
+import com.example.mistareasapp.ui.components.tasks.SelectorPrioridad
+import com.example.mistareasapp.ui.components.tasks.obtenerColorIcono
+import com.example.mistareasapp.ui.components.tasks.obtenerIcono
 import com.example.mistareasapp.viewmodel.Tasks.TareasViewModel
 import java.time.Instant
 import java.time.LocalTime

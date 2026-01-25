@@ -1,4 +1,4 @@
-package com.example.mistareasapp.ui.screens.Tasks
+package com.example.mistareasapp.ui.screens.tasks
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -16,15 +16,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import com.example.mistareasapp.OrdenCategorias
-import com.example.mistareasapp.ui.components.Tasks.CuerpoListaTareas
-import com.example.mistareasapp.ui.screens.Tasks.VistaPorCategorias
+import com.example.mistareasapp.ui.components.tasks.CuerpoListaTareas
 import com.example.mistareasapp.viewmodel.Tasks.MapasDeTareas
 import com.example.mistareasapp.viewmodel.Tasks.TareasViewModel
 import com.example.mistareasapp.viewmodel.Tasks.TipoVista
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
-import com.example.mistareasapp.data.tasks.Tarea
 
 
 @Suppress("FunctionNaming", "LongMethod", "LongParameterList")

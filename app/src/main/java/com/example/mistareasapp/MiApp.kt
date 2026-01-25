@@ -12,7 +12,6 @@ import java.util.Locale
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.*
 
 // --- 3. Networking (Ktor Client) ---
@@ -61,18 +60,17 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.*
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
-import com.example.mistareasapp.core.notifications.tasks.NotificacionWorker
 
 // --- 9. Clases del Proyecto (Local) ---
 import com.example.mistareasapp.data.tasks.TareasDatabase
 import com.example.mistareasapp.data.tasks.Prioridad
 import com.example.mistareasapp.data.tasks.Tarea
-import com.example.mistareasapp.ui.components.Tasks.BarraFiltros
-import com.example.mistareasapp.ui.screens.Habits.PantallaHabitos
-import com.example.mistareasapp.ui.screens.Tasks.PantallaCrearTarea
-import com.example.mistareasapp.ui.screens.Tasks.PantallaEditarTarea
-import com.example.mistareasapp.ui.screens.Tasks.PantallaGestionCategorias
-import com.example.mistareasapp.ui.screens.Tasks.PantallaListaTareas
+import com.example.mistareasapp.ui.components.tasks.BarraFiltros
+import com.example.mistareasapp.ui.screens.habits.PantallaHabitos
+import com.example.mistareasapp.ui.screens.tasks.PantallaCrearTarea
+import com.example.mistareasapp.ui.screens.tasks.PantallaEditarTarea
+import com.example.mistareasapp.ui.screens.tasks.PantallaGestionCategorias
+import com.example.mistareasapp.ui.screens.tasks.PantallaListaTareas
 import com.example.mistareasapp.ui.theme.MisTareasAppTheme
 import com.example.mistareasapp.viewmodel.Tasks.TareasViewModel
 import com.example.mistareasapp.viewmodel.Tasks.TareasViewModelFactory

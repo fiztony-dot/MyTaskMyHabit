@@ -1,4 +1,4 @@
-package com.example.mistareasapp.ui.components.Tasks
+package com.example.mistareasapp.ui.components.tasks
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Build

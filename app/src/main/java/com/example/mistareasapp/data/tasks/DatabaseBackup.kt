@@ -29,7 +29,8 @@ object DatabaseBackup {
             TareasDatabase.resetearInstancia()
 
         } catch (e: Exception) {
-            e.printStackTrace()
+            // Eliminado e.printStackTrace() para cumplir con Detekt
+            Log.e("BACKUP", "Error al exportar base de datos: ${e.message}")
         }
     }
 
@@ -60,7 +61,6 @@ object DatabaseBackup {
             Log.d("RESTORE", "Archivo copiado con éxito a ${dbFile.absolutePath}")
 
         } catch (e: Exception) {
-            e.printStackTrace()
             Log.e("RESTORE", "Error crítico: ${e.message}")
         }
     }

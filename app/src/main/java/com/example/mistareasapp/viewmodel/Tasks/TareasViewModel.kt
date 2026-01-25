@@ -35,6 +35,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.catch
 
 // --- DATA CLASS PARA LA ESTRUCTURA DE LA UI ---
 data class MapasDeTareas(
@@ -101,11 +102,12 @@ class TareasViewModel(
 
     @OptIn(ExperimentalCoroutinesApi::class)
     val listaTareas: Flow<List<Tarea>> = refreshTrigger.flatMapLatest {
-        try {
-            tareaDao.obtenerTodas()
-        } catch (e: Exception) {
-            flowOf(emptyList())
-        }
+        tareaDao.obtenerTodas()
+            .catch { e ->
+                // Usamos Log.e en lugar de printStackTrace para Detekt
+                Log.e("TAREAS_FLOW", "Error obteniendo tareas del DAO: ${e.message}")
+                emit(emptyList()) // Emitimos lista vacía en caso de error
+            }
     }
 
     // FUENTE DE VERDAD FILTRADA: Todas las pantallas (Vencimiento y Categorías) consumen de aquí

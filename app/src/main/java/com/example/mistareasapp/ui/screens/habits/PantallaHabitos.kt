@@ -1,4 +1,4 @@
-package com.example.mistareasapp.ui.screens.Habits
+package com.example.mistareasapp.ui.screens.habits
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column

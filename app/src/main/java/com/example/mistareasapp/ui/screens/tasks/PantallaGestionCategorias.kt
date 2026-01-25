@@ -1,4 +1,4 @@
-package com.example.mistareasapp.ui.screens.Tasks
+package com.example.mistareasapp.ui.screens.tasks
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -39,8 +39,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.example.mistareasapp.data.tasks.Categoria
-import com.example.mistareasapp.ui.components.Tasks.obtenerColorIcono
-import com.example.mistareasapp.ui.components.Tasks.obtenerIcono
+import com.example.mistareasapp.ui.components.tasks.obtenerColorIcono
+import com.example.mistareasapp.ui.components.tasks.obtenerIcono
 import com.example.mistareasapp.viewmodel.Tasks.TareasViewModel
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue

@@ -1,4 +1,4 @@
-package com.example.mistareasapp.ui.screens.Tasks
+package com.example.mistareasapp.ui.screens.tasks
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -30,15 +30,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.example.mistareasapp.data.tasks.Prioridad
 import com.example.mistareasapp.data.tasks.Tarea
-import com.example.mistareasapp.ui.components.Tasks.HeaderSeccion
-import com.example.mistareasapp.ui.components.Tasks.TareaCard
-import com.example.mistareasapp.ui.components.Tasks.obtenerEstiloCategoria
+import com.example.mistareasapp.ui.components.tasks.HeaderSeccion
+import com.example.mistareasapp.ui.components.tasks.TareaCard
+import com.example.mistareasapp.ui.components.tasks.obtenerEstiloCategoria
 import com.example.mistareasapp.viewmodel.Tasks.TareasViewModel
 import java.time.LocalDate
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import com.example.mistareasapp.ui.components.Tasks.CuerpoListaTareas
-import com.example.mistareasapp.viewmodel.Tasks.MapasDeTareas
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.Text
