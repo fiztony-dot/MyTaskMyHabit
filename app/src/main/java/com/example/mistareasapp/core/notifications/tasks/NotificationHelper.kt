@@ -12,13 +12,16 @@ object NotificationHelper {
     ) {
         val data = androidx.work.workDataOf(
             "titulo" to tarea.titulo,
-            "id_tarea" to tarea.id
+            "id_tarea" to tarea.id,
+            "tipo" to tipo // <-- AÑADE ESTA LÍNEA en NotificationHelper.kt
         )
 
         val request = androidx.work.OneTimeWorkRequestBuilder<NotificacionWorker>()
             .setInitialDelay(delayMs, java.util.concurrent.TimeUnit.MILLISECONDS)
             .setInputData(data)
-            .addTag("notif_${tarea.id}_$tipo") // Tag: notif_ID_principal o notif_ID_repeticion
+            // BORRA O COMENTA ESTA LÍNEA:
+            // .setExpedited(androidx.work.OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
+            .addTag("notif_${tarea.id}_$tipo")
             .build()
 
         androidx.work.WorkManager.getInstance(context).enqueueUniqueWork(
@@ -27,6 +30,10 @@ object NotificationHelper {
             request
         )
     }
+    private const val CINCO_MINUTOS_MS = 5 * 60 * 1000L // 5 minutos
+    private const val HORA_EN_MS = 3_600_000L // 60 minutos
+    private const val DIA_EN_MS = 86_400_000L // 24 horas
+    private const val TRES_DIAS_MS = 259_200_000L // 3 días
 
     fun programarNotificacion(context: android.content.Context, tarea: Tarea) {
         val fecha = tarea.fechaLimite ?: return
@@ -38,10 +45,9 @@ object NotificationHelper {
 
         // 1. DETERMINAMOS EL INTERVALO DE REPETICIÓN SEGÚN TU SOLICITUD
         val tiempoRepeticion = when (tarea.prioridad) {
-            Prioridad.ALTA -> 60 * 60 * 1000L           // 60 minutos
-            /*Prioridad.ALTA -> 5 * 60 * 1000L           // 60 minutos*/
-            Prioridad.MEDIA -> 24 * 60 * 60 * 1000L      // 24 horas
-            Prioridad.BAJA -> 3 * 24 * 60 * 60 * 1000L  // 3 días
+            Prioridad.ALTA -> CINCO_MINUTOS_MS
+            Prioridad.MEDIA -> HORA_EN_MS
+            Prioridad.BAJA -> TRES_DIAS_MS
             else -> 0L
         }
 

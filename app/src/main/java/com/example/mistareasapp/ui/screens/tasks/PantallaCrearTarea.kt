@@ -21,8 +21,6 @@ import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.LabelOff
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.DatePicker
-import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
@@ -34,7 +32,6 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TimePicker
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.rememberTimePickerState
@@ -62,31 +59,14 @@ import com.example.mistareasapp.ui.components.tasks.obtenerIcono
 import com.example.mistareasapp.viewmodel.Tasks.TareasViewModel
 import com.example.mistareasapp.viewmodel.Tasks.TareasViewModelFactory
 import kotlinx.coroutines.launch
-import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
-import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
+import com.example.mistareasapp.ui.components.tasks.DateTimePickers
 
-@Composable
-fun TimePickerDialog(
-    title: String = "Seleccionar Hora",
-    onDismissRequest: () -> Unit,
-    confirmButton: @Composable () -> Unit,
-    dismissButton: @Composable () -> Unit,
-    content: @Composable () -> Unit,
-) {
-    AlertDialog(
-        onDismissRequest = onDismissRequest,
-        title = { Text(text = title) },
-        text = { content() },
-        confirmButton = confirmButton,
-        dismissButton = dismissButton
-    )
-}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -120,74 +100,34 @@ fun PantallaCrearTarea(navController: NavController) {
     val datePickerState = rememberDatePickerState()
     val timePickerState = rememberTimePickerState(is24Hour = true)
 
-    if (showDatePicker) {
-        DatePickerDialog(
-            onDismissRequest = { showDatePicker = false },
-            confirmButton = {
-                TextButton(onClick = {
-                    datePickerState.selectedDateMillis?.let { millis ->
-                        fechaLimite = Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault())
-                            .toLocalDate()
-                    }
-                    showDatePicker = false
-                }) { Text("Aceptar") }
-            },
-            dismissButton = {
-                TextButton(onClick = {
-                    showDatePicker = false
-                }) { Text("Cancelar") }
-            }
-        ) { DatePicker(state = datePickerState) }
-    }
-
-    if (showTimePicker) {
-        TimePickerDialog(
-            onDismissRequest = { showTimePicker = false },
-            confirmButton = {
-                TextButton(onClick = {
-                    horaLimite = LocalTime.of(timePickerState.hour, timePickerState.minute)
-                    showTimePicker = false
-                }) { Text("Aceptar") }
-            },
-            dismissButton = {
-                TextButton(onClick = {
-                    showTimePicker = false
-                }) { Text("Cancelar") }
-            }
-        ) { TimePicker(state = timePickerState) }
-    }
+    // Gestionamos los selectores de Fecha y Hora de
+    DateTimePickers(
+        showDatePicker = showDatePicker,
+        showTimePicker = showTimePicker,
+        datePickerState = datePickerState,
+        timePickerState = timePickerState,
+        onDateSelected = { fechaLimite = it },
+        onTimeSelected = { horaLimite = it },
+        onDismissDate = { showDatePicker = false },
+        onDismissTime = { showTimePicker = false }
+    )
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("NUEVA TAREA", fontWeight = FontWeight.Companion.Bold) },
-                navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.Default.Close, contentDescription = "Cancelar")
+            CrearTareaTopBar(
+                titulo = titulo,
+                descripcion = descripcion,
+                prioridad = prioridad,
+                fechaLimite = fechaLimite,
+                horaLimite = horaLimite,
+                categoria = categoriaSeleccionada,
+                repeticion = repeticionSeleccionada,
+                onBack = { navController.popBackStack() },
+                onSave = { nuevaTarea ->
+                    scope.launch {
+                        viewModel.insertar(nuevaTarea)
+                        navController.popBackStack()
                     }
-                },
-                actions = {
-                    TextButton(
-                        onClick = {
-                            if (titulo.isNotBlank()) {
-                                val tituloFormateado = titulo.trim().replaceFirstChar {
-                                    if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString()
-                                }
-                                val nuevaTarea = Tarea(
-                                    titulo = tituloFormateado,
-                                    descripcion = descripcion.ifBlank { null },
-                                    prioridad = prioridad,
-                                    fechaLimite = fechaLimite,
-                                    horaLimite = if (fechaLimite == null) null else horaLimite,
-                                    categoria = categoriaSeleccionada?.titulo,
-                                    repeticion = if (fechaLimite == null) "Sin repetición" else repeticionSeleccionada
-                                )
-                                scope.launch { viewModel.insertar(nuevaTarea) }
-                                navController.popBackStack()
-                            }
-                        },
-                        enabled = titulo.isNotBlank()
-                    ) { Text("GUARDAR", fontWeight = FontWeight.Companion.ExtraBold) }
                 }
             )
         }
@@ -217,68 +157,8 @@ fun PantallaCrearTarea(navController: NavController) {
                     minLines = 3
                 )
             }
-
-            // --- CATEGORÍA (RESTAURADO COMPLETO) ---
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    "Categoría",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Companion.SemiBold
-                )
-                ExposedDropdownMenuBox(
-                    expanded = menuCategoriasExpandido,
-                    onExpandedChange = { menuCategoriasExpandido = !menuCategoriasExpandido }
-                ) {
-                    OutlinedTextField(
-                        value = categoriaSeleccionada?.titulo ?: "Sin categoría",
-                        onValueChange = {},
-                        readOnly = true,
-                        leadingIcon = {
-                            val nombreIcono = categoriaSeleccionada?.icono ?: "list"
-                            Icon(
-                                obtenerIcono(nombreIcono),
-                                null,
-                                tint = obtenerColorIcono(nombreIcono)
-                            )
-                        },
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = menuCategoriasExpandido) },
-                        modifier = Modifier.Companion.menuAnchor().fillMaxWidth()
-                    )
-                    ExposedDropdownMenu(
-                        expanded = menuCategoriasExpandido,
-                        onDismissRequest = { menuCategoriasExpandido = false }
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text("Sin categoría") },
-                            onClick = {
-                                categoriaSeleccionada = null; menuCategoriasExpandido = false
-                            },
-                            leadingIcon = {
-                                Icon(
-                                    Icons.Default.LabelOff,
-                                    null,
-                                    tint = Color.Companion.Gray
-                                )
-                            }
-                        )
-                        listaCategorias.filter { it.activa }.forEach { cat ->
-                            DropdownMenuItem(
-                                text = { Text(cat.titulo) },
-                                onClick = {
-                                    categoriaSeleccionada = cat; menuCategoriasExpandido = false
-                                },
-                                leadingIcon = {
-                                    Icon(
-                                        obtenerIcono(cat.icono),
-                                        null,
-                                        tint = obtenerColorIcono(cat.icono)
-                                    )
-                                }
-                            )
-                        }
-                    }
-                }
-            }
+            // Llamada a la función que pinta la parte de la categoría
+            SeccionCategoria(categoriaSeleccionada, listaCategorias, { categoriaSeleccionada = it })
 
             SelectorPrioridad(
                 prioridadSeleccionada = prioridad,
@@ -360,6 +240,124 @@ fun PantallaCrearTarea(navController: NavController) {
                         Spacer(Modifier.Companion.width(4.dp))
                         Text("Quitar fecha")
                     }
+                }
+            }
+        }
+    }
+}
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun CrearTareaTopBar(
+    titulo: String,
+    descripcion: String,
+    prioridad: Prioridad,
+    fechaLimite: LocalDate?,
+    horaLimite: LocalTime?,
+    categoria: Categoria?,
+    repeticion: String,
+    onBack: () -> Unit,
+    onSave: (Tarea) -> Unit
+) {
+    TopAppBar(
+        title = { Text("NUEVA TAREA", fontWeight = FontWeight.Bold) },
+        navigationIcon = {
+            IconButton(onClick = onBack) {
+                Icon(Icons.Default.Close, contentDescription = "Cancelar")
+            }
+        },
+        actions = {
+            TextButton(
+                enabled = titulo.isNotBlank(),
+                onClick = {
+                    val tituloFormateado = titulo.trim().replaceFirstChar {
+                        if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString()
+                    }
+                    val nuevaTarea = Tarea(
+                        titulo = tituloFormateado,
+                        descripcion = descripcion.ifBlank { null },
+                        prioridad = prioridad,
+                        fechaLimite = fechaLimite,
+                        horaLimite = if (fechaLimite == null) null else horaLimite,
+                        categoria = categoria?.titulo,
+                        repeticion = if (fechaLimite == null) "Sin repetición" else repeticion
+                    )
+                    onSave(nuevaTarea)
+                }
+            ) {
+                Text("GUARDAR", fontWeight = FontWeight.ExtraBold)
+            }
+        }
+    )
+}
+
+
+// --- CATEGORÍA (RESTAURADO COMPLETO) ---
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SeccionCategoria(
+    categoriaSeleccionada: Categoria?,
+    listaCategorias: List<Categoria>,
+    onCategoriaSelected: (Categoria?) -> Unit
+) {
+    // El estado del menú ahora vive aquí, solo donde se necesita
+    var expandido by remember { mutableStateOf(false) }
+
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            "Categoría",
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.SemiBold
+        )
+        ExposedDropdownMenuBox(
+            expanded = expandido,
+            onExpandedChange = { expandido = !expandido }
+        ) {
+            OutlinedTextField(
+                value = categoriaSeleccionada?.titulo ?: "Sin categoría",
+                onValueChange = {},
+                readOnly = true,
+                leadingIcon = {
+                    val nombreIcono = categoriaSeleccionada?.icono ?: "list"
+                    Icon(
+                        obtenerIcono(nombreIcono),
+                        null,
+                        tint = obtenerColorIcono(nombreIcono)
+                    )
+                },
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandido) },
+                modifier = Modifier.menuAnchor().fillMaxWidth()
+            )
+            ExposedDropdownMenu(
+                expanded = expandido,
+                onDismissRequest = { expandido = false }
+            ) {
+                // Opción: Sin categoría
+                DropdownMenuItem(
+                    text = { Text("Sin categoría") },
+                    onClick = {
+                        onCategoriaSelected(null)
+                        expandido = false
+                    },
+                    leadingIcon = {
+                        Icon(Icons.Default.LabelOff, null, tint = Color.Gray)
+                    }
+                )
+                // Opciones: Lista de categorías de la base de datos
+                listaCategorias.filter { it.activa }.forEach { cat ->
+                    DropdownMenuItem(
+                        text = { Text(cat.titulo) },
+                        onClick = {
+                            onCategoriaSelected(cat)
+                            expandido = false
+                        },
+                        leadingIcon = {
+                            Icon(
+                                obtenerIcono(cat.icono),
+                                null,
+                                tint = obtenerColorIcono(cat.icono)
+                            )
+                        }
+                    )
                 }
             }
         }
