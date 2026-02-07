@@ -44,17 +44,13 @@ import androidx.compose.animation.shrinkVertically
 // --- 7. Jetpack Compose: UI, Material Design y Gráficos ---
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
 
 // --- 8. Jetpack Compose: Runtime y Estado ---
 import androidx.compose.runtime.*
@@ -65,7 +61,6 @@ import androidx.compose.runtime.setValue
 import com.example.mistareasapp.data.tasks.TareasDatabase
 import com.example.mistareasapp.data.tasks.Prioridad
 import com.example.mistareasapp.data.tasks.Tarea
-import com.example.mistareasapp.ui.components.tasks.BarraFiltros
 import com.example.mistareasapp.ui.screens.habits.PantallaHabitos
 import com.example.mistareasapp.ui.screens.tasks.PantallaCrearTarea
 import com.example.mistareasapp.ui.screens.tasks.PantallaEditarTarea
@@ -75,47 +70,15 @@ import com.example.mistareasapp.ui.theme.MisTareasAppTheme
 import com.example.mistareasapp.viewmodel.Tasks.TareasViewModel
 import com.example.mistareasapp.viewmodel.Tasks.TareasViewModelFactory
 
-
 import com.example.mistareasapp.core.notifications.tasks.NotificationHelper
 import com.example.mistareasapp.core.ai.tasks.DatosIA
 import com.example.mistareasapp.core.ai.tasks.TareaIA
 
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
-
-
-@Composable
-fun MiBottomBar(navController: NavController) {
-    val navBackStackEntry by navController.currentBackStackEntryAsState()
-    val currentRoute = navBackStackEntry?.destination?.route
-
-    NavigationBar(tonalElevation = 0.dp) {
-        NavigationBarItem(
-            label = { Text("Tareas") },
-            icon = { Icon(Icons.Filled.List, contentDescription = null) },
-            selected = currentRoute == Rutas.PantallaTareas.ruta,
-            onClick = {
-                navController.navigate(Rutas.PantallaTareas.ruta) {
-                    popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                    launchSingleTop = true
-                    restoreState = true
-                }
-            }
-        )
-        NavigationBarItem(
-            label = { Text("Hábitos") },
-            icon = { Icon(Icons.Filled.CheckCircle, contentDescription = null) },
-            selected = currentRoute == Rutas.PantallaHabitos.ruta,
-            onClick = {
-                navController.navigate(Rutas.PantallaHabitos.ruta) {
-                    popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                    launchSingleTop = true
-                    restoreState = true
-                }
-            }
-        )
-    }
-}
+import com.example.mistareasapp.ui.components.tasks.AccionesTopBarTareas
+import com.example.mistareasapp.ui.navigation.BarraNavegacion
+import com.example.mistareasapp.ui.navigation.Rutas
 
 fun obtenerTitulo(ruta: String?): String {
     return when (ruta) {
@@ -146,6 +109,7 @@ fun MisTareasApp() {
     val navController = rememberNavController()
     val listaTareas by viewModel.listaTareas.collectAsState(initial = emptyList())
 
+    val filtroActual by viewModel.categoriaSeleccionada.collectAsState()
 
     LaunchedEffect(listaTareas) {
         Log.d("LOG-NOTIFICACION", "🔔 La lista ha cambiado. Tareas totales: ${listaTareas.size}")
@@ -446,14 +410,15 @@ fun MisTareasApp() {
     var mostrarConfirmacionRestore by remember { mutableStateOf(false) }
 
     val tareasActivas = listaTareas.count { !it.estaCompletada }
-// Asegúrate de recoger el estado del texto del buscador
+
     val textoBusqueda by viewModel.textoBusqueda.collectAsStateWithLifecycle()
+
+
 
     MisTareasAppTheme { // Si sigue en rojo, asegúrate de que el import de arriba sea correcto
         Scaffold(
             topBar = {
                 if (rutaActual == Rutas.PantallaTareas.ruta || rutaActual == Rutas.PantallaHabitos.ruta) {
-                    val filtroActual by viewModel.categoriaSeleccionada.collectAsState()
                     val listaCategoriasUI by viewModel.todasLasCategorias.collectAsState(initial = emptyList())
 
                     // Usamos Column para que la TopBar y el Filtro convivan verticalmente
@@ -514,129 +479,29 @@ fun MisTareasApp() {
                                     }
                                 }
                             },
+                            // En el caso de que estemos en la pestaña TAREAS pintamos los iconos de la TOPBar
                             actions = {
                                 if (rutaActual == Rutas.PantallaTareas.ruta) {
-                                    // --- NUEVO BOTÓN DE BÚSQUEDA ---
-                                    IconButton(onClick = {
-                                        viewModel.buscadorVisible = !viewModel.buscadorVisible
-                                        if (!viewModel.buscadorVisible) viewModel.actualizarBusqueda("") // Limpia al cerrar
-                                    }) {
-                                        Icon(
-                                            imageVector = if (viewModel.buscadorVisible) Icons.Default.Close else Icons.Default.Search,
-                                            contentDescription = "Buscar",
-                                            tint = if (textoBusqueda.isNotEmpty()) MaterialTheme.colorScheme.primary else LocalContentColor.current
-                                        )
-                                    }
-                                    // --- 1. NUEVO BOTÓN DE FILTRO ---
-                                    IconButton(onClick = { viewModel.mostrarBarraFiltro = !viewModel.mostrarBarraFiltro }) {
-                                        Icon(
-                                            imageVector = if (filtroActual == null) Icons.Default.FilterList else Icons.Default.FilterListOff,
-                                            contentDescription = "Filtrar",
-                                            tint = if (filtroActual != null) MaterialTheme.colorScheme.primary else LocalContentColor.current
-                                        )
-                                    }
-
-                                    // --- 2. BOTÓN MAESTRO EXPANDIR/COLAPSAR ---
-                                    IconButton(onClick = {
-                                        val nuevoEstado = !viewModel.todasSeccionesAbiertas
-                                        viewModel.cambiarEstadoGlobalSecciones(nuevoEstado)
-                                    }) {
-                                        Icon(
-                                            imageVector = if (viewModel.todasSeccionesAbiertas) Icons.Default.UnfoldLess else Icons.Default.UnfoldMore,
-                                            contentDescription = "Contraer/Expandir todo"
-                                        )
-                                    }
-
-                                    // --- 3. BOTÓN AÑADIR (Con tu lógica original) ---
-                                    var expandedAdd by remember { mutableStateOf(false) }
-                                    val rotation by animateFloatAsState(
-                                        targetValue = if (expandedAdd) 45f else 0f,
-                                        animationSpec = tween(durationMillis = 200),
-                                        label = "rotation"
+                                    AccionesTopBarTareas(
+                                        viewModel = viewModel,
+                                        navController = navController,
+                                        onLanzarVoz = { lanzarEscucha() },
+                                        textoBusqueda = textoBusqueda,
+                                        filtroActual = filtroActual
                                     )
-                                    Box {
-                                        IconButton(onClick = { expandedAdd = true }) {
-                                            Surface(
-                                                shape = CircleShape,
-                                                color = MaterialTheme.colorScheme.secondary,
-                                                modifier = Modifier.size(40.dp)
-                                            ) {
-                                                Icon(
-                                                    Icons.Default.Add,
-                                                    contentDescription = "Nueva tarea",
-                                                    tint = Color.Black,
-                                                    modifier = Modifier
-                                                        .padding(8.dp)
-                                                        .graphicsLayer { rotationZ = rotation }
-                                                )
-                                            }
-                                        }
-                                        DropdownMenu(
-                                            expanded = expandedAdd,
-                                            onDismissRequest = { expandedAdd = false }
-                                        ) {
-                                            DropdownMenuItem(
-                                                text = { Text("🗣️ Por voz") },
-                                                onClick = { expandedAdd = false; lanzarEscucha() }
-                                            )
-                                            DropdownMenuItem(
-                                                text = { Text("📝 Escribir") },
-                                                onClick = { expandedAdd = false; navController.navigate(Rutas.PantallaCrearTarea.ruta) }
-                                            )
-                                        }
-                                    }
                                 }
                             }
                         )
-
-
-
-// --- SECCIÓN DE FILTROS Y BÚSQUEDA ---
-                        Column {
-                            // 1. Buscador (Se activa con la lupa)
-                            AnimatedVisibility(
-                                visible = viewModel.buscadorVisible && rutaActual == Rutas.PantallaTareas.ruta,
-                                enter = expandVertically() + fadeIn(),
-                                exit = shrinkVertically() + fadeOut()
-                            ) {
-                                OutlinedTextField(
-                                    value = textoBusqueda,
-                                    onValueChange = { viewModel.actualizarBusqueda(it) },
-                                    placeholder = { Text("Buscar en mis tareas...") },
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                                    shape = RoundedCornerShape(12.dp),
-                                    singleLine = true,
-                                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                                    trailingIcon = {
-                                        if (textoBusqueda.isNotEmpty()) {
-                                            IconButton(onClick = { viewModel.actualizarBusqueda("") }) {
-                                                Icon(Icons.Default.Clear, contentDescription = "Limpiar")
-                                            }
-                                        }
-                                    }
-                                )
-                            }
-
-                            // 2. Tu Barra de Filtros actual (Se activa con el botón de filtro)
-                            AnimatedVisibility(
-                                visible = viewModel.mostrarBarraFiltro && rutaActual == Rutas.PantallaTareas.ruta,
-                                enter = expandVertically() + fadeIn(),
-                                exit = shrinkVertically() + fadeOut()
-                            ) {
-                                BarraFiltros(
-                                    categorias = listaCategoriasUI,
-                                    seleccionada = filtroActual,
-                                    onSeleccionar = { viewModel.filtrarPor(it) }
-                                )
-                            }
-                        }
                     }
                 }
             }
             ,
-            bottomBar = { if (rutaActual != Rutas.PantallaCrearTarea.ruta) MiBottomBar(navController) }
+
+            bottomBar = {
+                if (rutaActual == Rutas.PantallaTareas.ruta || rutaActual == Rutas.PantallaHabitos.ruta) {
+                    BarraNavegacion(navController, rutaActual)
+                }
+            }
         ) { innerPadding ->
             // (Mantén aquí tus diálogos de seguridad: mostrarConfirmacionRestore, etc.)
             if (mostrarConfirmacionRestore) {

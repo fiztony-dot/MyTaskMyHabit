@@ -15,7 +15,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavController
-import com.example.mistareasapp.Rutas
+import com.example.mistareasapp.ui.navigation.Rutas
 import com.example.mistareasapp.viewmodel.Tasks.TareasViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
