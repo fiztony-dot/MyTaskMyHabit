@@ -26,7 +26,11 @@ class TareaWidget : GlanceAppWidget() {
         provideContent {
             Column(
                 modifier = GlanceModifier.fillMaxSize()
-                    .clickable(onClick = actionStartActivity<MainActivity>()),
+                    .clickable(onClick = actionStartActivity<MainActivity>(
+                        parameters = androidx.glance.action.actionParametersOf(
+                            androidx.glance.action.ActionParameters.Key<Boolean>("abrirVoz") to true
+                        )
+                    )),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalAlignment = Alignment.CenterVertically
             ) {

@@ -37,4 +37,8 @@ interface TareaDao {
 
     @Query("SELECT * FROM tareas_table WHERE id = :id")
     fun obtenerTareaPorId(id: Int): Flow<Tarea?> // Añade la palabra Flow
+
+    // ➡️ AÑADE ESTA PARA EL WORKER (Sin Flow y sin suspend)
+    @Query("SELECT * FROM tareas_table WHERE id = :id")
+    fun obtenerTareaPorIdSincrona(id: Int): Tarea?
 }

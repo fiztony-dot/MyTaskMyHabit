@@ -2,48 +2,52 @@ package com.example.mistareasapp.core.notifications.tasks
 
 import com.example.mistareasapp.data.tasks.Prioridad
 import com.example.mistareasapp.data.tasks.Tarea
+import java.time.Duration
+import java.time.LocalDateTime
+import java.time.LocalTime
+import java.util.concurrent.TimeUnit
+import androidx.work.*
 
 object NotificationHelper {
+    private const val CINCO_MINUTOS_MS = 5 * 60 * 1000L
+    private const val HORA_EN_MS = 60 * 60 * 1000L
+    private const val TRES_DIAS_MS = 3 * 24 * 60 * 60 * 1000L
+
     private fun programarTareaEnWorkManager(
         context: android.content.Context,
         tarea: Tarea,
         delayMs: Long,
-        tipo: String
+        tipo: String,
+        intervalo: Long = 0L
     ) {
-        val data = androidx.work.workDataOf(
+        val data = workDataOf(
             "titulo" to tarea.titulo,
             "id_tarea" to tarea.id,
-            "tipo" to tipo // <-- AÑADE ESTA LÍNEA en NotificationHelper.kt
+            "tipo" to tipo,
+            "intervalo" to intervalo
         )
 
-        val request = androidx.work.OneTimeWorkRequestBuilder<NotificacionWorker>()
-            .setInitialDelay(delayMs, java.util.concurrent.TimeUnit.MILLISECONDS)
+        val request = OneTimeWorkRequestBuilder<NotificacionWorker>()
+            .setInitialDelay(delayMs, TimeUnit.MILLISECONDS)
             .setInputData(data)
-            // BORRA O COMENTA ESTA LÍNEA:
-            // .setExpedited(androidx.work.OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
             .addTag("notif_${tarea.id}_$tipo")
             .build()
 
-        androidx.work.WorkManager.getInstance(context).enqueueUniqueWork(
+        WorkManager.getInstance(context).enqueueUniqueWork(
             "notif_${tarea.id}_$tipo",
-            androidx.work.ExistingWorkPolicy.REPLACE,
+            ExistingWorkPolicy.REPLACE,
             request
         )
     }
-    private const val CINCO_MINUTOS_MS = 5 * 60 * 1000L // 5 minutos
-    private const val HORA_EN_MS = 3_600_000L // 60 minutos
-    private const val DIA_EN_MS = 86_400_000L // 24 horas
-    private const val TRES_DIAS_MS = 259_200_000L // 3 días
 
     fun programarNotificacion(context: android.content.Context, tarea: Tarea) {
         val fecha = tarea.fechaLimite ?: return
-        val hora = tarea.horaLimite ?: java.time.LocalTime.of(9, 0)
-        val fechaHoraLimite = java.time.LocalDateTime.of(fecha, hora)
-        val ahora = java.time.LocalDateTime.now()
+        val hora = tarea.horaLimite ?: LocalTime.of(9, 0)
+        val fechaHoraLimite = LocalDateTime.of(fecha, hora)
+        val ahora = LocalDateTime.now()
 
-        val delayBase = java.time.Duration.between(ahora, fechaHoraLimite).toMillis()
+        val delayBase = Duration.between(ahora, fechaHoraLimite).toMillis()
 
-        // 1. DETERMINAMOS EL INTERVALO DE REPETICIÓN SEGÚN TU SOLICITUD
         val tiempoRepeticion = when (tarea.prioridad) {
             Prioridad.ALTA -> CINCO_MINUTOS_MS
             Prioridad.MEDIA -> HORA_EN_MS
@@ -51,25 +55,21 @@ object NotificationHelper {
             else -> 0L
         }
 
+        // A. AVISO PRINCIPAL
         if (delayBase > 0) {
-            // A. AVISO PRINCIPAL (A la hora de la tarea)
             programarTareaEnWorkManager(context, tarea, delayBase, "principal")
             android.util.Log.d("LOG-NOTIFICACION", "✅ ALARMA PRINCIPAL: '${tarea.titulo}' a las $hora")
+        }
 
-            // B. AVISO DE REPETICIÓN (Según prioridad)
-            if (tiempoRepeticion > 0) {
-                programarTareaEnWorkManager(context, tarea, delayBase + tiempoRepeticion, "repeticion")
-                val info = when(tarea.prioridad) {
-                    Prioridad.ALTA -> "60 min"
-                    Prioridad.MEDIA -> "24 horas"
-                    Prioridad.BAJA -> "3 días"
-                    else -> ""
-                }
-                android.util.Log.d("LOG-NOTIFICACION", "➕ REPETICIÓN PROGRAMADA (cada $info) para: '${tarea.titulo}'")
+        // B. AVISO DE REPETICIÓN (Bucle)
+        if (tiempoRepeticion > 0) {
+            val proximoAvisoRepeticion = if (delayBase > 0) delayBase + tiempoRepeticion else tiempoRepeticion
+
+            // Programamos si el momento de repetición es futuro
+            if (proximoAvisoRepeticion > 0) {
+                programarTareaEnWorkManager(context, tarea, proximoAvisoRepeticion, "repeticion", tiempoRepeticion)
+                android.util.Log.d("LOG-NOTIFICACION", "➕ REPETICIÓN PROGRAMADA para: '${tarea.titulo}'")
             }
-
-        } else {
-            android.util.Log.d("LOG-NOTIFICACION", "❌ NO PROGRAMADA: '${tarea.titulo}' ya pasó.")
         }
     }
 }

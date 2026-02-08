@@ -85,8 +85,6 @@ import com.example.mistareasapp.network.IAResultTarea
 import com.example.mistareasapp.network.IAResultHabito
 import com.example.mistareasapp.network.TipoEntrada
 
-
-
 fun obtenerTitulo(ruta: String?): String {
     return when (ruta) {
         Rutas.PantallaTareas.ruta -> "Mis Tareas"
@@ -112,31 +110,11 @@ fun MisTareasApp() {
     // --- NUEVO: AÑADIMOS EL CEREBRO DE LA IA ---
     val iaViewModel: IAViewModel = viewModel()
 
+
     // --- 2. AHORA DEFINIMOS LA LISTA Y EL VIGILANTE ---
     val navController = rememberNavController()
     val listaTareas by viewModel.listaTareas.collectAsState(initial = emptyList())
     val filtroActual by viewModel.categoriaSeleccionada.collectAsState()
-
-    // 1. DEFINIR EL LAUNCHER AQUÍ (Al principio del Composable)
-    val voiceLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.StartActivityForResult()
-    ) { result ->
-        if (result.resultCode == android.app.Activity.RESULT_OK) {
-            val matches = result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
-            val textoDictado = matches?.get(0) ?: ""
-
-            if (textoDictado.isNotEmpty()) {
-                // Usamos la función "procesarVoz" de TU IAViewModel
-                iaViewModel.procesarVoz(textoDictado, TipoEntrada.TAREA) { resultado ->
-                    if (resultado is IAResultTarea) {
-                        // Aquí el resultado ya viene con los parches aplicados
-                        viewModel.agregarTareaDesdeIA(resultado)
-                        Toast.makeText(context, "Tarea: ${resultado.titulo}", Toast.LENGTH_SHORT).show()
-                    }
-                }
-            }
-        }
-    }
 
     LaunchedEffect(listaTareas) {
         Log.d("LOG-NOTIFICACION", "🔔 La lista ha cambiado. Tareas totales: ${listaTareas.size}")
@@ -179,10 +157,16 @@ fun MisTareasApp() {
 
                 // 1. Detectamos automáticamente si estamos en Hábitos o Tareas
                 val rutaActual = navController.currentBackStackEntry?.destination?.route
-                val tipo = if (rutaActual == Rutas.PantallaHabitos.ruta) {
-                    TipoEntrada.HABITO
+                val esWidget = (context as? MainActivity)?.intent?.getBooleanExtra("abrirVoz", false) ?: false
+
+                val tipo = if (esWidget) {
+                    TipoEntrada.TAREA // Si es widget, forzamos TAREA para que la IA sepa qué buscar
                 } else {
-                    TipoEntrada.TAREA
+                    if (navController.currentBackStackEntry?.destination?.route == Rutas.PantallaHabitos.ruta) {
+                        TipoEntrada.HABITO
+                    } else {
+                        TipoEntrada.TAREA
+                    }
                 }
 
                 // 2. Llamada al "cerebro" (IAViewModel)
@@ -230,6 +214,29 @@ fun MisTareasApp() {
         }
     }
 
+ /*   // 1. DEFINIR EL LAUNCHER AQUÍ (Al principio del Composable)
+    val voiceLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == android.app.Activity.RESULT_OK) {
+            val matches = result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
+            val textoDictado = matches?.get(0) ?: ""
+
+            if (textoDictado.isNotEmpty()) {
+                // Usamos la función "procesarVoz" de TU IAViewModel
+                iaViewModel.procesarVoz(textoDictado, TipoEntrada.TAREA) { resultado ->
+                    if (resultado is IAResultTarea) {
+                        // Aquí el resultado ya viene con los parches aplicados
+                        viewModel.agregarTareaDesdeIA(resultado)
+                        Toast.makeText(context, "Tarea: ${resultado.titulo}", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+        }
+    }*/
+
+
+
     val lanzarEscucha = {
         // 1. Preparamos el Intent
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
@@ -247,6 +254,19 @@ fun MisTareasApp() {
             Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
         }
     }
+/*      // 1. Detectamos si la actividad trae el recado del widget
+   val contexto = LocalContext.current
+   val actividad = contexto as? MainActivity
+   val necesitaVoz = actividad?.intent?.getBooleanExtra("abrirVoz", false) ?: false
+
+// 2. Si necesita voz, ejecutamos tu función tal cual está
+   LaunchedEffect(necesitaVoz) {
+       if (necesitaVoz) {
+           actividad?.intent?.removeExtra("abrirVoz") // Limpiamos para que no buclee
+           lanzarEscucha() // <--- Llamamos a TU función, la que ya funciona
+       }
+   }*/
+
     var mostrarMenuPrincipal by remember { mutableStateOf(false) }
     var mostrarConfirmacionRestore by remember { mutableStateOf(false) }
     val tareasActivas = listaTareas.count { !it.estaCompletada }
@@ -371,6 +391,16 @@ fun MisTareasApp() {
                    // Llamamos a la función que está en tu archivo GestionArchivosCopias.kt
                    GestionDatosScreen(viewModel = viewModel)
                }
+            }
+        }
+        // --- AL FINAL DEL COMPOSABLE ---
+        val actividad = LocalContext.current as? MainActivity
+        val necesitaVozWidget = actividad?.intent?.getBooleanExtra("abrirVoz", false) ?: false
+
+        if (necesitaVozWidget) {
+            LaunchedEffect(Unit) {
+                lanzarEscucha()
+                actividad?.intent?.removeExtra("abrirVoz")
             }
         }
     }
