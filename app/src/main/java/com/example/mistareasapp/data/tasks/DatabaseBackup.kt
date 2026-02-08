@@ -1,9 +1,8 @@
-package com.example.mistareasapp
+package com.example.mistareasapp.data.tasks
 
 import android.content.Context
 import android.net.Uri
 import android.util.Log
-import com.example.mistareasapp.data.tasks.TareasDatabase
 import java.io.File
 
 object DatabaseBackup {

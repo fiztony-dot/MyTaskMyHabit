@@ -71,14 +71,21 @@ import com.example.mistareasapp.viewmodel.Tasks.TareasViewModel
 import com.example.mistareasapp.viewmodel.Tasks.TareasViewModelFactory
 
 import com.example.mistareasapp.core.notifications.tasks.NotificationHelper
-import com.example.mistareasapp.core.ai.tasks.DatosIA
-import com.example.mistareasapp.core.ai.tasks.TareaIA
-
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
+import com.example.mistareasapp.network.IAProcessor
 import com.example.mistareasapp.ui.components.tasks.AccionesTopBarTareas
 import com.example.mistareasapp.ui.navigation.BarraNavegacion
 import com.example.mistareasapp.ui.navigation.Rutas
+import com.example.mistareasapp.ui.screens.GestionDatosScreen
+import com.example.mistareasapp.viewmodel.IAViewModel
+
+// --- 10. Nuevos modelos de IA y tipos de entrada ---
+import com.example.mistareasapp.network.IAResultTarea
+import com.example.mistareasapp.network.IAResultHabito
+import com.example.mistareasapp.network.TipoEntrada
+
+
 
 fun obtenerTitulo(ruta: String?): String {
     return when (ruta) {
@@ -96,20 +103,40 @@ fun MisTareasApp() {
     val scope = rememberCoroutineScope()
 
     // --- 1. PRIMERO CREAMOS LA BASE DE DATOS Y EL VIEWMODEL ---
-    // (Esto tiene que ir arriba para que 'listaTareas' lo pueda usar)
     val db = TareasDatabase.getDatabase(context)
     val factory = TareasViewModelFactory(
-        tareaDao = db.tareaDao(),
-        categoriaDao = db.categoriaDao()
+        tareaDao = db.tareaDao(), categoriaDao = db.categoriaDao()
     )
     val viewModel: TareasViewModel = viewModel(factory = factory)
 
+    // --- NUEVO: AÑADIMOS EL CEREBRO DE LA IA ---
+    val iaViewModel: IAViewModel = viewModel()
+
     // --- 2. AHORA DEFINIMOS LA LISTA Y EL VIGILANTE ---
-    // (Ya no darán rojo porque el viewModel ya existe arriba)
     val navController = rememberNavController()
     val listaTareas by viewModel.listaTareas.collectAsState(initial = emptyList())
-
     val filtroActual by viewModel.categoriaSeleccionada.collectAsState()
+
+    // 1. DEFINIR EL LAUNCHER AQUÍ (Al principio del Composable)
+    val voiceLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == android.app.Activity.RESULT_OK) {
+            val matches = result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
+            val textoDictado = matches?.get(0) ?: ""
+
+            if (textoDictado.isNotEmpty()) {
+                // Usamos la función "procesarVoz" de TU IAViewModel
+                iaViewModel.procesarVoz(textoDictado, TipoEntrada.TAREA) { resultado ->
+                    if (resultado is IAResultTarea) {
+                        // Aquí el resultado ya viene con los parches aplicados
+                        viewModel.agregarTareaDesdeIA(resultado)
+                        Toast.makeText(context, "Tarea: ${resultado.titulo}", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+        }
+    }
 
     LaunchedEffect(listaTareas) {
         Log.d("LOG-NOTIFICACION", "🔔 La lista ha cambiado. Tareas totales: ${listaTareas.size}")
@@ -121,7 +148,6 @@ fun MisTareasApp() {
             }
         }
     }
-
 
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val rutaActual = navBackStackEntry?.destination?.route
@@ -143,246 +169,61 @@ fun MisTareasApp() {
     }
     // Este es tu nuevo motor de IA, mucho más fiable
     val client = remember { HttpClient(OkHttp) }
-    val apiKey = DatosIA.MI_LLAVE
-
-
-    // Este lanzador abre el selector de archivos para guardar
-    val exportarLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.CreateDocument("application/octet-stream")
-    ) { uri ->
-        uri?.let {
-            // 1. Exportamos y reseteamos la instancia global (INSTANCE = null)
-            DatabaseBackup.exportDatabase(context, it)
-
-            // 2. OBTENEMOS LA NUEVA DB (Esto crea una conexión fresca)
-            val nuevaDb = TareasDatabase.getDatabase(context)
-
-            // 3. ACTUALIZAMOS LOS DAOS DEL VIEWMODEL
-            // Necesitamos una función en el ViewModel que acepte los nuevos DAOs
-            viewModel.actualizarDaos(nuevaDb.tareaDao(), nuevaDb.categoriaDao())
-
-            Toast.makeText(context, "Copia guardada y base de datos reconectada", Toast.LENGTH_SHORT).show()
-        }
-    }
-    // Este lanzador abre el explorador para elegir un archivo existente
-    var mostrarInstruccionesPostRestore by remember { mutableStateOf(false) }
-
-    // Modificamos el lanzador de importar para que al terminar active este diálogo
-    val importarLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocument()
-    ) { uri ->
-        uri?.let {
-            DatabaseBackup.importDatabase(context, it)
-            mostrarInstruccionesPostRestore = true // Activamos el aviso de "ahora reinicia"
-        }
-    }
 
     val speechLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
     ) { result ->
-        val data = result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
-        data?.get(0)?.let { textoEscuchado ->
-            scope.launch {
-                try {
-                    // 1. Obtenemos la fecha de hoy para darle contexto a la IA
-                    val sdfHoy = java.text.SimpleDateFormat("EEEE dd/MM/yyyy", java.util.Locale("es", "ES"))
-                    val urlCorrecta = "https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash-lite:generateContent?key=$apiKey"
+        if (result.resultCode == android.app.Activity.RESULT_OK) {
+            val data = result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
+            data?.get(0)?.let { textoEscuchado ->
 
+                // 1. Detectamos automáticamente si estamos en Hábitos o Tareas
+                val rutaActual = navController.currentBackStackEntry?.destination?.route
+                val tipo = if (rutaActual == Rutas.PantallaHabitos.ruta) {
+                    TipoEntrada.HABITO
+                } else {
+                    TipoEntrada.TAREA
+                }
 
-                    // 1. Obtenemos fecha y hora LOCAL del dispositivo
-                    val ahora = java.time.LocalDateTime.now()
-                    val fechaHoy = java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy").format(ahora)
-                    val horaHoy = java.time.format.DateTimeFormatter.ofPattern("HH:mm").format(ahora)
-                    val anyoHoy = java.time.format.DateTimeFormatter.ofPattern("yyyy").format(ahora)
-
-                    // 3. LOGS PARA VER QUÉ ESTÁ PASANDO (Copia esto justo después de donde obtienes la respuesta de la IA)
-                    android.util.Log.d("LOG", "=== DATOS ENVIADOS ===")
-                    android.util.Log.d("LOG", "Texto escuchado: $textoEscuchado")
-                    android.util.Log.d("LOG", "Fecha Hoy: $fechaHoy | Hora Hoy: $horaHoy")
-
-                    val response = client.post(urlCorrecta) {
-                        contentType(ContentType.Application.Json)
-                        setBody(buildJsonObject {
-                            putJsonArray("contents") {
-                                addJsonObject {
-                                    putJsonArray("parts") {
-                                        addJsonObject {
-                                            put("text", """
-                                                Eres un experto en extracción de datos.
-                                                CONTEXTO: Hoy es $fechaHoy, la hora actual es $horaHoy y el año es $anyoHoy.
-                                            
-                                                TAREA: Extraer la información de: "$textoEscuchado"
-                                            
-                                                INSTRUCCIONES CRÍTICAS:
-                                                1. "fecha": 
-                                                   - Si dice "mañana", usa exactamente: ${java.time.LocalDate.now().plusDays(1)}.
-                                                   - Si menciona día/mes, usa el año $anyoHoy y devuélvelo como YYYY-MM-DD.
-                                                   - Si dice "en X minutos/horas" o solo indica una hora, la fecha es $fechaHoy.
-                                                   - Solo si es una tarea sin ninguna referencia de tiempo, pon null.
-                                                2. "hora":
-                                                   - Si dice "en X minutos", calcula la hora sumando a $horaHoy.
-                                                   - Si no especifica hora, pon null.
-                                                   - Formato HH:mm (24h).
-                                                3. JSON (estrictamente numérico):
-                                                {
-                                                  "tarea": "acción sin palabras temporales",
-                                                  "fecha": "YYYY-MM-DD o null",
-                                                  "hora": "HH:mm o null",
-                                                  "prioridad": "ALTA|MEDIA|BAJA"
-                                                }
-                                            
-                                                EJEMPLOS:
-                                                - "Mañana a las 5": {"fecha": "${java.time.LocalDate.now().plusDays(1)}", "hora": "17:00"}
-                                                - "En 2 min": {"fecha": "$fechaHoy", "hora": "Calcula según $horaHoy"}
-                                            """.trimIndent())
-
-                                        }
-                                    }
-                                }
-                            }
-                        }.toString())
-                    }
-
-                    if (response.status.isSuccess()) {
-                        val responseBody = response.bodyAsText()
-
-                        val jsonElement = Json.parseToJsonElement(responseBody)
-                        val textoIA = jsonElement.jsonObject["candidates"]
-                            ?.jsonArray?.get(0)
-                            ?.jsonObject?.get("content")
-                            ?.jsonObject?.get("parts")
-                            ?.jsonArray?.get(0)
-                            ?.jsonObject?.get("text")
-                            ?.jsonPrimitive?.content ?: ""
-
-                        val jsonLimpio = textoIA.replace("```json", "").replace("```", "").trim()
-
-                        // Asegúrate de que tu data class TareaIA tenga: val hora: String?
-                        val objetoTarea = Json.decodeFromString<TareaIA>(jsonLimpio)
-
-                        // --- AÑADE ESTOS LOGS AQUÍ ---
-                        android.util.Log.d("LOG_IA", "1. JSON RECIBIDO DE GEMINI: $jsonLimpio")
-                        android.util.Log.d("LOG_IA", "2. OBJETO DESERIALIZADO: Tarea=${objetoTarea.tarea}, Fecha=${objetoTarea.fecha}, Hora=${objetoTarea.hora}")
-                        // -----------------------------
-                        withContext(Dispatchers.Main) {
-                            try {
-                                // 1. Formateo del título
-                                val tituloFormateado = objetoTarea.tarea.trim().replaceFirstChar {
-                                    if (it.isLowerCase()) it.titlecase(java.util.Locale.getDefault()) else it.toString()
-                                }
-
-                                // 2. Procesamos la fecha (acepta null, "null" o dd/mm/yyyy)
-                                val fechaConvertida = try {
-                                    val fechaTexto = objetoTarea.fecha?.trim()
-
-                                    if (fechaTexto.isNullOrBlank() || fechaTexto == "null") {
-                                        null
-                                    } else {
-                                        // 1. Detectamos el formato (Gemini usa '-' y nosotros '/')
-                                        val fechaParseada = if (fechaTexto.contains("-")) {
-                                            // Formato YYYY-MM-DD (El que viene de Gemini)
-                                            java.time.LocalDate.parse(fechaTexto)
-                                        } else {
-                                            // Formato DD/MM/YYYY (El que tenías antes por si acaso)
-                                            val p = fechaTexto.split("/")
-                                            if (p.size == 3) {
-                                                val dia = p[0].toInt()
-                                                val mes = p[1].toInt()
-                                                val anioRaw = p[2].toInt()
-                                                val anio = if (anioRaw < 100) anioRaw + 2000 else anioRaw
-                                                java.time.LocalDate.of(anio, mes, dia)
-                                            } else {
-                                                null
-                                            }
-                                        }
-
-                                        // 2. Validación final contra "Alucinaciones"
-                                        val hoy = java.time.LocalDate.now()
-                                        if (fechaParseada != null && fechaParseada.isBefore(hoy)) {
-                                            android.util.Log.w("LOG", "⚠️ IA envió fecha pasada: $fechaParseada. Ajustando a hoy.")
-                                            hoy
-                                        } else {
-                                            fechaParseada
-                                        }
-                                    }
-                                } catch (e: Exception) {
-                                    android.util.Log.e("LOG", "❌ Error fatal parseando fecha: ${objetoTarea.fecha}")
-                                    java.time.LocalDate.now()
-                                }
-
-                                // 3. Procesamos la hora (acepta null, "null" o HH:mm)
-                                val horaConvertida = try {
-                                    val horaTexto = objetoTarea.hora?.trim()
-                                    if (!horaTexto.isNullOrBlank() && horaTexto != "null") {
-                                        // Soporta formatos como "8:05" convirtiéndolos a "08:05" si fuera necesario
-                                        val horaLimpia = if (horaTexto.contains(":") && horaTexto.indexOf(":") == 1) "0$horaTexto" else horaTexto
-                                        java.time.LocalTime.parse(horaLimpia)
-                                    } else null
-                                } catch (e: Exception) {
-                                    android.util.Log.e("LOG", "Error en hora: ${objetoTarea.hora}")
-                                    null
-                                }
-
-                                // ... después de calcular horaConvertida ...
-
-                                var horaFinal = horaConvertida
-
-                                // PARCHE: Si el usuario dijo "en X minutos" y la IA ha devuelto algo muy lejano (más de 3 horas)
-                                // es que la IA ha alucinado. Vamos a intentar corregirlo localmente.
-                                val texto = textoEscuchado.lowercase()
-                                if (texto.contains("en ") && (texto.contains("minuto") || texto.contains("min"))) {
-                                    val minutos = texto.filter { it.isDigit() }.toIntOrNull() ?: 2 // por defecto 2 si no lee el número
-                                    if (minutos < 60) {
-                                        // Si la IA dio una hora que está a más de 1 hora de diferencia de "ahora + minutos"
-                                        val calculoLocal = java.time.LocalTime.now().plusMinutes(minutos.toLong())
-                                        horaFinal = calculoLocal
-                                        android.util.Log.d("LOG", "🕒 Corrección local: Sumados $minutos min. Hora: $horaFinal")
-                                    }
-                                }
-
-                                val prioridadConvertida = when (objetoTarea.prioridad?.uppercase()) {
+                // 2. Llamada al "cerebro" (IAViewModel)
+                iaViewModel.procesarVoz(textoEscuchado, tipo) { resultado ->
+                    // --- LOG DE DEPURACIÓN ---
+                    Log.d("IA_DEBUG", """
+                    TEXTO RECIBIDO: "$textoEscuchado"
+                    PANTALLA ACTUAL: $tipo
+                    RESULTADO IA: $resultado
+                """.trimIndent())
+                    // -------------------------
+                    when (resultado) {
+                        is IAResultTarea -> {
+                            // Log específico para los campos de la tarea
+                            Log.d("IA_DEBUG", "Distribución: Titulo=${resultado.titulo}, Fecha=${resultado.fecha}, Hora=${resultado.hora}, Prioridad=${resultado.prioridad}")
+                            val nuevaTarea = Tarea(
+                                id = 0,
+                                titulo = resultado.titulo,
+                                descripcion = textoEscuchado,
+                                prioridad = when(resultado.prioridad.uppercase()) {
                                     "ALTA" -> Prioridad.ALTA
                                     "BAJA" -> Prioridad.BAJA
                                     else -> Prioridad.MEDIA
-                                }
-
-                                val nuevaTarea = Tarea(
-                                    id = 0,
-                                    titulo = tituloFormateado,
-                                    descripcion = textoEscuchado,
-                                    estaCompletada = false,
-                                    prioridad = prioridadConvertida,
-                                    fechaCreacion = System.currentTimeMillis(),
-                                    fechaLimite = fechaConvertida,
-                                    horaLimite = horaFinal
-                                )
-
-                                // --- ESTO ES LO QUE QUEREMOS VER EN EL LOGCAT ---
-                                android.util.Log.d("LOG", "Ejecutando guardado para: ${nuevaTarea.titulo}")
-
-                                viewModel.insertar(nuevaTarea)
-                                NotificationHelper.programarNotificacion(context, nuevaTarea)
-
-                                Toast.makeText(context, "Tarea guardada: $tituloFormateado", Toast.LENGTH_SHORT).show()
-
-                            } catch (e: Exception) {
-                                // Si algo falla catastróficamente, lo veremos aquí
-                                android.util.Log.e("LOG", "Error crítico en el bloque Main: ${e.message}")
-                                e.printStackTrace()
-                            }
+                                },
+                                fechaLimite = resultado.fecha?.let { java.time.LocalDate.parse(it) },
+                                horaLimite = resultado.hora?.let { java.time.LocalTime.parse(it) },
+                                fechaCreacion = System.currentTimeMillis()
+                            )
+                            viewModel.insertar(nuevaTarea)
+                            NotificationHelper.programarNotificacion(context, nuevaTarea)
+                            Toast.makeText(context, "Tarea: ${resultado.titulo}", Toast.LENGTH_SHORT).show()
                         }
-                    }
-                } catch (e: Exception) {
-                    Log.e("LOG", "Error: ${e.message}")
-                    // --- ESTO ES LO QUE TIENES QUE AÑADIR PARA QUE NO FALLE ---
-                    withContext(Dispatchers.Main) {
-                        val tareaSimple = Tarea(
-                            titulo = textoEscuchado.replaceFirstChar { it.uppercase() },
-                            descripcion = "Voz (Sin IA por error de red)",
-                            prioridad = Prioridad.MEDIA
-                        )
-                        viewModel.insertar(tareaSimple)
-                        Toast.makeText(context, "Guardado simple (Error de conexión)", Toast.LENGTH_SHORT).show()
+
+                        is IAResultHabito -> {
+                            // Preparado para el futuro: aquí conectarás con HabitosViewModel
+                            Toast.makeText(context, "Hábito detectado: ${resultado.nombre}", Toast.LENGTH_SHORT).show()
+                        }
+
+                        null -> {
+                            Toast.makeText(context, "La IA no pudo procesar la frase", Toast.LENGTH_SHORT).show()
+                        }
                     }
                 }
             }
@@ -408,14 +249,10 @@ fun MisTareasApp() {
     }
     var mostrarMenuPrincipal by remember { mutableStateOf(false) }
     var mostrarConfirmacionRestore by remember { mutableStateOf(false) }
-
     val tareasActivas = listaTareas.count { !it.estaCompletada }
-
     val textoBusqueda by viewModel.textoBusqueda.collectAsStateWithLifecycle()
 
-
-
-    MisTareasAppTheme { // Si sigue en rojo, asegúrate de que el import de arriba sea correcto
+    MisTareasAppTheme {
         Scaffold(
             topBar = {
                 if (rutaActual == Rutas.PantallaTareas.ruta || rutaActual == Rutas.PantallaHabitos.ruta) {
@@ -439,20 +276,13 @@ fun MisTareasApp() {
                                         onDismissRequest = { mostrarMenuPrincipal = false }
                                     ) {
                                         DropdownMenuItem(
-                                            text = { Text("Backup") },
+                                            text = { Text("Backup & Restore") },
                                             onClick = {
                                                 mostrarMenuPrincipal = false
-                                                exportarLauncher.launch("backup_tareas_${System.currentTimeMillis()}.db")
+                                                // CAMBIO: Ahora navegamos a la pantalla de gestión
+                                                navController.navigate("ruta_gestion_copias")
                                             },
                                             leadingIcon = { Icon(Icons.Default.Backup, null) }
-                                        )
-                                        DropdownMenuItem(
-                                            text = { Text("Restore") },
-                                            onClick = {
-                                                mostrarMenuPrincipal = false
-                                                mostrarConfirmacionRestore = true
-                                            },
-                                            leadingIcon = { Icon(Icons.Default.Restore, null) }
                                         )
                                         HorizontalDivider()
                                         DropdownMenuItem(
@@ -483,10 +313,8 @@ fun MisTareasApp() {
                             actions = {
                                 if (rutaActual == Rutas.PantallaTareas.ruta) {
                                     AccionesTopBarTareas(
-                                        viewModel = viewModel,
-                                        navController = navController,
-                                        onLanzarVoz = { lanzarEscucha() },
-                                        textoBusqueda = textoBusqueda,
+                                        viewModel = viewModel, navController = navController,
+                                        onLanzarVoz = { lanzarEscucha() }, textoBusqueda = textoBusqueda,
                                         filtroActual = filtroActual
                                     )
                                 }
@@ -494,52 +322,14 @@ fun MisTareasApp() {
                         )
                     }
                 }
-            }
-            ,
-
+            },
             bottomBar = {
                 if (rutaActual == Rutas.PantallaTareas.ruta || rutaActual == Rutas.PantallaHabitos.ruta) {
                     BarraNavegacion(navController, rutaActual)
                 }
             }
         ) { innerPadding ->
-            // (Mantén aquí tus diálogos de seguridad: mostrarConfirmacionRestore, etc.)
-            if (mostrarConfirmacionRestore) {
-                AlertDialog(
-                    onDismissRequest = { mostrarConfirmacionRestore = false },
-                    title = { Text("¿Restaurar copia de seguridad?") },
-                    text = { Text("Esto borrará las tareas actuales y las reemplazará por las de la copia. ¿Deseas continuar?") },
-                    confirmButton = {
-                        TextButton(onClick = {
-                            mostrarConfirmacionRestore = false
-                            // Esto es lo que realmente abre el buscador de archivos
-                            importarLauncher.launch(arrayOf("application/octet-stream", "application/x-sqlite3"))
-                        }) {
-                            Text("RESTAURAR", color = Color.Red)
-                        }
-                    },
-                    dismissButton = {
-                        TextButton(onClick = { mostrarConfirmacionRestore = false }) {
-                            Text("CANCELAR")
-                        }
-                    }
-                )
-            }
-
-            if (mostrarInstruccionesPostRestore) {
-                AlertDialog(
-                    onDismissRequest = { mostrarInstruccionesPostRestore = false },
-                    title = { Text("Restauración completada") },
-                    text = { Text("Para que los datos se carguen correctamente, por favor cierra la aplicación por completo y vuelve a abrirla.") },
-                    confirmButton = {
-                        Button(onClick = { mostrarInstruccionesPostRestore = false }) {
-                            Text("ENTENDIDO")
-                        }
-                    }
-                )
-            }
-
-            NavHost(
+           NavHost(
                 navController = navController,
                 startDestination = Rutas.PantallaTareas.ruta,
                 // CLAVE: El NavHost ocupa TODO. No le pongas padding(innerPadding) aquí.
@@ -550,26 +340,19 @@ fun MisTareasApp() {
                     val mapasDeTareas by viewModel.tareasClasificadas.collectAsStateWithLifecycle()
 
                     PantallaListaTareas(
-                        navController = navController,
-                        viewModel = viewModel,
-                        mapas = mapasDeTareas,
-                        modifier = Modifier.padding(innerPadding).fillMaxSize()
+                        navController = navController, viewModel = viewModel,
+                        mapas = mapasDeTareas,modifier = Modifier.padding(innerPadding).fillMaxSize()
                     )
                 }
-
                 composable(Rutas.PantallaHabitos.ruta) {
                     PantallaHabitos(
-                        navController,
-                        viewModel,
+                        navController, viewModel,
                         modifier = Modifier.padding(innerPadding).fillMaxSize()
                     )
                 }
-
                 composable(Rutas.PantallaCrearTarea.ruta) {
-                    // Esta pantalla tiene su propio Scaffold, no necesita que le pases el padding del padre
                     PantallaCrearTarea(navController)
                 }
-
                 composable(
                     route = Rutas.PantallaEditarTarea.ruta,
                     arguments = listOf(navArgument("tareaId") { type = NavType.IntType })
@@ -577,7 +360,6 @@ fun MisTareasApp() {
                     val id = backStackEntry.arguments?.getInt("tareaId") ?: 0
                     PantallaEditarTarea(navController, id, viewModel)
                 }
-
                 composable("categorias") {
                     PantallaGestionCategorias(
                         navController,
@@ -585,6 +367,10 @@ fun MisTareasApp() {
                         modifier = Modifier.padding(innerPadding).fillMaxSize()
                     )
                 }
+               composable("ruta_gestion_copias") {
+                   // Llamamos a la función que está en tu archivo GestionArchivosCopias.kt
+                   GestionDatosScreen(viewModel = viewModel)
+               }
             }
         }
     }

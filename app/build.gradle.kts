@@ -99,7 +99,9 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended")
 
     // --- GEMINI (Asegúrate de que esta línea esté dentro de las llaves de dependencies) ---
-    implementation("com.google.ai.client.generativeai:generativeai:0.9.0")
+    /*implementation("com.google.ai.client.generativeai:generativeai:0.9.0") {
+        exclude(group = "org.jetbrains.kotlinx", module = "kotlinx-serialization-json")
+    }*/
 
     // Ktor: El motor para hacer peticiones REST
     implementation("io.ktor:ktor-client-core:2.3.12")
