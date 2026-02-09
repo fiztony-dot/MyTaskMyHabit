@@ -9,17 +9,10 @@ import android.widget.Toast
 import java.util.Locale
 
 // --- 2. Kotlin Core: Corrutinas y Serialización ---
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import kotlinx.serialization.json.*
 
 // --- 3. Networking (Ktor Client) ---
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
-import io.ktor.client.request.*
-import io.ktor.client.statement.*
-import io.ktor.http.*
 
 // --- 4. AndroidX & Lifecycle (Integración con el SO) ---
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -29,17 +22,9 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 
 // --- 5. Jetpack Compose: Navegación ---
 import androidx.navigation.*
-import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.*
 
 // --- 6. Jetpack Compose: Animaciones ---
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
 
 // --- 7. Jetpack Compose: UI, Material Design y Gráficos ---
 import androidx.compose.foundation.background
@@ -58,7 +43,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 
 // --- 9. Clases del Proyecto (Local) ---
-import com.example.mistareasapp.data.tasks.TareasDatabase
+import com.example.mistareasapp.data.AppDatabase
 import com.example.mistareasapp.data.tasks.Prioridad
 import com.example.mistareasapp.data.tasks.Tarea
 import com.example.mistareasapp.ui.screens.habits.PantallaHabitos
@@ -73,7 +58,6 @@ import com.example.mistareasapp.viewmodel.Tasks.TareasViewModelFactory
 import com.example.mistareasapp.core.notifications.tasks.NotificationHelper
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
-import com.example.mistareasapp.network.IAProcessor
 import com.example.mistareasapp.ui.components.tasks.AccionesTopBarTareas
 import com.example.mistareasapp.ui.navigation.BarraNavegacion
 import com.example.mistareasapp.ui.navigation.Rutas
@@ -84,13 +68,19 @@ import com.example.mistareasapp.viewmodel.IAViewModel
 import com.example.mistareasapp.network.IAResultTarea
 import com.example.mistareasapp.network.IAResultHabito
 import com.example.mistareasapp.network.TipoEntrada
+import com.example.mistareasapp.ui.navigation.BarraNavegacionHabitos
+import com.example.mistareasapp.ui.screens.habits.PantallaHabitosEstadisticas
+import com.example.mistareasapp.ui.screens.habits.PantallaHabitosFlash
+import com.example.mistareasapp.ui.screens.habits.PantallaHabitosListado
+import com.example.mistareasapp.viewmodel.Habits.HabitosViewModel
+import com.example.mistareasapp.viewmodel.Habits.HabitosViewModelFactory
 
 fun obtenerTitulo(ruta: String?): String {
-    return when (ruta) {
-        Rutas.PantallaTareas.ruta -> "Mis Tareas"
-        Rutas.PantallaHabitos.ruta -> "Mis Hábitos"
-        Rutas.PantallaCrearTarea.ruta -> "Nueva Tarea"
-        else -> "Gestión de Tareas"
+    return when {
+        ruta == Rutas.PantallaTareas.ruta -> "Mis Tareas"
+        ruta?.startsWith("habitos") == true -> "Mis Habitos, Mi Destino"
+        ruta == Rutas.PantallaCrearTarea.ruta -> "Nueva Tarea"
+        else -> "Gestión"
     }
 }
 
@@ -101,7 +91,7 @@ fun MisTareasApp() {
     val scope = rememberCoroutineScope()
 
     // --- 1. PRIMERO CREAMOS LA BASE DE DATOS Y EL VIEWMODEL ---
-    val db = TareasDatabase.getDatabase(context)
+    val db = AppDatabase.getDatabase(context)
     val factory = TareasViewModelFactory(
         tareaDao = db.tareaDao(), categoriaDao = db.categoriaDao()
     )
@@ -110,6 +100,9 @@ fun MisTareasApp() {
     // --- NUEVO: AÑADIMOS EL CEREBRO DE LA IA ---
     val iaViewModel: IAViewModel = viewModel()
 
+    // 3. NUEVO: Factory y ViewModel de Hábitos
+    val habitosFactory = HabitosViewModelFactory(db.habitoDao())
+    val habitosViewModel: HabitosViewModel = viewModel(factory = habitosFactory)
 
     // --- 2. AHORA DEFINIMOS LA LISTA Y EL VIGILANTE ---
     val navController = rememberNavController()
@@ -214,30 +207,7 @@ fun MisTareasApp() {
         }
     }
 
- /*   // 1. DEFINIR EL LAUNCHER AQUÍ (Al principio del Composable)
-    val voiceLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.StartActivityForResult()
-    ) { result ->
-        if (result.resultCode == android.app.Activity.RESULT_OK) {
-            val matches = result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
-            val textoDictado = matches?.get(0) ?: ""
-
-            if (textoDictado.isNotEmpty()) {
-                // Usamos la función "procesarVoz" de TU IAViewModel
-                iaViewModel.procesarVoz(textoDictado, TipoEntrada.TAREA) { resultado ->
-                    if (resultado is IAResultTarea) {
-                        // Aquí el resultado ya viene con los parches aplicados
-                        viewModel.agregarTareaDesdeIA(resultado)
-                        Toast.makeText(context, "Tarea: ${resultado.titulo}", Toast.LENGTH_SHORT).show()
-                    }
-                }
-            }
-        }
-    }*/
-
-
-
-    val lanzarEscucha = {
+     val lanzarEscucha = {
         // 1. Preparamos el Intent
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
@@ -254,18 +224,6 @@ fun MisTareasApp() {
             Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
         }
     }
-/*      // 1. Detectamos si la actividad trae el recado del widget
-   val contexto = LocalContext.current
-   val actividad = contexto as? MainActivity
-   val necesitaVoz = actividad?.intent?.getBooleanExtra("abrirVoz", false) ?: false
-
-// 2. Si necesita voz, ejecutamos tu función tal cual está
-   LaunchedEffect(necesitaVoz) {
-       if (necesitaVoz) {
-           actividad?.intent?.removeExtra("abrirVoz") // Limpiamos para que no buclee
-           lanzarEscucha() // <--- Llamamos a TU función, la que ya funciona
-       }
-   }*/
 
     var mostrarMenuPrincipal by remember { mutableStateOf(false) }
     var mostrarConfirmacionRestore by remember { mutableStateOf(false) }
@@ -344,8 +302,22 @@ fun MisTareasApp() {
                 }
             },
             bottomBar = {
-                if (rutaActual == Rutas.PantallaTareas.ruta || rutaActual == Rutas.PantallaHabitos.ruta) {
-                    BarraNavegacion(navController, rutaActual)
+                // Definimos las rutas del módulo de hábitos
+                val rutasHabitos = listOf(
+                    Rutas.HabitosFlash.ruta,
+                    Rutas.HabitosListado.ruta,
+                    Rutas.HabitosEstadisticas.ruta
+                )
+
+                when {
+                    // Si estamos en tareas o la pantalla principal de hábitos, mostramos la barra principal
+                    rutaActual == Rutas.PantallaTareas.ruta || rutaActual == Rutas.PantallaHabitos.ruta -> {
+                        BarraNavegacion(navController, rutaActual)
+                    }
+                    // Si estamos dentro del sub-módulo de hábitos (Flash, Listado, Stats), mostramos la nueva barra
+                    rutaActual in rutasHabitos -> {
+                        BarraNavegacionHabitos(navController, rutaActual)
+                    }
                 }
             }
         ) { innerPadding ->
@@ -364,12 +336,25 @@ fun MisTareasApp() {
                         mapas = mapasDeTareas,modifier = Modifier.padding(innerPadding).fillMaxSize()
                     )
                 }
-                composable(Rutas.PantallaHabitos.ruta) {
-                    PantallaHabitos(
-                        navController, viewModel,
-                        modifier = Modifier.padding(innerPadding).fillMaxSize()
-                    )
-                }
+               composable(Rutas.PantallaHabitos.ruta) {
+                   // Para una alineación completa con el patrón de la App, recolectamos el estado aquí
+                   val listaHabitos by habitosViewModel.habitosConProgreso.collectAsStateWithLifecycle()
+
+                   PantallaHabitos(
+                       navController = navController,
+                       viewModel = habitosViewModel,
+                       modifier = Modifier.padding(innerPadding).fillMaxSize()
+                   )
+               }
+               /*composable(Rutas.HabitosFlash.ruta) {
+                   PantallaHabitosFlash(habitosViewModel, Modifier.padding(innerPadding))
+               }
+               composable(Rutas.HabitosListado.ruta) {
+                   PantallaHabitosListado(habitosViewModel, Modifier.padding(innerPadding))
+               }
+               composable(Rutas.HabitosEstadisticas.ruta) {
+                   PantallaHabitosEstadisticas(habitosViewModel, Modifier.padding(innerPadding))
+               }*/
                 composable(Rutas.PantallaCrearTarea.ruta) {
                     PantallaCrearTarea(navController)
                 }

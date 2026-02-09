@@ -1,7 +1,8 @@
-// Fichero: Converters.kt
-package com.example.mistareasapp.data.tasks
+package com.example.mistareasapp.data
 
 import androidx.room.TypeConverter
+import com.example.mistareasapp.data.habits.FrecuenciaHabito
+import com.example.mistareasapp.data.tasks.Prioridad
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
@@ -28,8 +29,6 @@ class Converters {
         return epochDay?.let { LocalDate.ofEpochDay(it) }
     }
 
-    // --- NUEVOS CONVERSORES PARA LA HORA ---
-
     @TypeConverter
     fun fromLocalTime(time: LocalTime?): String? {
         return time?.format(DateTimeFormatter.ISO_LOCAL_TIME)
@@ -38,5 +37,15 @@ class Converters {
     @TypeConverter
     fun toLocalTime(timeString: String?): LocalTime? {
         return timeString?.let { LocalTime.parse(it, DateTimeFormatter.ISO_LOCAL_TIME) }
+    }
+    // Añadir esto dentro de la clase Converters en data/Converters.kt
+    @TypeConverter
+    fun fromFrecuencia(frecuencia: FrecuenciaHabito): String {
+        return frecuencia.name
+    }
+
+    @TypeConverter
+    fun toFrecuencia(valor: String): FrecuenciaHabito {
+        return FrecuenciaHabito.valueOf(valor)
     }
 }

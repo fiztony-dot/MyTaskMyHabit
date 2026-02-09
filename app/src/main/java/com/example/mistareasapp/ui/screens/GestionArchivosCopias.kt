@@ -11,7 +11,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.example.mistareasapp.data.tasks.DatabaseBackup
-import com.example.mistareasapp.data.tasks.TareasDatabase
+import com.example.mistareasapp.data.AppDatabase
 import com.example.mistareasapp.viewmodel.Tasks.TareasViewModel
 import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.CloudDownload
@@ -26,7 +26,7 @@ fun GestionDatosScreen(viewModel: TareasViewModel) {
     ) { uri ->
         uri?.let {
             DatabaseBackup.exportDatabase(context, it)
-            val nuevaDb = TareasDatabase.getDatabase(context)
+            val nuevaDb = AppDatabase.getDatabase(context)
             viewModel.actualizarDaos(nuevaDb.tareaDao(), nuevaDb.categoriaDao())
             Toast.makeText(context, "Copia guardada", Toast.LENGTH_SHORT).show()
         }

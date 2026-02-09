@@ -3,6 +3,7 @@ package com.example.mistareasapp.data.tasks
 import android.content.Context
 import android.net.Uri
 import android.util.Log
+import com.example.mistareasapp.data.AppDatabase
 import java.io.File
 
 object DatabaseBackup {
@@ -11,7 +12,7 @@ object DatabaseBackup {
 
     fun exportDatabase(context: Context, destinationUri: Uri) {
         try {
-            val db = TareasDatabase.getDatabase(context)
+            val db = AppDatabase.getDatabase(context)
             // 1. Cerramos para asegurar que el archivo de disco esté actualizado
             db.close()
 
@@ -25,7 +26,7 @@ object DatabaseBackup {
 
             // 2. ¡CLAVE! Borramos la instancia cerrada para que la próxima llamada
             // a TareasDatabase.getDatabase(context) cree una conexión NUEVA.
-            TareasDatabase.resetearInstancia()
+            AppDatabase.resetearInstancia()
 
         } catch (e: Exception) {
             // Eliminado e.printStackTrace() para cumplir con Detekt
@@ -36,7 +37,7 @@ object DatabaseBackup {
     fun importDatabase(context: Context, sourceUri: Uri) {
         try {
             // 1. Forzar el cierre de la base de datos
-            val db = TareasDatabase.getDatabase(context)
+            val db = AppDatabase.getDatabase(context)
             db.close()
 
             val dbFile: File = context.getDatabasePath(DB_NAME)

@@ -2,12 +2,12 @@ package com.example.mistareasapp.data.Tasks
 
 import android.content.Context
 import com.example.mistareasapp.data.tasks.Tarea
-import com.example.mistareasapp.data.tasks.TareasDatabase
+import com.example.mistareasapp.data.AppDatabase
 
 object TareaRepository {
 
     private fun dao(context: Context) =
-        TareasDatabase.getDatabase(context).tareaDao()
+        AppDatabase.getDatabase(context).tareaDao()
 
     suspend fun insertar(context: Context, tarea: Tarea) {
         dao(context).insertar(tarea)

@@ -1,41 +1,61 @@
 package com.example.mistareasapp.ui.screens.habits
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.Icon
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
+import androidx.compose.foundation.layout.*
+import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.navigation.NavController
-import com.example.mistareasapp.ui.navigation.Rutas
-import com.example.mistareasapp.viewmodel.Tasks.TareasViewModel
+import androidx.navigation.NavHostController
+import com.example.mistareasapp.viewmodel.Habits.HabitosViewModel
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.text.font.FontWeight
+import com.example.mistareasapp.viewmodel.Habits.TipoVistaHabitos
+
+// Archivo: ui/screens/habits/PantallaHabitos.kt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PantallaHabitos(navController: NavController, viewModel: TareasViewModel, modifier: Modifier = Modifier.Companion) {
-    Scaffold(
-        floatingActionButton = {
-            FloatingActionButton(
-                onClick = { navController.navigate(Rutas.PantallaCrearTarea.ruta) }
-            ) {
-                Icon(Icons.Default.Add, contentDescription = "Añadir Hábito")
-            }
-        }
-    ) { innerPadding ->
-        Column(
-            modifier = modifier.padding(innerPadding).fillMaxSize(),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.Companion.CenterHorizontally
+fun PantallaHabitos(
+    navController: NavHostController,
+    viewModel: HabitosViewModel,
+    modifier: Modifier = Modifier
+) {
+    Column(modifier = modifier.fillMaxSize()) {
+        // 1. Navegación superior homogénea con "Mis Tareas"
+        SecondaryTabRow(
+            selectedTabIndex = when (viewModel.vistaActual) {
+                TipoVistaHabitos.FLASH -> 0
+                TipoVistaHabitos.LISTADO -> 1
+                TipoVistaHabitos.ESTADISTICAS -> 2
+            },
+            containerColor = MaterialTheme.colorScheme.surface
         ) {
-            Text("Pantalla de Hábitos en construcción")
+            Tab(
+                selected = viewModel.vistaActual == TipoVistaHabitos.FLASH,
+                onClick = { viewModel.cambiarVista(TipoVistaHabitos.FLASH) },
+                text = { Text("Flash", fontWeight = FontWeight.Bold) }
+            )
+            Tab(
+                selected = viewModel.vistaActual == TipoVistaHabitos.LISTADO,
+                onClick = { viewModel.cambiarVista(TipoVistaHabitos.LISTADO) },
+                text = { Text("Hábitos", fontWeight = FontWeight.Bold) }
+            )
+            Tab(
+                selected = viewModel.vistaActual == TipoVistaHabitos.ESTADISTICAS,
+                onClick = { viewModel.cambiarVista(TipoVistaHabitos.ESTADISTICAS) },
+                text = { Text("Estadísticas", fontWeight = FontWeight.Bold) }
+            )
+        }
+
+        // 2. Contenido dinámico
+        Box(modifier = Modifier.weight(1f)) {
+            when (viewModel.vistaActual) {
+                TipoVistaHabitos.FLASH -> PantallaHabitosFlash(viewModel)
+                TipoVistaHabitos.LISTADO -> PantallaHabitosListado(viewModel)
+                TipoVistaHabitos.ESTADISTICAS -> PantallaHabitosEstadisticas(viewModel)
+            }
         }
     }
 }

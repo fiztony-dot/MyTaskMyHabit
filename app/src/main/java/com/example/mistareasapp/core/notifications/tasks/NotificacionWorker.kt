@@ -8,7 +8,7 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.work.*
 // IMPORTANTE: Estos imports deben coincidir con tus rutas reales
-import com.example.mistareasapp.data.tasks.TareasDatabase
+import com.example.mistareasapp.data.AppDatabase
 import kotlinx.coroutines.runBlocking
 import java.util.concurrent.TimeUnit
 
@@ -22,7 +22,7 @@ class NotificacionWorker(context: Context, params: WorkerParameters) : Worker(co
 
         // 1. CONEXIÓN A TU BASE DE DATOS REAL
         // Cambiado AppDatabase por TareasDatabase que es el tuyo
-        val db = TareasDatabase.getDatabase(applicationContext)
+        val db = AppDatabase.getDatabase(applicationContext)
 
         val tareaEnDb = runBlocking {
             db.tareaDao().obtenerTareaPorIdSincrona(idTarea)

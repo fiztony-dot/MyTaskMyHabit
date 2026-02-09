@@ -20,7 +20,6 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.LabelOff
 import androidx.compose.material.icons.filled.Repeat
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
@@ -51,7 +50,7 @@ import androidx.navigation.NavController
 import com.example.mistareasapp.data.tasks.Categoria
 import com.example.mistareasapp.data.tasks.Prioridad
 import com.example.mistareasapp.data.tasks.Tarea
-import com.example.mistareasapp.data.tasks.TareasDatabase
+import com.example.mistareasapp.data.AppDatabase
 import com.example.mistareasapp.ui.components.tasks.BotonSelectorDato
 import com.example.mistareasapp.ui.components.tasks.SelectorPrioridad
 import com.example.mistareasapp.ui.components.tasks.obtenerColorIcono
@@ -72,7 +71,7 @@ import com.example.mistareasapp.ui.components.tasks.DateTimePickers
 @Composable
 fun PantallaCrearTarea(navController: NavController) {
     val context = LocalContext.current
-    val db = TareasDatabase.Companion.getDatabase(context)
+    val db = AppDatabase.Companion.getDatabase(context)
     val factory = TareasViewModelFactory(db.tareaDao(), db.categoriaDao())
     val viewModel: TareasViewModel = viewModel(factory = factory)
     val scope = rememberCoroutineScope()
