@@ -50,4 +50,21 @@ interface HabitoDao {
 
     @Query("SELECT * FROM habitos_tareas_especificas WHERE habitoId = :habitoId")
     fun obtenerTareasDeHabito(habitoId: Long): Flow<List<TareaHabito>>
+
+    // En HabitoDao.kt añade o actualiza:
+
+    @Query("""
+    SELECT * FROM habitos 
+    WHERE activo = 1 
+    ORDER BY categoriaId ASC
+""")
+    fun obtenerHabitosActivos(): Flow<List<Habito>>
+
+    // Para las estadísticas rápidas
+    @Query("SELECT COUNT(*) FROM habitos_historial WHERE habitoId = :habitoId AND completado = 1")
+    fun obtenerDiasCompletados(habitoId: Long): Flow<Int>
+
+    // Para calcular la racha (obtiene las fechas de cumplimiento ordenadas)
+    @Query("SELECT fecha FROM habitos_historial WHERE habitoId = :habitoId AND completado = 1 ORDER BY fecha DESC")
+    fun obtenerFechasCompletadas(habitoId: Long): Flow<List<LocalDate>>
 }

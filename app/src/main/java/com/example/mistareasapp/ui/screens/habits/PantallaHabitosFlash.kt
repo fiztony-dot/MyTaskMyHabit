@@ -1,9 +1,14 @@
+// ui/screens/habits/PantallaHabitosFlash.kt
+
 package com.example.mistareasapp.ui.screens.habits
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
@@ -16,6 +21,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.draw.clip
+import com.example.mistareasapp.data.habits.FrecuenciaHabito
+import com.example.mistareasapp.obtenerIconoPorNombre
 import com.example.mistareasapp.viewmodel.Habits.HabitoConProgreso
 import com.example.mistareasapp.viewmodel.Habits.HabitosViewModel
 import java.time.format.DateTimeFormatter
@@ -27,7 +35,7 @@ fun PantallaHabitosFlash(viewModel: HabitosViewModel, modifier: Modifier = Modif
     val habitosConProgreso by viewModel.habitosConProgreso.collectAsState()
 
     val totalHabitos = habitosConProgreso.size
-    val habitosCompletados = habitosConProgreso.count { it.progreso?.completado == true }
+    val habitosCompletados = habitosConProgreso.count { it.estaCompletado }
     val progresoGeneral = if (totalHabitos > 0) (habitosCompletados.toFloat() / totalHabitos) else 0f
 
     Column(modifier = modifier.fillMaxSize().padding(16.dp)) {
@@ -107,57 +115,116 @@ fun PantallaHabitosFlash(viewModel: HabitosViewModel, modifier: Modifier = Modif
 fun HabitoFlashItem(item: HabitoConProgreso, viewModel: HabitosViewModel) {
     val habito = item.habito
     val progreso = item.progreso
-    val estaCompletado = progreso?.completado ?: false
-    val valorActual = progreso?.valorProgreso ?: 0
-    val total = habito.vecesPorDia
+    val estaCompletado = item.estaCompletado
+    val valorActual = item.valorActual
+
+    // El objetivo puede ser vecesPorDia o un valor numérico (objetivoValor)
+    val totalGoal = habito.objetivoValor ?: habito.vecesPorDia
+    val porcentaje = if (totalGoal > 0) (valorActual.toFloat() / totalGoal).coerceIn(0f, 1f) else 0f
+
+    val colorHabito = try {
+        Color(android.graphics.Color.parseColor(habito.colorHex))
+    } catch (e: Exception) {
+        MaterialTheme.colorScheme.primary
+    }
 
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(
-            containerColor = if (estaCompletado) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.2f)
-            else MaterialTheme.colorScheme.surface
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
         )
     ) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(habito.nombre, fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                Text(
-                    text = "${habito.frecuencia.name} • $valorActual / $total veces",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                // 1. Icono dinámico
+                Icon(
+                    imageVector = com.example.mistareasapp.obtenerIconoPorNombre(habito.icono),
+                    contentDescription = null,
+                    tint = colorHabito,
+                    modifier = Modifier.size(32.dp)
                 )
-                Spacer(modifier = Modifier.height(8.dp))
-                LinearProgressIndicator(
-                    progress = { if (total > 0) valorActual.toFloat() / total else 0f },
-                    modifier = Modifier.fillMaxWidth().height(8.dp),
-                    color = Color(android.graphics.Color.parseColor(habito.colorHex)),
-                    trackColor = MaterialTheme.colorScheme.surfaceVariant
-                )
+
+                Spacer(modifier = Modifier.width(16.dp))
+
+                // 2. Textos centrales (Nombre y Subtítulo dinámico)
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = habito.nombre,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 18.sp,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+
+                    // Texto de frecuencia (1x/día, 5d/sem, etc)
+                    val freqText = when(habito.frecuencia) {
+                        FrecuenciaHabito.DIARIA -> "${habito.vecesPorDia}x/día"
+                        FrecuenciaHabito.SEMANAL -> if(habito.objetivoValor != null) "${habito.objetivoValor} ${habito.unidad ?: ""}/sem" else "5d/sem"
+                        FrecuenciaHabito.MENSUAL -> "Mensual"
+                    }
+
+                    // Texto de progreso numérico (• 55/150 (37%))
+                    val progressText = if (habito.objetivoValor != null || habito.vecesPorDia > 1) {
+                        "  •  $valorActual/$totalGoal (${(porcentaje * 100).toInt()}%)"
+                    } else ""
+
+                    Text(
+                        text = "$freqText$progressText",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                // 3. Badge de Acción/Estado
+                Surface(
+                    onClick = {
+                        if (totalGoal > 1) viewModel.incrementarProgreso(habito, progreso)
+                        else viewModel.toggleHabitoCompleto(habito, progreso)
+                    },
+                    color = when {
+                        estaCompletado -> Color(0xFF4CAF50) // Verde si está ok
+                        habito.objetivoValor != null -> Color(0xFF64B5F6) // Azul para objetivos de valor
+                        valorActual > 0 -> Color(0xFFFF9800) // Naranja si hay progreso parcial
+                        else -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
+                    },
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.size(width = 68.dp, height = 48.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        if (estaCompletado) {
+                            Icon(Icons.Default.Check, contentDescription = null, tint = Color.White)
+                        } else {
+                            val badgeContent = when {
+                                habito.objetivoValor != null -> "${(porcentaje * 100).toInt()}%"
+                                habito.vecesPorDia > 1 -> "$valorActual/$totalGoal"
+                                else -> ""
+                            }
+
+                            if (badgeContent.isNotEmpty()) {
+                                Text(
+                                    text = badgeContent,
+                                    color = if (valorActual > 0) Color.White else Color.Gray,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 14.sp
+                                )
+                            } else {
+                                Icon(Icons.Default.Check, contentDescription = null, tint = Color.White.copy(alpha = 0.3f))
+                            }
+                        }
+                    }
+                }
             }
 
-            Spacer(modifier = Modifier.width(16.dp))
-
-            FilledIconButton(
-                onClick = {
-                    if (total > 1) viewModel.incrementarProgreso(habito, progreso)
-                    else viewModel.toggleHabitoCompleto(habito, progreso)
-                },
-                modifier = Modifier.size(56.dp),
-                colors = IconButtonDefaults.filledIconButtonColors(
-                    containerColor = if (estaCompletado) Color(0xFF4CAF50) else MaterialTheme.colorScheme.secondaryContainer
+            // 4. Barra de progreso inferior (se muestra si tiene objetivo numérico o varias veces al día)
+            if (habito.objetivoValor != null || habito.vecesPorDia > 1) {
+                Spacer(modifier = Modifier.height(14.dp))
+                LinearProgressIndicator(
+                    progress = { porcentaje },
+                    modifier = Modifier.fillMaxWidth().height(6.dp).clip(CircleShape),
+                    color = if (habito.objetivoValor != null) Color(0xFF64B5F6) else colorHabito,
+                    trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
                 )
-            ) {
-                if (estaCompletado) {
-                    Icon(Icons.Default.Check, contentDescription = "Completado", tint = Color.White)
-                } else {
-                    Text(if (total > 1) "+1" else "✓", fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                }
             }
         }
     }
 }
-

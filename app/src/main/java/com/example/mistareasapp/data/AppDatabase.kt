@@ -16,14 +16,18 @@ import com.example.mistareasapp.data.habits.Habito
 import com.example.mistareasapp.data.habits.HabitoHistorial
 import com.example.mistareasapp.data.habits.HabitoDao
 import com.example.mistareasapp.data.habits.CategoriaHabito
+import com.example.mistareasapp.data.habits.FrecuenciaHabito
 import com.example.mistareasapp.data.habits.TareaHabito
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
-val MIGRATION_5_6 = object : Migration(5, 6) {
+val MIGRATION_6_7 = object : Migration(7, 8) {
     override fun migrate(database: SupportSQLiteDatabase) {
         // 1. Crear tabla de categorías de hábitos
+        database.execSQL("ALTER TABLE habitos ADD COLUMN objetivoValor INTEGER DEFAULT NULL")
+        database.execSQL("ALTER TABLE habitos ADD COLUMN unidad TEXT DEFAULT NULL")
+
         database.execSQL("""
             CREATE TABLE IF NOT EXISTS `habitos_categorias` (
                 `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, 
@@ -43,9 +47,11 @@ val MIGRATION_5_6 = object : Migration(5, 6) {
                 `fechaInicio` INTEGER NOT NULL, 
                 `frecuencia` TEXT NOT NULL, 
                 `vecesPorDia` INTEGER NOT NULL, 
+                `objetivoValor` INTEGER,                -- <--- Añadido
+                `unidad` TEXT,                         -- <--- Añadido
                 `objetivoRachaSemanas` INTEGER NOT NULL, 
                 `recordatoriosActivos` INTEGER NOT NULL, 
-                `horaRecordatorio` INTEGER, 
+                `horaRecordatorio` TEXT,                -- <--- Cambiado de INTEGER a TEXT
                 `icono` TEXT NOT NULL, 
                 `colorHex` TEXT NOT NULL, 
                 `activo` INTEGER NOT NULL
@@ -81,7 +87,7 @@ val MIGRATION_5_6 = object : Migration(5, 6) {
 @TypeConverters(Converters::class)
 @Database(
     entities = [Tarea::class, Categoria::class, Habito::class, HabitoHistorial::class, CategoriaHabito::class, TareaHabito::class],
-    version = 6,
+    version = 8,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -101,7 +107,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "tareas_db"
                 )
-                    .addMigrations(MIGRATION_5_6) // <--- AÑADE ESTA LÍNEA AQUÍ
+                    .addMigrations(MIGRATION_6_7) // <--- AÑADE ESTA LÍNEA AQUÍ
                     .addCallback(DatabaseCallback(context))
                     .fallbackToDestructiveMigration() // Se queda como "plan B" por seguridad
                     .setJournalMode(JournalMode.TRUNCATE)
@@ -116,7 +122,7 @@ abstract class AppDatabase : RoomDatabase() {
     }
 
 
-    private class DatabaseCallback(private val context: Context) : Callback() {
+    /*private class DatabaseCallback(private val context: Context) : Callback() {
         override fun onCreate(db: SupportSQLiteDatabase) {
             super.onCreate(db)
             INSTANCE?.let { database ->
@@ -129,6 +135,65 @@ abstract class AppDatabase : RoomDatabase() {
                     catDao.insertar(Categoria(titulo = "Urgente", icono = "warning"))
                     catDao.insertar(Categoria(titulo = "Salud", icono = "favorite"))
                     catDao.insertar(Categoria(titulo = "Hogar", icono = "home"))
+                }
+            }
+        }
+    }*/
+    // Dentro de AppDatabase.kt -> DatabaseCallback
+    private class DatabaseCallback(private val context: Context) : Callback() {
+        override fun onCreate(db: SupportSQLiteDatabase) {
+            super.onCreate(db)
+            INSTANCE?.let { database ->
+                CoroutineScope(Dispatchers.IO).launch {
+                    val habitoDao = database.habitoDao()
+
+                    // 1. Insertar Categorías de Hábitos
+                    val catSalud = habitoDao.insertarCategoria(CategoriaHabito(nombre = "Salud", icono = "medical_services", color = "#EF5350"))
+                    val catDeporte = habitoDao.insertarCategoria(CategoriaHabito(nombre = "Deporte", icono = "fitness_center", color = "#66BB6A"))
+                    val catAprendizaje = habitoDao.insertarCategoria(CategoriaHabito(nombre = "Aprendizaje", icono = "school", color = "#42A5F5"))
+                    val catBienestar = habitoDao.insertarCategoria(CategoriaHabito(nombre = "Bienestar", icono = "self_improvement", color = "#AB47BC"))
+                    val catPersonal = habitoDao.insertarCategoria(CategoriaHabito(nombre = "Personal", icono = "person", color = "#FFA726"))
+
+                    // 2. Rellenar Hábitos de la imagen
+                    habitoDao.insertarHabito(Habito(
+                        nombre = "Ingles",
+                        categoriaId = 3, // Aprendizaje
+                        frecuencia = FrecuenciaHabito.SEMANAL,
+                        objetivoValor = 100,
+                        unidad = "Minutos",
+                        icono = "language",
+                        colorHex = "#42A5F5"
+                    ))
+
+                    habitoDao.insertarHabito(Habito(
+                        nombre = "Bisoprolol",
+                        categoriaId = 1, // Salud
+                        frecuencia = FrecuenciaHabito.DIARIA,
+                        objetivoValor = 1,
+                        unidad = "vez",
+                        icono = "medication",
+                        colorHex = "#EF5350"
+                    ))
+
+                    habitoDao.insertarHabito(Habito(
+                        nombre = "Pasos",
+                        categoriaId = 2, // Deporte
+                        frecuencia = FrecuenciaHabito.SEMANAL,
+                        objetivoValor = 40000,
+                        unidad = "Pasos",
+                        icono = "directions_run",
+                        colorHex = "#66BB6A"
+                    ))
+
+                    habitoDao.insertarHabito(Habito(
+                        nombre = "Día sin Alcohol",
+                        categoriaId = 4, // Bienestar
+                        frecuencia = FrecuenciaHabito.MENSUAL,
+                        objetivoValor = 18, // 60% de 30 días aprox
+                        unidad = "días",
+                        icono = "no_drinks",
+                        colorHex = "#AB47BC"
+                    ))
                 }
             }
         }
