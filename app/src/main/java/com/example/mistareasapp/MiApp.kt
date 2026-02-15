@@ -179,6 +179,13 @@ fun MisTareasApp() {
     // Este es tu nuevo motor de IA, mucho más fiable
     val client = remember { HttpClient(OkHttp) }
     val apiKey = DatosIA.MI_LLAVE
+    
+    // Properly dispose HttpClient when composable leaves composition
+    DisposableEffect(Unit) {
+        onDispose {
+            client.close()
+        }
+    }
 
 
     // Este lanzador abre el selector de archivos para guardar

@@ -29,22 +29,31 @@ abstract class TareasDatabase : RoomDatabase() {
 
         fun getDatabase(context: Context): TareasDatabase {
             return INSTANCE ?: synchronized(this) {
-                val instance = Room.databaseBuilder(
-                    context.applicationContext,
-                    TareasDatabase::class.java,
-                    "tareas_db"
-                )
-                    .addCallback(DatabaseCallback(context))
-                    // Usamos fallback para que Room cree las tablas nuevas automáticamente
-                    // Esto evita tener que escribir migraciones SQL complejas en desarrollo
-                    .fallbackToDestructiveMigration()
-                    .setJournalMode(JournalMode.TRUNCATE) // <--- AÑADE ESTA LÍNEA
-                    .build()
-                INSTANCE = instance
-                instance
+                INSTANCE ?: run {
+                    val instance = Room.databaseBuilder(
+                        context.applicationContext,
+                        TareasDatabase::class.java,
+                        "tareas_db"
+                    )
+                        .addCallback(DatabaseCallback(context))
+                        // Usamos fallback para que Room cree las tablas nuevas automáticamente
+                        // Esto evita tener que escribir migraciones SQL complejas en desarrollo
+                        .fallbackToDestructiveMigration()
+                        .setJournalMode(JournalMode.TRUNCATE) // <--- AÑADE ESTA LÍNEA
+                        .build()
+                    INSTANCE = instance
+                    instance
+                }
             }
         }
+        
+        @Synchronized
         fun resetearInstancia() {
+            INSTANCE?.let { database ->
+                if (database.isOpen) {
+                    database.close()
+                }
+            }
             INSTANCE = null
         }
     }
