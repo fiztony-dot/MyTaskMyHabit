@@ -60,7 +60,7 @@ import com.example.mistareasapp.viewmodel.Tasks.TareasViewModel
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import com.example.mistareasapp.ui.components.tasks.TareaDialogos
-
+import androidx.compose.ui.platform.LocalContext
 
 // --- COMPONENTE: LISTA PRINCIPAL (CUERPO) ---
 /**
@@ -89,6 +89,7 @@ fun CuerpoListaTareas(
     var tareaAEliminar by remember { mutableStateOf<Tarea?>(null) }
     var mostrarDialogoCompletar by remember { mutableStateOf(false) }
     var tareaACompletar by remember { mutableStateOf<Tarea?>(null) }
+    val context = LocalContext.current
 
       // Función para inicializar o cambiar todas las secciones
     fun setTodas(abrir: Boolean) {
@@ -112,7 +113,7 @@ fun CuerpoListaTareas(
         mostrarDialogoCompletar = mostrarDialogoCompletar,
         tareaACompletar = tareaACompletar,
         onConfirmCompletar = {
-            tareaACompletar?.let { viewModel.archivarTarea(it) }
+            tareaACompletar?.let { viewModel.completarTarea(it, context)  }
             mostrarDialogoCompletar = false
             tareaACompletar = null
         },

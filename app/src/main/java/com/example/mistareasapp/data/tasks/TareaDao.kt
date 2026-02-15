@@ -41,4 +41,11 @@ interface TareaDao {
     // ➡️ AÑADE ESTA PARA EL WORKER (Sin Flow y sin suspend)
     @Query("SELECT * FROM tareas_table WHERE id = :id")
     fun obtenerTareaPorIdSincrona(id: Int): Tarea?
+    // ... otros campos de TareaDao ...
+
+    // ➡️ AÑADE ESTO: Para reprogramar alarmas al iniciar el móvil
+    @Query("SELECT * FROM tareas_table WHERE estaCompletada = 0")
+    fun obtenerTareasPendientesSincronas(): List<Tarea>
+
+
 }

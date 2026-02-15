@@ -181,14 +181,15 @@ fun PantallaCrearTarea(navController: NavController) {
                         onClick = { showDatePicker = true },
                         modifier = Modifier.Companion.weight(1f)
                     )
+                    // Selector de HORA
                     BotonSelectorDato(
                         label = horaLimite?.format(DateTimeFormatter.ofPattern("HH:mm")) ?: "Hora",
                         icon = Icons.Default.AccessTime,
-                        onClick = { if (fechaLimite != null) showTimePicker = true },
-                        modifier = Modifier.Companion.weight(1f),
-                        colorTexto = if (fechaLimite != null) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(
-                            alpha = 0.38f
-                        )
+                        onClick = { showTimePicker = true }, // Quitamos el 'if' de aquí, ahora lo maneja el 'enabled'
+                        enabled = fechaLimite != null,       // El botón se desactiva solo si no hay fecha
+                        modifier = Modifier.weight(1f),
+                        colorTexto = if (fechaLimite != null) MaterialTheme.colorScheme.onSurface
+                        else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
                     )
                 }
 
