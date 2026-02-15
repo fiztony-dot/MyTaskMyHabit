@@ -39,6 +39,12 @@ class VoiceTaskActivity : ComponentActivity() {
         }
         speechLauncher.launch(intent)
     }
+    
+    override fun onDestroy() {
+        super.onDestroy()
+        // Close HttpClient to prevent resource leaks
+        client.close()
+    }
 
     private val speechLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode == RESULT_OK) {
