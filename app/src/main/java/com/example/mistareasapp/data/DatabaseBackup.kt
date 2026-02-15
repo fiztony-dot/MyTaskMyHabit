@@ -21,8 +21,16 @@ object DatabaseBackup {
                 
                 // 1. Checkpoint WAL to ensure all data is written to the main database file
                 db.openHelper.writableDatabase.query("PRAGMA wal_checkpoint(FULL)").use { cursor ->
-                    cursor.moveToFirst()
-                    Log.d(TAG, "WAL checkpoint completed before export")
+                    if (cursor.moveToFirst()) {
+                        val busy = cursor.getInt(0)
+                        val checkpointed = cursor.getInt(1)
+                        val written = cursor.getInt(2)
+                        if (busy != 0) {
+                            Log.w(TAG, "WAL checkpoint completed with busy=$busy, some transactions may still be pending")
+                        } else {
+                            Log.d(TAG, "WAL checkpoint completed successfully: checkpointed=$checkpointed, written=$written")
+                        }
+                    }
                 }
                 
                 // 2. Close the database properly
@@ -65,8 +73,16 @@ object DatabaseBackup {
                 // Checkpoint WAL to ensure no pending writes
                 try {
                     db.openHelper.writableDatabase.query("PRAGMA wal_checkpoint(TRUNCATE)").use { cursor ->
-                        cursor.moveToFirst()
-                        Log.d(TAG, "WAL checkpoint completed before import")
+                        if (cursor.moveToFirst()) {
+                            val busy = cursor.getInt(0)
+                            val checkpointed = cursor.getInt(1)
+                            val written = cursor.getInt(2)
+                            if (busy != 0) {
+                                Log.w(TAG, "WAL checkpoint completed with busy=$busy before import")
+                            } else {
+                                Log.d(TAG, "WAL checkpoint completed successfully before import: checkpointed=$checkpointed, written=$written")
+                            }
+                        }
                     }
                 } catch (e: Exception) {
                     Log.w(TAG, "WAL checkpoint failed (database may not exist yet): ${e.message}")
@@ -76,12 +92,28 @@ object DatabaseBackup {
                 db.close()
                 TareasDatabase.resetearInstancia()
                 
-                // Give the system time to release file handles
-                Thread.sleep(100)
+                // Wait for file handles to be released with retry mechanism
+                var retries = 0
+                val maxRetries = 10
+                val walFile = File(context.getDatabasePath(DB_NAME).path + "-wal")
+                val shmFile = File(context.getDatabasePath(DB_NAME).path + "-shm")
+                
+                while (retries < maxRetries) {
+                    try {
+                        // Try to delete files to ensure handles are released
+                        if (walFile.exists()) walFile.delete()
+                        if (shmFile.exists()) shmFile.delete()
+                        break
+                    } catch (e: Exception) {
+                        retries++
+                        if (retries >= maxRetries) {
+                            throw IllegalStateException("Failed to release database file handles after $maxRetries retries", e)
+                        }
+                        Thread.sleep(50L * retries) // Exponential backoff
+                    }
+                }
 
                 val dbFile: File = context.getDatabasePath(DB_NAME)
-                val walFile = File(dbFile.path + "-wal")
-                val shmFile = File(dbFile.path + "-shm")
 
                 // 3. Create temporary file for atomic operation
                 tempFile = File(dbFile.parent, "${DB_NAME}.tmp")

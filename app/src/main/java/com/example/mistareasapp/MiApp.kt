@@ -176,11 +176,12 @@ fun MisTareasApp() {
             permisoLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
         }
     }
-    // Este es tu nuevo motor de IA, mucho más fiable
+    // HttpClient for AI functionality - created once and reused across recompositions
     val client = remember { HttpClient(OkHttp) }
     val apiKey = DatosIA.MI_LLAVE
     
     // Properly dispose HttpClient when composable leaves composition
+    // This prevents resource leaks by closing the client when the app is destroyed
     DisposableEffect(Unit) {
         onDispose {
             client.close()
