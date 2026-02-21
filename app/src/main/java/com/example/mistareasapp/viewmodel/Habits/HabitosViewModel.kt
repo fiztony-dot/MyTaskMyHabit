@@ -1,5 +1,6 @@
 package com.example.mistareasapp.viewmodel.Habits
 
+import android.util.Log
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
@@ -15,8 +16,12 @@ enum class TipoVistaHabitos { FLASH, LISTADO, ESTADISTICAS }
 
 class HabitosViewModel(private val habitoDao: HabitoDao) : ViewModel() {
 
+    init {
+        Log.d("HABITOS_VM", "🚀 HabitosViewModel inicializado")
+    }
+
     // --- ESTADO DE NAVEGACIÓN INTERNA ---
-    var vistaActual by mutableStateOf(TipoVistaHabitos.LISTADO)
+    var vistaActual by mutableStateOf(TipoVistaHabitos.FLASH)
         private set
 
     fun cambiarVista(nuevaVista: TipoVistaHabitos) {
@@ -26,6 +31,10 @@ class HabitosViewModel(private val habitoDao: HabitoDao) : ViewModel() {
 
     // Todos los hábitos de la base de datos
     val todosLosHabitos: Flow<List<Habito>> = habitoDao.obtenerTodosLosHabitos()
+        .onEach { habitos ->
+            Log.d("HABITOS_VM", "📚 Hábitos desde Room: ${habitos.size}")
+            habitos.forEach { Log.d("HABITOS_VM", "  - ${it.nombre}") }
+        }
 
     // Fecha que el usuario está viendo actualmente
     private val _fechaSeleccionada = MutableStateFlow(LocalDate.now())
@@ -36,8 +45,10 @@ class HabitosViewModel(private val habitoDao: HabitoDao) : ViewModel() {
         todosLosHabitos,
         _fechaSeleccionada
     ) { listaHabitos, fecha ->
+        Log.d("HABITOS_VM", "🔄 Combinando datos - Hábitos: ${listaHabitos.size}, Fecha: $fecha")
         listaHabitos.map { habito ->
             val progreso = habitoDao.obtenerProgresoDiario(habito.id, fecha)
+            Log.d("HABITOS_VM", "  → ${habito.nombre}: progreso=$progreso")
             HabitoConProgreso(habito, progreso)
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())

@@ -2,8 +2,7 @@
 
 package com.example.mistareasapp.ui.screens.habits
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import android.util.Log
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -22,6 +21,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.draw.clip
+import androidx.core.graphics.toColorInt
 import com.example.mistareasapp.data.habits.FrecuenciaHabito
 import com.example.mistareasapp.obtenerIconoPorNombre
 import com.example.mistareasapp.viewmodel.Habits.HabitoConProgreso
@@ -30,80 +30,81 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Composable
-fun PantallaHabitosFlash(viewModel: HabitosViewModel, modifier: Modifier = Modifier) {
+fun PantallaHabitosFlash(
+    viewModel: HabitosViewModel,
+    progresoGeneral: Float = 0f,
+    modifier: Modifier = Modifier
+) {
     val fechaSeleccionada by viewModel.fechaSeleccionada.collectAsState()
     val habitosConProgreso by viewModel.habitosConProgreso.collectAsState()
 
+    // Log de depuración para ver si llegan hábitos
+    LaunchedEffect(habitosConProgreso) {
+        Log.d("HABITOS_DEBUG", "📊 Total hábitos cargados: ${habitosConProgreso.size}")
+        habitosConProgreso.forEach { item ->
+            Log.d("HABITOS_DEBUG", "  - ${item.habito.nombre} | Completado: ${item.estaCompletado} | Valor: ${item.valorActual}")
+        }
+    }
+
     val totalHabitos = habitosConProgreso.size
     val habitosCompletados = habitosConProgreso.count { it.estaCompletado }
-    val progresoGeneral = if (totalHabitos > 0) (habitosCompletados.toFloat() / totalHabitos) else 0f
+    val progresoCalculado = if (totalHabitos > 0) (habitosCompletados.toFloat() / totalHabitos) else 0f
+    // Usar el progresoGeneral pasado como parámetro
+    val progreso = if (progresoGeneral > 0) progresoGeneral else progresoCalculado
 
-    Column(modifier = modifier.fillMaxSize().padding(16.dp)) {
-        // Selector de Fecha superior
+    Column(modifier = modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 4.dp)) {
+
+        // Selector de Fecha superior - Sin Card de progreso
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            IconButton(onClick = { viewModel.cambiarFecha(fechaSeleccionada.minusDays(1)) }) {
-                Icon(Icons.Default.ChevronLeft, contentDescription = "Anterior")
-            }
-
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(
-                    text = fechaSeleccionada.format(DateTimeFormatter.ofPattern("d 'de' MMMM", Locale("es"))),
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = if (fechaSeleccionada == java.time.LocalDate.now()) "hoy" else fechaSeleccionada.format(DateTimeFormatter.ofPattern("EEEE", Locale("es"))),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-
-            IconButton(onClick = { viewModel.cambiarFecha(fechaSeleccionada.plusDays(1)) }) {
-                Icon(Icons.Default.ChevronRight, contentDescription = "Siguiente")
-            }
-        }
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        // Card de Resumen de Progreso
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
-            shape = RoundedCornerShape(16.dp)
-        ) {
+            // ...existing code...
             Row(
-                modifier = Modifier.padding(16.dp),
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Box(contentAlignment = Alignment.Center, modifier = Modifier.size(64.dp)) {
-                    CircularProgressIndicator(
-                        progress = { progresoGeneral },
-                        modifier = Modifier.fillMaxSize(),
-                        strokeWidth = 8.dp,
-                        color = Color(0xFF4CAF50)
+                IconButton(onClick = { viewModel.cambiarFecha(fechaSeleccionada.minusDays(1)) }) {
+                    Icon(Icons.Default.ChevronLeft, contentDescription = "Anterior")
+                }
+
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(
+                        text = fechaSeleccionada.format(DateTimeFormatter.ofPattern("d 'de' MMMM", Locale("es"))),
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "${(progresoGeneral * 100).toInt()}%",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 14.sp
+                        text = if (fechaSeleccionada == java.time.LocalDate.now()) "hoy" else fechaSeleccionada.format(DateTimeFormatter.ofPattern("EEEE", Locale("es"))),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                Spacer(modifier = Modifier.width(16.dp))
-                Column {
-                    Text("Progreso Diario", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
-                    Text("$habitosCompletados de $totalHabitos hábitos completados", style = MaterialTheme.typography.bodySmall)
+
+                IconButton(onClick = { viewModel.cambiarFecha(fechaSeleccionada.plusDays(1)) }) {
+                    Icon(Icons.Default.ChevronRight, contentDescription = "Siguiente")
                 }
             }
+
+            // Indicador de cumplimiento sin caja - solo el porcentaje
+            Text(
+                text = "${(progreso * 100).toInt()}%",
+                fontWeight = FontWeight.Bold,
+                fontSize = MaterialTheme.typography.headlineSmall.fontSize,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(end = 8.dp)
+            )
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(8.dp))
 
         // Lista de Hábitos del día
-        LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             items(habitosConProgreso) { item ->
                 HabitoFlashItem(item, viewModel)
             }
@@ -123,36 +124,36 @@ fun HabitoFlashItem(item: HabitoConProgreso, viewModel: HabitosViewModel) {
     val porcentaje = if (totalGoal > 0) (valorActual.toFloat() / totalGoal).coerceIn(0f, 1f) else 0f
 
     val colorHabito = try {
-        Color(android.graphics.Color.parseColor(habito.colorHex))
-    } catch (e: Exception) {
+        Color(habito.colorHex.toColorInt())
+    } catch (_: Exception) {
         MaterialTheme.colorScheme.primary
     }
 
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
         )
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(modifier = Modifier.padding(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 // 1. Icono dinámico
                 Icon(
-                    imageVector = com.example.mistareasapp.obtenerIconoPorNombre(habito.icono),
+                    imageVector = obtenerIconoPorNombre(habito.icono),
                     contentDescription = null,
                     tint = colorHabito,
-                    modifier = Modifier.size(32.dp)
+                    modifier = Modifier.size(20.dp)
                 )
 
-                Spacer(modifier = Modifier.width(16.dp))
+                Spacer(modifier = Modifier.width(10.dp))
 
                 // 2. Textos centrales (Nombre y Subtítulo dinámico)
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = habito.nombre,
                         fontWeight = FontWeight.Bold,
-                        fontSize = 18.sp,
+                        fontSize = 14.sp,
                         color = MaterialTheme.colorScheme.onSurface
                     )
 
@@ -170,29 +171,29 @@ fun HabitoFlashItem(item: HabitoConProgreso, viewModel: HabitosViewModel) {
 
                     Text(
                         text = "$freqText$progressText",
-                        style = MaterialTheme.typography.bodySmall,
+                        fontSize = 11.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
 
-                // 3. Badge de Acción/Estado
+                // 3. Badge de Acción/Estado - CUADRADO con fondo blanco y texto azul oscuro
                 Surface(
                     onClick = {
                         if (totalGoal > 1) viewModel.incrementarProgreso(habito, progreso)
                         else viewModel.toggleHabitoCompleto(habito, progreso)
                     },
-                    color = when {
-                        estaCompletado -> Color(0xFF4CAF50) // Verde si está ok
-                        habito.objetivoValor != null -> Color(0xFF64B5F6) // Azul para objetivos de valor
-                        valorActual > 0 -> Color(0xFFFF9800) // Naranja si hay progreso parcial
-                        else -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
-                    },
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.size(width = 68.dp, height = 48.dp)
+                    color = Color.White,
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.size(36.dp)
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         if (estaCompletado) {
-                            Icon(Icons.Default.Check, contentDescription = null, tint = Color.White)
+                            Icon(
+                                Icons.Default.Check,
+                                contentDescription = null,
+                                tint = Color(0xFF1565C0),
+                                modifier = Modifier.size(18.dp)
+                            )
                         } else {
                             val badgeContent = when {
                                 habito.objetivoValor != null -> "${(porcentaje * 100).toInt()}%"
@@ -203,12 +204,17 @@ fun HabitoFlashItem(item: HabitoConProgreso, viewModel: HabitosViewModel) {
                             if (badgeContent.isNotEmpty()) {
                                 Text(
                                     text = badgeContent,
-                                    color = if (valorActual > 0) Color.White else Color.Gray,
+                                    color = Color(0xFF1565C0),
                                     fontWeight = FontWeight.Bold,
-                                    fontSize = 14.sp
+                                    fontSize = 10.sp
                                 )
                             } else {
-                                Icon(Icons.Default.Check, contentDescription = null, tint = Color.White.copy(alpha = 0.3f))
+                                Icon(
+                                    Icons.Default.Check,
+                                    contentDescription = null,
+                                    tint = Color(0xFF1565C0).copy(alpha = 0.3f),
+                                    modifier = Modifier.size(18.dp)
+                                )
                             }
                         }
                     }
@@ -217,10 +223,10 @@ fun HabitoFlashItem(item: HabitoConProgreso, viewModel: HabitosViewModel) {
 
             // 4. Barra de progreso inferior (se muestra si tiene objetivo numérico o varias veces al día)
             if (habito.objetivoValor != null || habito.vecesPorDia > 1) {
-                Spacer(modifier = Modifier.height(14.dp))
+                Spacer(modifier = Modifier.height(6.dp))
                 LinearProgressIndicator(
                     progress = { porcentaje },
-                    modifier = Modifier.fillMaxWidth().height(6.dp).clip(CircleShape),
+                    modifier = Modifier.fillMaxWidth().height(3.dp).clip(CircleShape),
                     color = if (habito.objetivoValor != null) Color(0xFF64B5F6) else colorHabito,
                     trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
                 )

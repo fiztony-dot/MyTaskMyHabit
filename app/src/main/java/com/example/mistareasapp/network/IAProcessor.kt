@@ -1,7 +1,6 @@
 package com.example.mistareasapp.network
 
 import android.util.Log
-import com.google.ai.client.generativeai.GenerativeModel
 import kotlinx.serialization.Serializable
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
@@ -37,6 +36,8 @@ enum class TipoEntrada { TAREA, HABITO }
 // 2. El procesador que hace la llamada a Gemini
 object IAProcessor {
     // 1. Definimos la clave primero como una constante
+    private const val API_KEY = "AIzaSyANEu3pDzqEtBAUPCzjAT44UgwNYX76ENg"
+    private const val URL_GEMINI = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$API_KEY"
 
     private val client = HttpClient(OkHttp) {
         install(ContentNegotiation) {
@@ -46,8 +47,7 @@ object IAProcessor {
             })
         }
     }
-    private const val API_KEY = "AIzaSyCcZTsOCkF6dpM-eTZ-DstBsCdGRq_YWcg"
-    private const val URL_GEMINI = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$API_KEY"
+
     suspend fun procesarTexto(textoEscuchado: String, tipo: TipoEntrada): String? {
         val ahora = LocalDateTime.now()
         val fechaHoy = ahora.format(DateTimeFormatter.ISO_LOCAL_DATE)

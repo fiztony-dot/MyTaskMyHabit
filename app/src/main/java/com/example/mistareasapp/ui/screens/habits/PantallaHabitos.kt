@@ -20,7 +20,8 @@ import com.example.mistareasapp.viewmodel.Habits.TipoVistaHabitos
 fun PantallaHabitos(
     navController: NavHostController,
     viewModel: HabitosViewModel,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    progresoGeneral: Float = 0f
 ) {
     Column(modifier = modifier.fillMaxSize()) {
         // 1. Navegación superior homogénea con "Mis Tareas"
@@ -52,7 +53,7 @@ fun PantallaHabitos(
         // 2. Contenido dinámico
         Box(modifier = Modifier.weight(1f)) {
             when (viewModel.vistaActual) {
-                TipoVistaHabitos.FLASH -> PantallaHabitosFlash(viewModel)
+                TipoVistaHabitos.FLASH -> PantallaHabitosFlash(viewModel, progresoGeneral)
                 TipoVistaHabitos.LISTADO -> PantallaHabitosListado(viewModel)
                 TipoVistaHabitos.ESTADISTICAS -> PantallaHabitosEstadisticas(viewModel)
             }
