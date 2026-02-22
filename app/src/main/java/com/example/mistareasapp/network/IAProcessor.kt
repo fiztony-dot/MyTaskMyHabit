@@ -36,7 +36,8 @@ enum class TipoEntrada { TAREA, HABITO }
 // 2. El procesador que hace la llamada a Gemini
 object IAProcessor {
     // 1. Definimos la clave primero como una constante
-    private const val API_KEY = "AIzaSyANEu3pDzqEtBAUPCzjAT44UgwNYX76ENg"
+    //private const val API_KEY = "AIzaSyANEu3pDzqEtBAUPCzjAT44UgwNYX76ENg"
+    private const val API_KEY = "AIzaSyBRltwfm7SaPzQpChZ_4gV5zTuxu4aAftM"
     private const val URL_GEMINI = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$API_KEY"
 
     private val client = HttpClient(OkHttp) {
@@ -64,7 +65,7 @@ object IAProcessor {
                 TAREA: Extraer la información de: "$textoEscuchado"
                                             
                 INSTRUCCIONES CRÍTICAS:
-                1. "fecha": 
+                1. "fecha":
                    - Si dice "mañana", usa exactamente: ${java.time.LocalDate.now().plusDays(1)}.
                    - Si menciona día/mes, usa el año $anyoHoy y devuélvelo como YYYY-MM-DD.
                    - Si dice "en X minutos/horas" o solo indica una hora, la fecha es $fechaHoy.
@@ -114,9 +115,20 @@ object IAProcessor {
             }
 
             val responseBody = response.bodyAsText()
-            Log.d("IA_DEBUG", "RESPUESTA GOOGLE: $responseBody")
+            Log.d("IA_DEBUG", "🔵 RESPUESTA RECIBIDA - Status: ${response.status.value}, Body: $responseBody")
 
             val jsonResponse = Json.parseToJsonElement(responseBody).jsonObject
+
+            // Validación: verificar si hay error en la respuesta
+            if (jsonResponse.containsKey("error")) {
+                val errorObj = jsonResponse["error"]?.jsonObject
+                val errorMessage = errorObj?.get("message")?.jsonPrimitive?.content ?: "Error desconocido"
+                val errorStatus = errorObj?.get("status")?.jsonPrimitive?.content ?: "UNKNOWN"
+                Log.e("IA_DEBUG", "❌ ERROR DE API GOOGLE [$errorStatus]: $errorMessage")
+                return null
+            }
+
+            Log.d("IA_DEBUG", "✅ Respuesta exitosa, buscando candidates...")
 
             val textoExtraido = jsonResponse["candidates"]?.jsonArray?.getOrNull(0)
                 ?.jsonObject?.get("content")
@@ -124,24 +136,30 @@ object IAProcessor {
                 ?.jsonArray?.getOrNull(0)
                 ?.jsonObject?.get("text")?.jsonPrimitive?.content
 
+            Log.d("IA_DEBUG", "📄 Texto extraído: $textoExtraido")
+
             // 3. LIMPIEZA PARA ASEGURAR EL PARSEO
             val jsonLimpio = textoExtraido?.let { texto ->
+                Log.d("IA_DEBUG", "🔍 Buscando JSON en texto...")
                 val inicio = texto.indexOf("{")
                 val fin = texto.lastIndexOf("}")
+                Log.d("IA_DEBUG", "  Inicio: $inicio, Fin: $fin")
                 if (inicio != -1 && fin != -1 && fin > inicio) {
-                    texto.substring(inicio, fin + 1)
+                    val resultado = texto.substring(inicio, fin + 1)
+                    Log.d("IA_DEBUG", "✨ JSON encontrado: $resultado")
+                    resultado
                 } else {
-                    Log.e("IA_DEBUG", "No se encontró JSON en: $texto")
+                    Log.e("IA_DEBUG", "❌ No se encontró JSON en: $texto")
                     null
                 }
             }
 
-            Log.d("IA_DEBUG", "JSON FINAL: $jsonLimpio")
+            Log.d("IA_DEBUG", "🎯 JSON FINAL A RETORNAR: $jsonLimpio")
             jsonLimpio
 
         } catch (e: Exception) {
-            Log.e("IA_DEBUG", "Fallo crítico en IAProcessor: ${e.message}")
-            e.printStackTrace()
+            Log.e("IA_DEBUG", "💥 EXCEPCIÓN EN IAProcessor: ${e::class.simpleName} - ${e.message}")
+            Log.e("IA_DEBUG", "Stack trace: ", e)
             null
         }
     }

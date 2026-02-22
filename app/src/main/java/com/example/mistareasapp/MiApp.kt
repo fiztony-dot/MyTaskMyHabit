@@ -180,18 +180,22 @@ fun MisTareasApp() {
 
                 scope.launch {
                     try {
+                        Log.d("IA_DEBUG", "🎤 ENTRADA: texto='$textoEscuchado', tipo=$tipo")
                         val jsonResultado = IAProcessor.procesarTexto(textoEscuchado, tipo)
 
                         Log.d("IA_DEBUG", """
-                            TEXTO RECIBIDO: "$textoEscuchado"
-                            PANTALLA ACTUAL: $tipo
-                            RESULTADO IA: $jsonResultado
+                            ✅ RESULTADO DE IA:
+                            TEXTO: "$textoEscuchado"
+                            TIPO: $tipo
+                            JSON OBTENIDO: $jsonResultado
                         """.trimIndent())
 
                         when (tipo) {
                             TipoEntrada.TAREA -> {
                                 if (jsonResultado != null) {
+                                    Log.d("IA_DEBUG", "📋 Intentando parsear como TAREA...")
                                     val objetoTarea = Json.decodeFromString<IAResultTarea>(jsonResultado)
+                                    Log.d("IA_DEBUG", "✨ Tarea parseada: ${objetoTarea.titulo}")
                                     val nuevaTarea = Tarea(
                                         id = 0,
                                         titulo = objetoTarea.titulo,
@@ -209,6 +213,7 @@ fun MisTareasApp() {
                                     NotificationHelper.programarNotificacion(context, nuevaTarea)
                                     Toast.makeText(context, "Tarea: ${objetoTarea.titulo}", Toast.LENGTH_SHORT).show()
                                 } else {
+                                    Log.w("IA_DEBUG", "⚠️ jsonResultado es NULL, llamando guardarTareaSimple")
                                     guardarTareaSimple(textoEscuchado, viewModel, context)
                                 }
                             }
@@ -376,6 +381,7 @@ fun MisTareasApp() {
             NavHost(
                 navController = navController,
                 startDestination = Rutas.PantallaHabitos.ruta,
+                //startDestination = Rutas.PantallaTareas.ruta,
                 modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)
             ) {
                 composable(Rutas.PantallaTareas.ruta) {
@@ -488,6 +494,7 @@ fun MisTareasApp() {
 }
 
 private suspend fun guardarTareaSimple(texto: String, viewModel: TareasViewModel, context: android.content.Context) {
+    Log.d("IA_DEBUG", "💾 GUARDADO SIMPLE: '$texto'")
     withContext(Dispatchers.Main) {
         val tareaBasica = Tarea(
             titulo = texto.replaceFirstChar { it.uppercase() },
