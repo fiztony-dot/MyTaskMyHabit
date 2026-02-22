@@ -36,6 +36,9 @@ class HabitosViewModel(private val habitoDao: HabitoDao) : ViewModel() {
             habitos.forEach { Log.d("HABITOS_VM", "  - ${it.nombre}") }
         }
 
+    // Categorías de hábitos
+    val categoriasHabitos: Flow<List<CategoriaHabito>> = habitoDao.obtenerCategorias()
+
     // Fecha que el usuario está viendo actualmente
     private val _fechaSeleccionada = MutableStateFlow(LocalDate.now())
     val fechaSeleccionada = _fechaSeleccionada.asStateFlow()
@@ -73,6 +76,26 @@ class HabitosViewModel(private val habitoDao: HabitoDao) : ViewModel() {
             // Borramos el historial primero y luego el hábito
             habitoDao.eliminarHistorialDeHabito(habito.id)
             habitoDao.eliminarHabito(habito)
+        }
+    }
+
+    // --- 2B. GESTIÓN DE CATEGORÍAS DE HÁBITOS ---
+
+    fun insertarCategoriaHabito(categoria: CategoriaHabito) {
+        viewModelScope.launch {
+            habitoDao.insertarCategoria(categoria)
+        }
+    }
+
+    fun actualizarCategoriaHabito(categoria: CategoriaHabito) {
+        viewModelScope.launch {
+            habitoDao.actualizarCategoria(categoria)
+        }
+    }
+
+    fun eliminarCategoriaHabito(categoria: CategoriaHabito) {
+        viewModelScope.launch {
+            habitoDao.eliminarCategoria(categoria)
         }
     }
 

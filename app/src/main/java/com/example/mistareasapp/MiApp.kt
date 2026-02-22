@@ -41,6 +41,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.DpOffset
 
 // --- 7. Jetpack Compose: Runtime y Estado ---
 import androidx.compose.runtime.*
@@ -51,6 +52,7 @@ import com.example.mistareasapp.data.DatabaseBackup
 import com.example.mistareasapp.data.tasks.Prioridad
 import com.example.mistareasapp.data.tasks.Tarea
 import com.example.mistareasapp.ui.screens.habits.PantallaHabitos
+import com.example.mistareasapp.ui.screens.habits.PantallaGestionCategoriasHabitos
 import com.example.mistareasapp.ui.screens.tasks.PantallaCrearTarea
 import com.example.mistareasapp.ui.screens.tasks.PantallaEditarTarea
 import com.example.mistareasapp.ui.screens.tasks.PantallaGestionCategorias
@@ -64,6 +66,7 @@ import com.example.mistareasapp.ui.navigation.BarraNavegacion
 import com.example.mistareasapp.ui.navigation.BarraNavegacionHabitos
 import com.example.mistareasapp.ui.navigation.Rutas
 import com.example.mistareasapp.ui.screens.GestionDatosScreen
+import com.example.mistareasapp.ui.screens.PantallaConfiguracion
 import com.example.mistareasapp.network.IAResultTarea
 import com.example.mistareasapp.network.IAResultHabito
 import com.example.mistareasapp.network.TipoEntrada
@@ -258,43 +261,83 @@ fun MisTareasApp() {
                                     expanded = mostrarMenuPrincipal,
                                     onDismissRequest = { mostrarMenuPrincipal = false }
                                 ) {
-                                    DropdownMenuItem(
-                                        text = { Text("Guardar Backup") },
-                                        onClick = {
-                                            mostrarMenuPrincipal = false
-                                            exportarLauncher.launch("backup_tareas_${System.currentTimeMillis()}.db")
-                                        },
-                                        leadingIcon = { Icon(Icons.Default.Backup, null) }
-                                    )
-                                    DropdownMenuItem(
-                                        text = { Text("Restaurar Backup") },
-                                        onClick = {
-                                            mostrarMenuPrincipal = false
-                                            mostrarConfirmacionRestore = true
-                                        },
-                                        leadingIcon = { Icon(Icons.Default.Restore, null) }
-                                    )
-                                    HorizontalDivider()
-                                    DropdownMenuItem(
-                                        text = { Text("Tablas de Referencia") },
-                                        onClick = {
-                                            mostrarMenuPrincipal = false
-                                            navController.navigate("categorias")
-                                        },
-                                        leadingIcon = { Icon(Icons.Default.TableChart, null) }
-                                    )
-                                    HorizontalDivider()
-                                    DropdownMenuItem(
-                                        text = { Text("Mostrar completadas") },
-                                        onClick = {
-                                            viewModel.cambiarVisibilidadCompletadas(!viewModel.mostrarCompletadas)
-                                        },
-                                        leadingIcon = {
-                                            Icon(
-                                                Icons.Default.CheckCircle, null,
-                                                tint = if (viewModel.mostrarCompletadas) MaterialTheme.colorScheme.primary else Color.Transparent
+                                    // Submenu de Copias de Seguridad
+                                    var expandirCopias by remember { mutableStateOf(false) }
+                                    Box {
+                                        DropdownMenuItem(
+                                            text = { Text("Copias de Seguridad") },
+                                            onClick = { expandirCopias = !expandirCopias },
+                                            leadingIcon = { Icon(Icons.Default.SaveAlt, null) },
+                                            trailingIcon = { Icon(Icons.Default.KeyboardArrowRight, null) }
+                                        )
+                                        DropdownMenu(
+                                            expanded = expandirCopias,
+                                            onDismissRequest = { expandirCopias = false },
+                                            offset = DpOffset(150.dp, 0.dp)
+                                        ) {
+                                            DropdownMenuItem(
+                                                text = { Text("Guardar Backup") },
+                                                onClick = {
+                                                    mostrarMenuPrincipal = false
+                                                    expandirCopias = false
+                                                    exportarLauncher.launch("backup_tareas_${System.currentTimeMillis()}.db")
+                                                },
+                                                leadingIcon = { Icon(Icons.Default.Backup, null) }
+                                            )
+                                            DropdownMenuItem(
+                                                text = { Text("Restaurar Backup") },
+                                                onClick = {
+                                                    mostrarMenuPrincipal = false
+                                                    expandirCopias = false
+                                                    mostrarConfirmacionRestore = true
+                                                },
+                                                leadingIcon = { Icon(Icons.Default.Restore, null) }
                                             )
                                         }
+                                    }
+                                    HorizontalDivider()
+                                    // Submenu de Tablas de Referencia
+                                    var expandirTablas by remember { mutableStateOf(false) }
+                                    Box {
+                                        DropdownMenuItem(
+                                            text = { Text("Tablas de Referencia") },
+                                            onClick = { expandirTablas = !expandirTablas },
+                                            leadingIcon = { Icon(Icons.Default.TableChart, null) },
+                                            trailingIcon = { Icon(Icons.Default.KeyboardArrowRight, null) }
+                                        )
+                                        DropdownMenu(
+                                            expanded = expandirTablas,
+                                            onDismissRequest = { expandirTablas = false },
+                                            offset = DpOffset(150.dp, 0.dp)
+                                        ) {
+                                            DropdownMenuItem(
+                                                text = { Text("Categorias Tareas") },
+                                                onClick = {
+                                                    mostrarMenuPrincipal = false
+                                                    expandirTablas = false
+                                                    navController.navigate("categorias")
+                                                },
+                                                leadingIcon = { Icon(Icons.Default.TableChart, null) }
+                                            )
+                                            DropdownMenuItem(
+                                                text = { Text("Categorias Hábitos") },
+                                                onClick = {
+                                                    mostrarMenuPrincipal = false
+                                                    expandirTablas = false
+                                                    navController.navigate("categorias_habitos")
+                                                },
+                                                leadingIcon = { Icon(Icons.Default.TableChart, null) }
+                                            )
+                                        }
+                                    }
+                                    HorizontalDivider()
+                                    DropdownMenuItem(
+                                        text = { Text("Configuración") },
+                                        onClick = {
+                                            mostrarMenuPrincipal = false
+                                            navController.navigate("configuracion")
+                                        },
+                                        leadingIcon = { Icon(Icons.Default.Settings, null) }
                                     )
                                 }
                             }
@@ -374,8 +417,24 @@ fun MisTareasApp() {
                     )
                 }
 
+                composable("categorias_habitos") {
+                    PantallaGestionCategoriasHabitos(
+                        navController,
+                        habitosViewModel,
+                        modifier = Modifier.padding(innerPadding).fillMaxSize()
+                    )
+                }
+
                 composable("ruta_gestion_copias") {
                     GestionDatosScreen(viewModel = viewModel)
+                }
+
+                composable("configuracion") {
+                    PantallaConfiguracion(
+                        navController,
+                        viewModel,
+                        modifier = Modifier.padding(innerPadding).fillMaxSize()
+                    )
                 }
             }
         }

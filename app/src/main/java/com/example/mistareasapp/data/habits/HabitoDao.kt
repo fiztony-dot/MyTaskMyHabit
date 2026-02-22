@@ -41,6 +41,12 @@ interface HabitoDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertarCategoria(categoria: CategoriaHabito)
 
+    @Update
+    suspend fun actualizarCategoria(categoria: CategoriaHabito)
+
+    @Delete
+    suspend fun eliminarCategoria(categoria: CategoriaHabito)
+
     @Query("SELECT * FROM habitos_categorias")
     fun obtenerCategorias(): Flow<List<CategoriaHabito>>
 
