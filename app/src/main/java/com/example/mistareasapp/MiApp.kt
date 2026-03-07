@@ -380,8 +380,8 @@ fun MisTareasApp() {
         ) { innerPadding ->
             NavHost(
                 navController = navController,
-                startDestination = Rutas.PantallaHabitos.ruta,
-                //startDestination = Rutas.PantallaTareas.ruta,
+                //startDestination = Rutas.PantallaHabitos.ruta,
+                startDestination = Rutas.PantallaTareas.ruta,
                 modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)
             ) {
                 composable(Rutas.PantallaTareas.ruta) {

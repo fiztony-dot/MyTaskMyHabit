@@ -1,6 +1,7 @@
 package com.example.mistareasapp.network
 
 import android.util.Log
+import com.example.mistareasapp.BuildConfig
 import kotlinx.serialization.Serializable
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
@@ -35,10 +36,9 @@ enum class TipoEntrada { TAREA, HABITO }
 
 // 2. El procesador que hace la llamada a Gemini
 object IAProcessor {
-    // 1. Definimos la clave primero como una constante
-    //private const val API_KEY = "AIzaSyANEu3pDzqEtBAUPCzjAT44UgwNYX76ENg"
-    private const val API_KEY = "AIzaSyBRltwfm7SaPzQpChZ_4gV5zTuxu4aAftM"
-    private const val URL_GEMINI = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$API_KEY"
+    // SEGURIDAD: La API key se lee desde BuildConfig (local.properties) y NUNCA se sube a Git
+    private val API_KEY = BuildConfig.GEMINI_API_KEY
+    private val URL_GEMINI = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$API_KEY"
 
     private val client = HttpClient(OkHttp) {
         install(ContentNegotiation) {
@@ -101,6 +101,11 @@ object IAProcessor {
 
             val response: io.ktor.client.statement.HttpResponse = client.post(url) {
                 contentType(io.ktor.http.ContentType.Application.Json)
+
+                // Headers necesarios para validación Android
+                header("X-Android-Package", "com.example.mistareasapp")
+                header("X-Android-Cert", "350D08C8B3D6EBEED7CE641A8EEDBDD643EB5429")
+
                 setBody(buildJsonObject {
                     putJsonArray("contents") {
                         addJsonObject {

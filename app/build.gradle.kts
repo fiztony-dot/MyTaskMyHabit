@@ -1,5 +1,7 @@
 // Archivo: app/build.gradle.kts
 
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -27,6 +29,14 @@ tasks.withType<io.gitlab.arturbosch.detekt.Detekt>().configureEach {
     }
 }
 
+// Leer la API key desde local.properties de forma segura
+val localProperties = Properties()
+val localPropertiesFile = rootProject.file("local.properties")
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.inputStream().use { stream ->
+        localProperties.load(stream)
+    }
+}
 
 android {
     namespace = "com.example.mistareasapp"
@@ -39,6 +49,9 @@ android {
         versionCode = 1
         versionName = "1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // Exponer la API key como BuildConfig (de forma segura)
+        buildConfigField("String", "GEMINI_API_KEY", "\"${localProperties.getProperty("GEMINI_API_KEY", "")}\"")
     }
 
     buildTypes {
@@ -63,6 +76,7 @@ android {
     buildFeatures {
         compose = true
         viewBinding = true
+        buildConfig = true  // Habilitar BuildConfig para usar variables de configuración
     }
 }
 
