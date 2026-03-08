@@ -19,6 +19,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.mistareasapp.ui.components.habits.SelectorFechaConProgreso
 import com.example.mistareasapp.viewmodel.Habits.HabitoConProgreso
 import com.example.mistareasapp.viewmodel.Habits.HabitosViewModel
 import java.time.DayOfWeek
@@ -38,35 +39,39 @@ import java.util.Locale
 fun PantallaHabitosListado(viewModel: HabitosViewModel, modifier: Modifier = Modifier) {
     // Observar la lista de hábitos con su progreso desde el ViewModel
     val habitosConProgreso by viewModel.habitosConProgreso.collectAsState()
+    val fechaSeleccionada by viewModel.fechaSeleccionada.collectAsState()
 
-    Scaffold(
-        // Botón flotante para crear un nuevo hábito
-        floatingActionButton = {
-            FloatingActionButton(
-                onClick = { /* Navegar a pantalla crear hábito */ },
-                containerColor = MaterialTheme.colorScheme.primary
-            ) {
-                Icon(Icons.Default.Add, contentDescription = "Nuevo")
-            }
-        },
-        modifier = modifier
-    ) { padding ->
-        Column(modifier = Modifier.padding(padding).fillMaxSize().padding(horizontal = 16.dp)) {
-            // Selector de semana con flechas de navegación
-            SelectorSemana()
+    // Calcular progreso general del día
+    val totalHabitos = habitosConProgreso.size
+    val habitosCompletados = habitosConProgreso.count { it.estaCompletado }
+    val progresoGeneral = if (totalHabitos > 0) {
+        (habitosCompletados.toFloat() / totalHabitos)
+    } else {
+        0f
+    }
 
-            Spacer(modifier = Modifier.height(16.dp))
 
-            // Lista scrolleable de tarjetas de hábitos
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                items(habitosConProgreso) { item ->
-                    HabitoListadoCard(item)
-                }
+    Column(modifier = modifier.fillMaxSize().padding(horizontal = 16.dp)) {
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Selector de fecha con progreso (igual que en Flash)
+        SelectorFechaConProgreso(
+            fechaSeleccionada = fechaSeleccionada,
+            progresoGeneral = progresoGeneral,
+            onFechaAnterior = { viewModel.cambiarFecha(fechaSeleccionada.minusDays(1)) },
+            onFechaSiguiente = { viewModel.cambiarFecha(fechaSeleccionada.plusDays(1)) }
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Lista scrolleable de tarjetas de hábitos
+        LazyColumn(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            items(habitosConProgreso) { item ->
+                HabitoListadoCard(item)
             }
         }
     }
 }
-
 /**
  * Tarjeta individual que muestra un hábito con su progreso semanal.
  * Incluye:

@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.DpOffset
 
 // --- 7. Jetpack Compose: Runtime y Estado ---
 import androidx.compose.runtime.*
+import com.example.mistareasapp.core.ai.crearSpeechLauncher
 
 // --- 8. Clases del Proyecto (Local) ---
 import com.example.mistareasapp.data.AppDatabase
@@ -71,13 +72,15 @@ import com.example.mistareasapp.network.IAResultTarea
 import com.example.mistareasapp.network.IAResultHabito
 import com.example.mistareasapp.network.TipoEntrada
 import com.example.mistareasapp.network.IAProcessor
+import com.example.mistareasapp.ui.components.habits.AccionesTopBarHabitos
+import com.example.mistareasapp.ui.screens.habits.CrearHabitoScreen
 import com.example.mistareasapp.viewmodel.Habits.HabitosViewModel
 import com.example.mistareasapp.viewmodel.Habits.HabitosViewModelFactory
 
 fun obtenerTitulo(ruta: String?): String {
     return when {
         ruta == Rutas.PantallaTareas.ruta -> "Mis Tareas"
-        ruta?.startsWith("habitos") == true -> "Mis Habitos, Mi Destino"
+        ruta?.startsWith("habitos") == true -> "Mis Habitos"
         ruta == Rutas.PantallaCrearTarea.ruta -> "Nueva Tarea"
         else -> "Gestión"
     }
@@ -113,15 +116,6 @@ fun MisTareasApp() {
     val habitosCompletados = habitosConProgreso.count { it.estaCompletado }
     val progresoGeneral = if (totalHabitos > 0) (habitosCompletados.toFloat() / totalHabitos) else 0f
 
-    LaunchedEffect(listaTareas) {
-        Log.d("LOG-NOTIFICACION", "🔔 La lista ha cambiado. Tareas totales: ${listaTareas.size}")
-        listaTareas.forEach { tarea ->
-            if (!tarea.estaCompletada && tarea.fechaLimite != null) {
-                Log.d("LOG-NOTIFICACION", "🔎 Analizando tarea: ${tarea.titulo}")
-                NotificationHelper.programarNotificacion(context, tarea)
-            }
-        }
-    }
 
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val rutaActual = navBackStackEntry?.destination?.route
@@ -165,71 +159,19 @@ fun MisTareasApp() {
         }
     }
 
-    // --- 4. RECONOCIMIENTO DE VOZ ---
-    val speechLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.StartActivityForResult()
-    ) { result ->
-        if (result.resultCode == android.app.Activity.RESULT_OK) {
-            val data = result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
-            data?.get(0)?.let { textoEscuchado ->
-                val tipo = if (navController.currentBackStackEntry?.destination?.route == Rutas.PantallaHabitos.ruta) {
-                    TipoEntrada.HABITO
-                } else {
-                    TipoEntrada.TAREA
-                }
+     // --- 4. RECONOCIMIENTO DE VOZ ---
+    // Recibe los valores de vuelta de la IA
 
-                scope.launch {
-                    try {
-                        Log.d("IA_DEBUG", "🎤 ENTRADA: texto='$textoEscuchado', tipo=$tipo")
-                        val jsonResultado = IAProcessor.procesarTexto(textoEscuchado, tipo)
+    val speechLauncher = crearSpeechLauncher(
+        navController = navController,
+        viewModel = viewModel,
+        context = context,
+        scope = scope
+    )
 
-                        Log.d("IA_DEBUG", """
-                            ✅ RESULTADO DE IA:
-                            TEXTO: "$textoEscuchado"
-                            TIPO: $tipo
-                            JSON OBTENIDO: $jsonResultado
-                        """.trimIndent())
+    // Prepara el Intent que abre el reconocimiento de voz de Android.
+    // Le indica: que use lenguaje natural (FREE_FORM) y que escuche en español (es-ES)
 
-                        when (tipo) {
-                            TipoEntrada.TAREA -> {
-                                if (jsonResultado != null) {
-                                    Log.d("IA_DEBUG", "📋 Intentando parsear como TAREA...")
-                                    val objetoTarea = Json.decodeFromString<IAResultTarea>(jsonResultado)
-                                    Log.d("IA_DEBUG", "✨ Tarea parseada: ${objetoTarea.titulo}")
-                                    val nuevaTarea = Tarea(
-                                        id = 0,
-                                        titulo = objetoTarea.titulo,
-                                        descripcion = textoEscuchado,
-                                        prioridad = when(objetoTarea.prioridad.uppercase()) {
-                                            "ALTA" -> Prioridad.ALTA
-                                            "BAJA" -> Prioridad.BAJA
-                                            else -> Prioridad.MEDIA
-                                        },
-                                        fechaLimite = objetoTarea.fecha?.let { java.time.LocalDate.parse(it) },
-                                        horaLimite = objetoTarea.hora?.let { java.time.LocalTime.parse(it) },
-                                        fechaCreacion = System.currentTimeMillis()
-                                    )
-                                    viewModel.insertar(nuevaTarea)
-                                    NotificationHelper.programarNotificacion(context, nuevaTarea)
-                                    Toast.makeText(context, "Tarea: ${objetoTarea.titulo}", Toast.LENGTH_SHORT).show()
-                                } else {
-                                    Log.w("IA_DEBUG", "⚠️ jsonResultado es NULL, llamando guardarTareaSimple")
-                                    guardarTareaSimple(textoEscuchado, viewModel, context)
-                                }
-                            }
-
-                            TipoEntrada.HABITO -> {
-                                Toast.makeText(context, "Hábito detectado: $textoEscuchado", Toast.LENGTH_SHORT).show()
-                            }
-                        }
-                    } catch (e: Exception) {
-                        Log.e("IA_DEBUG", "Error procesando voz: ${e.message}")
-                        guardarTareaSimple(textoEscuchado, viewModel, context)
-                    }
-                }
-            }
-        }
-    }
 
     val lanzarEscucha = {
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
@@ -357,6 +299,15 @@ fun MisTareasApp() {
                                     filtroActual = filtroActual
                                 )
                             }
+                            if (rutaActual == Rutas.PantallaHabitos.ruta) {
+                                AccionesTopBarHabitos(
+                                    viewModel = viewModel,
+                                    navController = navController,
+                                    onLanzarVoz = { lanzarEscucha() },
+                                    textoBusqueda = textoBusqueda,
+                                    filtroActual = filtroActual
+                                )
+                            }
                         }
                     )
                 }
@@ -405,6 +356,13 @@ fun MisTareasApp() {
 
                 composable(Rutas.PantallaCrearTarea.ruta) {
                     PantallaCrearTarea(navController)
+                }
+
+                composable(Rutas.PantallaCrearHabito.ruta) {
+                    CrearHabitoScreen(
+                        viewModel = habitosViewModel,
+                        onGuardar = { navController.popBackStack() }
+                    )
                 }
 
                 composable(
@@ -493,16 +451,6 @@ fun MisTareasApp() {
     }
 }
 
-private suspend fun guardarTareaSimple(texto: String, viewModel: TareasViewModel, context: android.content.Context) {
-    Log.d("IA_DEBUG", "💾 GUARDADO SIMPLE: '$texto'")
-    withContext(Dispatchers.Main) {
-        val tareaBasica = Tarea(
-            titulo = texto.replaceFirstChar { it.uppercase() },
-            descripcion = "Voz (IA no disponible)",
-            prioridad = Prioridad.MEDIA
-        )
-        viewModel.insertar(tareaBasica)
-        Toast.makeText(context, "Guardado simple (IA falló)", Toast.LENGTH_SHORT).show()
-    }
-}
+
+
 

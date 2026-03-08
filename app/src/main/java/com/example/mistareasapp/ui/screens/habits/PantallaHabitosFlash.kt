@@ -9,8 +9,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ChevronLeft
-import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -24,10 +22,9 @@ import androidx.compose.ui.draw.clip
 import androidx.core.graphics.toColorInt
 import com.example.mistareasapp.data.habits.FrecuenciaHabito
 import com.example.mistareasapp.obtenerIconoPorNombre
+import com.example.mistareasapp.ui.components.habits.SelectorFechaConProgreso
 import com.example.mistareasapp.viewmodel.Habits.HabitoConProgreso
 import com.example.mistareasapp.viewmodel.Habits.HabitosViewModel
-import java.time.format.DateTimeFormatter
-import java.util.Locale
 
 @Composable
 fun PantallaHabitosFlash(
@@ -52,54 +49,17 @@ fun PantallaHabitosFlash(
     // Usar el progresoGeneral pasado como parámetro
     val progreso = if (progresoGeneral > 0) progresoGeneral else progresoCalculado
 
-    Column(modifier = modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 4.dp)) {
+    Column(modifier = modifier.fillMaxSize().padding(horizontal = 16.dp)) {
 
-        // Selector de Fecha superior - Sin Card de progreso
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // ...existing code...
-            Row(
-                modifier = Modifier.weight(1f).fillMaxWidth(),
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                IconButton(onClick = { viewModel.cambiarFecha(fechaSeleccionada.minusDays(1)) }) {
-                    Icon(Icons.Default.ChevronLeft, contentDescription = "Anterior")
-                }
+        Spacer(modifier = Modifier.height(8.dp))
 
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text(
-                        text = fechaSeleccionada.format(DateTimeFormatter.ofPattern("d 'de' MMMM", Locale("es"))),
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = if (fechaSeleccionada == java.time.LocalDate.now()) "hoy" else fechaSeleccionada.format(DateTimeFormatter.ofPattern("EEEE", Locale("es"))),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-
-                IconButton(onClick = { viewModel.cambiarFecha(fechaSeleccionada.plusDays(1)) }) {
-                    Icon(Icons.Default.ChevronRight, contentDescription = "Siguiente")
-                }
-            }
-
-            // Indicador de cumplimiento sin caja - solo el porcentaje
-            Text(
-                text = "${(progreso * 100).toInt()}%",
-                fontWeight = FontWeight.Bold,
-                fontSize = MaterialTheme.typography.headlineSmall.fontSize,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(end = 8.dp)
-            )
-        }
+        // Selector de fecha con progreso (componente reutilizable)
+        SelectorFechaConProgreso(
+            fechaSeleccionada = fechaSeleccionada,
+            progresoGeneral = progreso,
+            onFechaAnterior = { viewModel.cambiarFecha(fechaSeleccionada.minusDays(1)) },
+            onFechaSiguiente = { viewModel.cambiarFecha(fechaSeleccionada.plusDays(1)) }
+        )
 
         Spacer(modifier = Modifier.height(8.dp))
 

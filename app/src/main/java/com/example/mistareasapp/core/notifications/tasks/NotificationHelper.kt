@@ -12,6 +12,8 @@ import java.util.concurrent.TimeUnit
 object NotificationHelper {
     private const val CINCO_MINUTOS_MS = 5 * 60 * 1000L
     private const val HORA_EN_MS = 60 * 60 * 1000L
+    private const val CINCOHORAS_EN_MS = 300 * 60 * 1000L
+    private const val UN_DIA_MS = 1 * 24 * 60 * 60 * 1000L
     private const val TRES_DIAS_MS = 3 * 24 * 60 * 60 * 1000L
 
     fun programarNotificacion(context: Context, tarea: Tarea) {
@@ -24,8 +26,8 @@ object NotificationHelper {
 
         // Determinamos el intervalo según la prioridad que ya tienes en Tarea.kt
         val tiempoRepeticion = when (tarea.prioridad) {
-            Prioridad.ALTA -> CINCO_MINUTOS_MS
-            Prioridad.MEDIA -> HORA_EN_MS
+            Prioridad.ALTA -> CINCOHORAS_EN_MS
+            Prioridad.MEDIA -> UN_DIA_MS
             Prioridad.BAJA -> TRES_DIAS_MS
         }
 

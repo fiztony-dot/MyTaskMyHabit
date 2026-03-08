@@ -27,7 +27,7 @@ class MainActivity : ComponentActivity() {
                 // Primero lo más ligero: Notificaciones
                 checkNotificationPermission()
 
-                // Esperamos un segundo antes de lanzar lo de la batería
+              // Esperamos un segundo antes de lanzar lo de la batería
                 // para evitar que el móvil se colapse con dos diálogos
                 delay(1000)
                 solicitarIgnorarOptimizacionBateria()
