@@ -12,7 +12,7 @@ import androidx.activity.result.ActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
 import androidx.navigation.NavController
-import com.example.mistareasapp.data.tasks.Prioridad
+import com.example.mistareasapp.core.voice.VozTaskParser
 import com.example.mistareasapp.data.tasks.Tarea
 import com.example.mistareasapp.viewmodel.Tasks.TareasViewModel
 import kotlinx.coroutines.CoroutineScope
@@ -37,10 +37,10 @@ fun crearSpeechLauncher(
                 scope.launch {
                     try {
                         Log.d("VOZ_DEBUG", "Entrada de voz: '$textoEscuchado'")
-                        guardarTareaSimple(textoEscuchado, viewModel, context)
+                        guardarTareaDesdeParser(textoEscuchado, viewModel, context)
                     } catch (e: Exception) {
                         Log.e("VOZ_DEBUG", "Error procesando voz: ${e.message}", e)
-                        guardarTareaSimple(textoEscuchado, viewModel, context)
+                        guardarTareaDesdeParser(textoEscuchado, viewModel, context)
                     }
                 }
             }
@@ -48,18 +48,34 @@ fun crearSpeechLauncher(
     }
 }
 
-suspend fun guardarTareaSimple(
+suspend fun guardarTareaDesdeParser(
     texto: String,
     viewModel: TareasViewModel,
     context: Context
 ) {
+    val resultado = VozTaskParser.parse(texto)
+
     withContext(Dispatchers.Main) {
-        val tareaBasica = Tarea(
-            titulo = texto.replaceFirstChar { it.uppercase() },
+        val tarea = Tarea(
+            titulo = resultado.titulo,
             descripcion = "Creada por voz",
-            prioridad = Prioridad.MEDIA
+            prioridad = resultado.prioridad,
+            fechaLimite = resultado.fechaLimite,
+            horaLimite = resultado.horaLimite
         )
-        viewModel.insertar(tareaBasica)
-        Toast.makeText(context, "Tarea creada por voz", Toast.LENGTH_SHORT).show()
+
+        viewModel.insertar(tarea)
+
+        val resumen = buildString {
+            append("Tarea creada")
+            if (resultado.fechaLimite != null) {
+                append(" · ${resultado.fechaLimite}")
+            }
+            if (resultado.horaLimite != null) {
+                append(" · ${resultado.horaLimite}")
+            }
+        }
+
+        Toast.makeText(context, resumen, Toast.LENGTH_SHORT).show()
     }
 }
