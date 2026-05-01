@@ -1,9 +1,12 @@
-package com.example.mistareasapp
+package com.example.mistareasapp.ui.widgets.Tasks
 
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
 import android.content.Context
 import android.widget.RemoteViews
+import com.example.mistareasapp.R
+import com.example.mistareasapp.ui.widgets.Tasks.deleteTitlePref
+import com.example.mistareasapp.ui.widgets.Tasks.loadTitlePref
 
 /**
  * Implementation of App Widget functionality.

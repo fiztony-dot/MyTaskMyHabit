@@ -3,13 +3,12 @@ package com.example.mistareasapp.viewmodel
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.mistareasapp.network.TipoEntrada
+import com.example.mistareasapp.core.ai.TipoEntrada
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.*
-import com.example.mistareasapp.network.IAProcessor
-import com.example.mistareasapp.network.IAResultHabito
-import com.example.mistareasapp.network.IAResultTarea
-import kotlinx.serialization.json.*
+import com.example.mistareasapp.core.ai.IAProcessor
+import com.example.mistareasapp.core.ai.IAResultHabito
+import com.example.mistareasapp.core.ai.IAResultTarea
 
 private val jsonConfig = Json {
     ignoreUnknownKeys = true

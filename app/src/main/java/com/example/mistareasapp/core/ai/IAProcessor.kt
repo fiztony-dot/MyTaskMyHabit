@@ -1,4 +1,4 @@
-package com.example.mistareasapp.network
+package com.example.mistareasapp.core.ai
 
 import android.util.Log
 import com.example.mistareasapp.BuildConfig
@@ -89,7 +89,7 @@ object IAProcessor {
             }
             TipoEntrada.HABITO -> {
                 """
-                Analiza: "${'$'}textoEscuchado"
+                Analiza: "$textoEscuchado"
                 Genera un JSON con: {"nombre": "...", "frecuencia": "Diaria/Semanal", "objetivo": "..."}
                 Responde solo el JSON sin formato markdown.
                 """.trimIndent()
@@ -99,10 +99,10 @@ object IAProcessor {
         return try {
             val url = "https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash-lite:generateContent?key=$API_KEY"
 
-            val response: io.ktor.client.statement.HttpResponse = client.post(url) {
-                contentType(io.ktor.http.ContentType.Application.Json)
+            val response: HttpResponse = client.post(url) {
+                contentType(ContentType.Application.Json)
 
-                // Headers necesarios para validación Android
+                // Headers necesarios para validacion Android
                 header("X-Android-Package", "com.example.mistareasapp")
                 header("X-Android-Cert", "350D08C8B3D6EBEED7CE641A8EEDBDD643EB5429")
 
@@ -120,20 +120,19 @@ object IAProcessor {
             }
 
             val responseBody = response.bodyAsText()
-            Log.d("IA_DEBUG", "🔵 RESPUESTA RECIBIDA - Status: ${response.status.value}, Body: $responseBody")
+            Log.d("IA_DEBUG", "RESPUESTA RECIBIDA - Status: ${response.status.value}, Body: $responseBody")
 
             val jsonResponse = Json.parseToJsonElement(responseBody).jsonObject
 
-            // Validación: verificar si hay error en la respuesta
             if (jsonResponse.containsKey("error")) {
                 val errorObj = jsonResponse["error"]?.jsonObject
                 val errorMessage = errorObj?.get("message")?.jsonPrimitive?.content ?: "Error desconocido"
                 val errorStatus = errorObj?.get("status")?.jsonPrimitive?.content ?: "UNKNOWN"
-                Log.e("IA_DEBUG", "❌ ERROR DE API GOOGLE [$errorStatus]: $errorMessage")
+                Log.e("IA_DEBUG", "ERROR DE API GOOGLE [$errorStatus]: $errorMessage")
                 return null
             }
 
-            Log.d("IA_DEBUG", "✅ Respuesta exitosa, buscando candidates...")
+            Log.d("IA_DEBUG", "Respuesta exitosa, buscando candidates...")
 
             val textoExtraido = jsonResponse["candidates"]?.jsonArray?.getOrNull(0)
                 ?.jsonObject?.get("content")
@@ -141,29 +140,24 @@ object IAProcessor {
                 ?.jsonArray?.getOrNull(0)
                 ?.jsonObject?.get("text")?.jsonPrimitive?.content
 
-            Log.d("IA_DEBUG", "📄 Texto extraído: $textoExtraido")
+            Log.d("IA_DEBUG", "Texto extraido: $textoExtraido")
 
-            // 3. LIMPIEZA PARA ASEGURAR EL PARSEO
+            // Limpieza para extraer solo el JSON del texto de respuesta
             val jsonLimpio = textoExtraido?.let { texto ->
-                Log.d("IA_DEBUG", "🔍 Buscando JSON en texto...")
                 val inicio = texto.indexOf("{")
                 val fin = texto.lastIndexOf("}")
-                Log.d("IA_DEBUG", "  Inicio: $inicio, Fin: $fin")
                 if (inicio != -1 && fin != -1 && fin > inicio) {
-                    val resultado = texto.substring(inicio, fin + 1)
-                    Log.d("IA_DEBUG", "✨ JSON encontrado: $resultado")
-                    resultado
+                    texto.substring(inicio, fin + 1)
                 } else {
-                    Log.e("IA_DEBUG", "❌ No se encontró JSON en: $texto")
+                    Log.e("IA_DEBUG", "No se encontro JSON en: $texto")
                     null
                 }
             }
 
-            Log.d("IA_DEBUG", "🎯 JSON FINAL A RETORNAR: $jsonLimpio")
+            Log.d("IA_DEBUG", "JSON FINAL A RETORNAR: $jsonLimpio")
             jsonLimpio
-
         } catch (e: Exception) {
-            Log.e("IA_DEBUG", "💥 EXCEPCIÓN EN IAProcessor: ${e::class.simpleName} - ${e.message}")
+            Log.e("IA_DEBUG", "EXCEPCION EN IAProcessor: ${e::class.simpleName} - ${e.message}")
             Log.e("IA_DEBUG", "Stack trace: ", e)
             null
         }

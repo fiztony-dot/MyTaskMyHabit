@@ -7,7 +7,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.work.WorkManager
-import com.example.mistareasapp.OrdenCategorias
+import com.example.mistareasapp.ui.components.tasks.OrdenCategorias
 import com.example.mistareasapp.data.tasks.Categoria
 import com.example.mistareasapp.data.tasks.CategoriaDao
 import com.example.mistareasapp.data.tasks.Prioridad
@@ -33,7 +33,7 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
-import com.example.mistareasapp.network.IAResultTarea
+import com.example.mistareasapp.core.ai.IAResultTarea
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.catch

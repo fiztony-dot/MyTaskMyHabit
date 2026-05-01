@@ -1,4 +1,4 @@
-package com.example.mistareasapp
+package com.example.mistareasapp.ui.components.tasks
 
 enum class OrdenCategorias {
     ALFABETICO,

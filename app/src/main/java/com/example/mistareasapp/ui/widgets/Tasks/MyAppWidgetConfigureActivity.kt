@@ -1,4 +1,4 @@
-package com.example.mistareasapp
+package com.example.mistareasapp.ui.widgets.Tasks
 
 import android.app.Activity
 import android.appwidget.AppWidgetManager
@@ -7,6 +7,7 @@ import android.content.Intent
 import android.os.Bundle
 import android.view.View
 import android.widget.EditText
+import com.example.mistareasapp.R
 import com.example.mistareasapp.databinding.MyAppWidgetConfigureBinding
 
 /**
@@ -67,7 +68,7 @@ class MyAppWidgetConfigureActivity : Activity() {
 
 }
 
-private const val PREFS_NAME = "com.example.mistareasapp.MyAppWidget"
+private const val PREFS_NAME = "com.example.mistareasapp.ui.widgets.Tasks.MyAppWidget"
 private const val PREF_PREFIX_KEY = "appwidget_"
 
 // Write the prefix to the SharedPreferences object for this widget

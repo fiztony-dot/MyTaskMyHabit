@@ -28,7 +28,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
-import com.example.mistareasapp.OrdenCategorias
+import com.example.mistareasapp.ui.components.tasks.OrdenCategorias
 import com.example.mistareasapp.ui.components.tasks.CuerpoListaTareas
 import com.example.mistareasapp.viewmodel.Tasks.MapasDeTareas
 import com.example.mistareasapp.viewmodel.Tasks.TareasViewModel

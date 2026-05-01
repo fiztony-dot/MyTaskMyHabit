@@ -20,7 +20,7 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.MisTareasApp">
         <receiver
-            android:name=".MyAppWidget"
+            android:name=".ui.widgets.Tasks.MyAppWidget"
             android:exported="false">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
@@ -32,7 +32,7 @@
         </receiver>
 
         <activity
-            android:name=".MyAppWidgetConfigureActivity"
+            android:name=".ui.widgets.Tasks.MyAppWidgetConfigureActivity"
             android:exported="false">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />

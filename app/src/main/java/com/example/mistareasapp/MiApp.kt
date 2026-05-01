@@ -67,11 +67,10 @@ import com.example.mistareasapp.ui.navigation.BarraNavegacion
 import com.example.mistareasapp.ui.navigation.BarraNavegacionHabitos
 import com.example.mistareasapp.ui.navigation.Rutas
 import com.example.mistareasapp.ui.screens.GestionDatosScreen
-import com.example.mistareasapp.ui.screens.PantallaConfiguracion
-import com.example.mistareasapp.network.IAResultTarea
-import com.example.mistareasapp.network.IAResultHabito
-import com.example.mistareasapp.network.TipoEntrada
-import com.example.mistareasapp.network.IAProcessor
+import com.example.mistareasapp.ui.screens.tasks.PantallaConfiguracion
+import com.example.mistareasapp.core.ai.IAResultTarea
+import com.example.mistareasapp.core.ai.TipoEntrada
+import com.example.mistareasapp.core.ai.IAProcessor
 import com.example.mistareasapp.ui.components.habits.AccionesTopBarHabitos
 import com.example.mistareasapp.ui.screens.habits.CrearHabitoScreen
 import com.example.mistareasapp.viewmodel.Habits.HabitosViewModel
@@ -301,7 +300,7 @@ fun MisTareasApp() {
                             }
                             if (rutaActual == Rutas.PantallaHabitos.ruta) {
                                 AccionesTopBarHabitos(
-                                    viewModel = viewModel,
+                                    viewModel = habitosViewModel,
                                     navController = navController,
                                     onLanzarVoz = { lanzarEscucha() },
                                     textoBusqueda = textoBusqueda,
@@ -331,8 +330,8 @@ fun MisTareasApp() {
         ) { innerPadding ->
             NavHost(
                 navController = navController,
-                //startDestination = Rutas.PantallaHabitos.ruta,
-                startDestination = Rutas.PantallaTareas.ruta,
+                startDestination = Rutas.PantallaHabitos.ruta,
+                //startDestination = Rutas.PantallaTareas.ruta,
                 modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)
             ) {
                 composable(Rutas.PantallaTareas.ruta) {
@@ -386,6 +385,13 @@ fun MisTareasApp() {
                         navController,
                         habitosViewModel,
                         modifier = Modifier.padding(innerPadding).fillMaxSize()
+                    )
+                }
+
+                composable("crear_habito") {
+                    CrearHabitoScreen(
+                        viewModel = habitosViewModel,
+                        onGuardar = { navController.popBackStack() }
                     )
                 }
 
@@ -450,6 +456,8 @@ fun MisTareasApp() {
         }
     }
 }
+
+
 
 
 

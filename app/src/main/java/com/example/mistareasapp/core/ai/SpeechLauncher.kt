@@ -16,9 +16,9 @@ import com.example.mistareasapp.data.tasks.Tarea
 import com.example.mistareasapp.data.tasks.Prioridad
 import com.example.mistareasapp.ui.navigation.Rutas
 import com.example.mistareasapp.core.notifications.tasks.NotificationHelper
-import com.example.mistareasapp.network.IAProcessor
-import com.example.mistareasapp.network.IAResultTarea
-import com.example.mistareasapp.network.TipoEntrada
+import com.example.mistareasapp.core.ai.IAProcessor
+import com.example.mistareasapp.core.ai.IAResultTarea
+import com.example.mistareasapp.core.ai.TipoEntrada
 import com.example.mistareasapp.viewmodel.Tasks.TareasViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers

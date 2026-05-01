@@ -7,8 +7,10 @@ import android.widget.Toast
 // --- COMPOSE ---
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -35,10 +37,7 @@ import com.example.mistareasapp.data.habits.Habito
 import com.example.mistareasapp.data.habits.FrecuenciaHabito
 import com.example.mistareasapp.viewmodel.Habits.HabitosViewModel
 
-import androidx.compose.runtime.Composable
-
-
-
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CrearHabitoScreen(
     viewModel: HabitosViewModel,
@@ -65,38 +64,57 @@ fun CrearHabitoScreen(
     var icono by remember { mutableStateOf("favorite") }
     var colorHex by remember { mutableStateOf("#FF0000") }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp)
-            .verticalScroll(rememberScrollState())
-    ) {
-
-        Text("Crear nuevo hábito", style = MaterialTheme.typography.headlineSmall)
-
-        Spacer(Modifier.height(16.dp))
-
-        // NOMBRE
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Nuevo Hábito") },
+                navigationIcon = {
+                    IconButton(onClick = onGuardar) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Volver")
+                    }
+                }
+            )
+        }
+    ) { padding ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(16.dp)
+                    .imePadding()
+            ) {
+        Text("Nombre del hábito", style = MaterialTheme.typography.labelLarge)
         OutlinedTextField(
             value = nombre,
             onValueChange = { nombre = it },
-            label = { Text("Nombre del hábito") },
+            placeholder = { Text("Ej: Hacer ejercicio") },
             modifier = Modifier.fillMaxWidth()
         )
 
+        Spacer(Modifier.height(16.dp))
+
         // DESCRIPCIÓN
+        Text("Descripción", style = MaterialTheme.typography.labelLarge)
         OutlinedTextField(
             value = descripcion,
             onValueChange = { descripcion = it },
-            label = { Text("Descripción (opcional)") },
+            placeholder = { Text("Descripción del hábito...") },
             modifier = Modifier.fillMaxWidth()
         )
 
+        Spacer(Modifier.height(16.dp))
+
         // CATEGORÍA
+        Text("Categoría", style = MaterialTheme.typography.labelLarge)
         OutlinedTextField(
             value = categoriaId,
             onValueChange = { categoriaId = it },
-            label = { Text("ID de categoría") },
+            placeholder = { Text("ID de categoría") },
             modifier = Modifier.fillMaxWidth(),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
         )
@@ -104,17 +122,19 @@ fun CrearHabitoScreen(
         Spacer(Modifier.height(16.dp))
 
         // FRECUENCIA
-        Text("Frecuencia")
+        Text("Frecuencia", style = MaterialTheme.typography.labelLarge)
         DropdownMenuFrecuencia(
             frecuenciaActual = frecuencia,
             onFrecuenciaSeleccionada = { frecuencia = it }
         )
 
+        Spacer(Modifier.height(16.dp))
+
         // VECES POR DÍA
+        Text("Veces por día", style = MaterialTheme.typography.labelLarge)
         OutlinedTextField(
             value = vecesPorDia,
             onValueChange = { vecesPorDia = it },
-            label = { Text("Veces por día") },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             modifier = Modifier.fillMaxWidth()
         )
@@ -122,28 +142,28 @@ fun CrearHabitoScreen(
         Spacer(Modifier.height(16.dp))
 
         // OBJETIVO
-        Text("Objetivo opcional")
+        Text("Objetivo opcional", style = MaterialTheme.typography.labelLarge)
         OutlinedTextField(
             value = objetivoValor,
             onValueChange = { objetivoValor = it },
-            label = { Text("Valor objetivo (ej: 10)") },
+            placeholder = { Text("Valor objetivo (ej: 10)") },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             modifier = Modifier.fillMaxWidth()
         )
         OutlinedTextField(
             value = unidad,
             onValueChange = { unidad = it },
-            label = { Text("Unidad (ej: pasos, minutos)") },
+            placeholder = { Text("Unidad (ej: pasos, minutos)") },
             modifier = Modifier.fillMaxWidth()
         )
 
         Spacer(Modifier.height(16.dp))
 
         // RACHA
+        Text("Racha objetivo (semanas)", style = MaterialTheme.typography.labelLarge)
         OutlinedTextField(
             value = objetivoRachaSemanas,
             onValueChange = { objetivoRachaSemanas = it },
-            label = { Text("Racha objetivo (semanas)") },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             modifier = Modifier.fillMaxWidth()
         )
@@ -169,57 +189,71 @@ fun CrearHabitoScreen(
         Spacer(Modifier.height(16.dp))
 
         // ICONO
+        Text("Icono", style = MaterialTheme.typography.labelLarge)
         OutlinedTextField(
             value = icono,
             onValueChange = { icono = it },
-            label = { Text("Icono (nombre)") },
             modifier = Modifier.fillMaxWidth()
         )
 
+        Spacer(Modifier.height(16.dp))
+
         // COLOR
+        Text("Color HEX", style = MaterialTheme.typography.labelLarge)
         OutlinedTextField(
             value = colorHex,
             onValueChange = { colorHex = it },
-            label = { Text("Color HEX") },
             modifier = Modifier.fillMaxWidth()
         )
 
-        Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.height(24.dp))
 
-        // BOTÓN GUARDAR
-        Button(
-            onClick = {
-                if (nombre.isBlank()) {
-                    Toast.makeText(context, "El nombre es obligatorio", Toast.LENGTH_SHORT).show()
-                    return@Button
+            // BOTONES
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End
+            ) {
+                OutlinedButton(onClick = onGuardar) {
+                    Text("Cancelar")
                 }
+                Spacer(Modifier.width(12.dp))
+                Button(
+                    onClick = {
+                        if (nombre.isBlank()) {
+                            Toast.makeText(context, "El nombre es obligatorio", Toast.LENGTH_SHORT).show()
+                            return@Button
+                        }
 
-                val nuevoHabito = Habito(
-                    nombre = nombre,
-                    descripcion = descripcion.ifBlank { null },
-                    categoriaId = categoriaId.toLongOrNull() ?: 0,
-                    fechaInicio = fechaInicio,
-                    frecuencia = frecuencia,
-                    vecesPorDia = vecesPorDia.toIntOrNull() ?: 1,
-                    objetivoValor = objetivoValor.toIntOrNull(),
-                    unidad = unidad.ifBlank { null },
-                    objetivoRachaSemanas = objetivoRachaSemanas.toIntOrNull() ?: 4,
-                    recordatoriosActivos = recordatoriosActivos,
-                    horaRecordatorio = if (recordatoriosActivos) horaRecordatorio else null,
-                    icono = icono,
-                    colorHex = colorHex
-                )
+                        val nuevoHabito = Habito(
+                            nombre = nombre,
+                            descripcion = descripcion.ifBlank { null },
+                            categoriaId = categoriaId.toLongOrNull() ?: 0,
+                            fechaInicio = fechaInicio,
+                            frecuencia = frecuencia,
+                            vecesPorDia = vecesPorDia.toIntOrNull() ?: 1,
+                            objetivoValor = objetivoValor.toIntOrNull(),
+                            unidad = unidad.ifBlank { null },
+                            objetivoRachaSemanas = objetivoRachaSemanas.toIntOrNull() ?: 4,
+                            recordatoriosActivos = recordatoriosActivos,
+                            horaRecordatorio = if (recordatoriosActivos) horaRecordatorio else null,
+                            icono = icono,
+                            colorHex = colorHex
+                        )
 
-                viewModel.insertarHabito(nuevoHabito)
-                Toast.makeText(context, "Hábito creado", Toast.LENGTH_SHORT).show()
-                onGuardar()
-            },
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("Guardar hábito")
-        }
-    }
+                        viewModel.insertarHabito(nuevoHabito)
+                        Toast.makeText(context, "Hábito creado", Toast.LENGTH_SHORT).show()
+                        onGuardar()
+                    }
+                ) {
+                    Text("Crear")
+                }
+            } // Cierra Row
+            } // Cierra Column
+        } // Cierra Box
+    } // Cierra Scaffold
 }
+
+
 @Composable
 fun DropdownMenuFrecuencia(
     frecuenciaActual: FrecuenciaHabito,
