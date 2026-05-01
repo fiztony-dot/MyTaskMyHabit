@@ -16,3 +16,4 @@ Captures/
 
 # Secretos (si tuvieras archivos de claves, se ponen aquí)
 google-services.json
+.env

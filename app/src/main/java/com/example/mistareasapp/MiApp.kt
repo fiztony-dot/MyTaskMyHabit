@@ -68,9 +68,6 @@ import com.example.mistareasapp.ui.navigation.BarraNavegacionHabitos
 import com.example.mistareasapp.ui.navigation.Rutas
 import com.example.mistareasapp.ui.screens.GestionDatosScreen
 import com.example.mistareasapp.ui.screens.tasks.PantallaConfiguracion
-import com.example.mistareasapp.core.ai.IAResultTarea
-import com.example.mistareasapp.core.ai.TipoEntrada
-import com.example.mistareasapp.core.ai.IAProcessor
 import com.example.mistareasapp.ui.components.habits.AccionesTopBarHabitos
 import com.example.mistareasapp.ui.screens.habits.CrearHabitoScreen
 import com.example.mistareasapp.viewmodel.Habits.HabitosViewModel

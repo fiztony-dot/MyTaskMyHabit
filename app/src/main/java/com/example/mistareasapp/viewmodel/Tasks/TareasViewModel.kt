@@ -2,7 +2,6 @@ package com.example.mistareasapp.viewmodel.Tasks
 
 import android.content.Context
 import android.util.Log
-import android.widget.Toast
 import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -33,9 +32,6 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
-import com.example.mistareasapp.core.ai.IAResultTarea
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.catch
 
 
@@ -364,36 +360,5 @@ class TareasViewModel(
             }
         }
     }
-    private suspend fun guardarTareaSimple(texto: String, viewModel: TareasViewModel, context: android.content.Context) {
-        withContext(Dispatchers.Main) {
-            val tareaBasica = Tarea(
-                titulo = texto.replaceFirstChar { it.uppercase() },
-                descripcion = "Voz (IA no disponible)",
-                prioridad = Prioridad.MEDIA
-            )
-            viewModel.insertar(tareaBasica)
-            Toast.makeText(context, "Guardado simple (IA falló)", Toast.LENGTH_SHORT).show()
-        }
-    }
-    fun agregarTareaDesdeIA(resultado: IAResultTarea) {
-        viewModelScope.launch {
-            val nuevaTarea = Tarea(
-                titulo = resultado.titulo,
-                // 1. En tu modelo Tarea, probablemente el campo es 'descripcion'
-                // y ahí es donde guardamos la fecha/hora si no tienes campos propios.
-                descripcion = "Fecha: ${resultado.fecha ?: ""} Hora: ${resultado.hora ?: ""}".trim(),
 
-                // 2. PRIORIDAD (Usa el Enum que ya tienes)
-                prioridad = when(resultado.prioridad?.uppercase()) {
-                    "ALTA" -> Prioridad.ALTA
-                    "BAJA" -> Prioridad.BAJA
-                    else -> Prioridad.MEDIA
-                },
-
-                // 3. ESTADO (En Room suele ser 'isCompleted' o no estar en el constructor)
-                estaCompletada = false
-            )
-            insertar(nuevaTarea)
-        }
-    }
 }
