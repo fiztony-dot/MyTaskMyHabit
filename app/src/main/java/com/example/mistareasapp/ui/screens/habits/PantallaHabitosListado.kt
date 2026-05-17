@@ -7,9 +7,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -175,64 +172,3 @@ fun HabitoListadoCard(item: HabitoConProgreso) {
     }
 }
 
-/**
- * Componente selector de semana.
- * Muestra el rango de fechas de la semana actual con flechas de navegación.
- *
- * Formato: "17 feb - 23 feb"
- *
- * TODO: Añadir lógica para navegar entre semanas con las flechas
- */
-@Composable
-fun SelectorSemana() {
-    val hoy = LocalDate.now()
-    // Calcular el lunes de la semana actual
-    val lunes = hoy.with(DayOfWeek.MONDAY)
-    // Calcular el domingo (6 días después del lunes)
-    val domingo = lunes.plusDays(6)
-
-    // Formatear el rango de fechas para mostrar: "día mes - día mes"
-    val rangoSemana = "${lunes.dayOfMonth} ${lunes.month.getDisplayName(TextStyle.SHORT, Locale("es"))} - " +
-            "${domingo.dayOfMonth} ${domingo.month.getDisplayName(TextStyle.SHORT, Locale("es"))}"
-
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(60.dp),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            // Flecha izquierda - para retroceder a la semana anterior
-            IconButton(onClick = { /* TODO: Lógica para retroceder semana */ }) {
-                Icon(
-                    imageVector = Icons.Default.ArrowBack,
-                    contentDescription = "Semana anterior",
-                    tint = MaterialTheme.colorScheme.primary
-                )
-            }
-
-            // Texto central con el rango de fechas de la semana
-            Text(
-                text = rangoSemana,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
-            )
-
-            // Flecha derecha - para avanzar a la semana siguiente
-            IconButton(onClick = { /* TODO: Lógica para avanzar semana */ }) {
-                Icon(
-                    imageVector = Icons.Default.ArrowForward,
-                    contentDescription = "Semana siguiente",
-                    tint = MaterialTheme.colorScheme.primary
-                )
-            }
-        }
-    }
-}

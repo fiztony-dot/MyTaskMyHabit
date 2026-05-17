@@ -162,10 +162,19 @@ val MIGRATION_8_9 = object : Migration(8, 9) {
     }
 }
 
+val MIGRATION_9_10 = object : Migration(9, 10) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        database.execSQL("ALTER TABLE habitos ADD COLUMN tipoObjetivo TEXT NOT NULL DEFAULT 'FRECUENCIA'")
+        database.execSQL("ALTER TABLE habitos ADD COLUMN esCompuestoPorTareas INTEGER NOT NULL DEFAULT 0")
+        database.execSQL("ALTER TABLE habitos ADD COLUMN criterioCumplimientoTareas TEXT NOT NULL DEFAULT 'TODAS'")
+        database.execSQL("ALTER TABLE habitos ADD COLUMN minimoTareasCumplimiento INTEGER DEFAULT NULL")
+    }
+}
+
 @TypeConverters(Converters::class)
 @Database(
     entities = [Tarea::class, Categoria::class, Habito::class, HabitoHistorial::class, CategoriaHabito::class, TareaHabito::class],
-    version = 9,
+    version = 10,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -185,7 +194,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "tareas_db"
                 )
-                    .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9)
+                    .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10)
                     .addCallback(DatabaseCallback(context))
                     .setJournalMode(JournalMode.TRUNCATE)
                     .build()

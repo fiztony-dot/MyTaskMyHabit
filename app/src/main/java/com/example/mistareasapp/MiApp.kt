@@ -4,7 +4,6 @@ package com.example.mistareasapp
 import android.content.Intent
 import android.os.Build
 import android.speech.RecognizerIntent
-import android.util.Log
 import android.widget.Toast
 import java.util.Locale
 
@@ -120,9 +119,7 @@ fun MisTareasApp() {
     val permisoLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { isGranted ->
-        if (isGranted) {
-            Log.d("LOG", "Permiso de notificaciones concedido")
-        } else {
+        if (!isGranted) {
             Toast.makeText(context, "Debes activar las notificaciones en Ajustes", Toast.LENGTH_LONG).show()
         }
     }

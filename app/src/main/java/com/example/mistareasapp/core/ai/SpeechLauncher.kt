@@ -64,7 +64,7 @@ suspend fun guardarTareaDesdeParser(
             horaLimite = resultado.horaLimite
         )
 
-        viewModel.insertar(tarea)
+        viewModel.insertar(tarea, context)
 
         val resumen = buildString {
             append("Tarea creada")

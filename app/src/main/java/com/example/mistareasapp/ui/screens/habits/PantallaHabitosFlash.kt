@@ -2,7 +2,6 @@
 
 package com.example.mistareasapp.ui.screens.habits
 
-import android.util.Log
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -35,13 +34,6 @@ fun PantallaHabitosFlash(
     val fechaSeleccionada by viewModel.fechaSeleccionada.collectAsState()
     val habitosConProgreso by viewModel.habitosConProgreso.collectAsState()
 
-    // Log de depuración para ver si llegan hábitos
-    LaunchedEffect(habitosConProgreso) {
-        Log.d("HABITOS_DEBUG", "📊 Total hábitos cargados: ${habitosConProgreso.size}")
-        habitosConProgreso.forEach { item ->
-            Log.d("HABITOS_DEBUG", "  - ${item.habito.nombre} | Completado: ${item.estaCompletado} | Valor: ${item.valorActual}")
-        }
-    }
 
     val totalHabitos = habitosConProgreso.size
     val habitosCompletados = habitosConProgreso.count { it.estaCompletado }

@@ -135,9 +135,9 @@ fun PantallaListaTareas(
                 onTaskToggle = { tarea, isChecked ->
                     // Aquí solo la lógica del Checkbox.
                     if (isChecked) {
-                        viewModel.archivarTarea(tarea)
+                        viewModel.archivarTarea(tarea, context)
                     } else {
-                        viewModel.actualizar(tarea.copy(estaCompletada = false))
+                        viewModel.actualizar(tarea.copy(estaCompletada = false), context)
                     }
                 },
                 onEditTask = { id ->
@@ -154,11 +154,9 @@ fun PantallaListaTareas(
                 onEditTask = { id -> navController.navigate("editar_tarea/$id") },
                 onTaskToggle = { tarea, isChecked ->
                     if (isChecked) {
-                        // En lugar de llamar al diálogo (que ya no existe aquí),
-                        // completamos la tarea directamente
-                        viewModel.archivarTarea(tarea)
+                        viewModel.archivarTarea(tarea, context)
                     } else {
-                        viewModel.actualizar(tarea.copy(estaCompletada = false))
+                        viewModel.actualizar(tarea.copy(estaCompletada = false), context)
                     }
                 }
             )

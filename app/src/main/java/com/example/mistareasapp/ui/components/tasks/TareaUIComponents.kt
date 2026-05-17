@@ -102,7 +102,7 @@ fun CuerpoListaTareas(
         mostrarDialogo = mostrarDialogo,
         tareaAEliminar = tareaAEliminar,
         onConfirmEliminar = {
-            tareaAEliminar?.let { viewModel.eliminarTarea(it) }
+            tareaAEliminar?.let { viewModel.eliminarTarea(it, context) }
             mostrarDialogo = false
             tareaAEliminar = null
         },

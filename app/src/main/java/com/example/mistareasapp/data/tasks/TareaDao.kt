@@ -17,7 +17,7 @@ interface TareaDao {
 
     // ➕ INSERTAR UNA TAREA
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertar(tarea: Tarea)
+    suspend fun insertar(tarea: Tarea): Long
 
     // ➕ INSERTAR VARIAS TAREAS
     @Insert(onConflict = OnConflictStrategy.REPLACE)

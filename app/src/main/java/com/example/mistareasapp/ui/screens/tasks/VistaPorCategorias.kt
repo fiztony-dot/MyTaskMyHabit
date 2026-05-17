@@ -27,6 +27,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.example.mistareasapp.data.tasks.Prioridad
 import com.example.mistareasapp.data.tasks.Tarea
@@ -50,6 +51,7 @@ fun VistaPorCategorias(
     onTaskToggle: (Tarea, Boolean) -> Unit,
     onEditTask: (Int) -> Unit
 ) {
+    val context = LocalContext.current
     val mapaExpansiones by viewModel.categoriasExpandidas.collectAsState()
     val estadoGlobal = viewModel.todasSeccionesAbiertas
     val listaCategoriasUI by viewModel.todasLasCategorias.collectAsState(initial = emptyList())
@@ -161,7 +163,7 @@ fun VistaPorCategorias(
             text = { Text("¿Estás seguro de que quieres borrar \"${tareaAEliminar?.titulo}\"?") },
             confirmButton = {
                 TextButton(onClick = {
-                    tareaAEliminar?.let { viewModel.eliminarTarea(it) }
+                    tareaAEliminar?.let { viewModel.eliminarTarea(it, context) }
                     mostrarDialogoEliminar = false
                 }) { Text("Eliminar", color = Color.Red) }
             },
@@ -179,7 +181,7 @@ fun VistaPorCategorias(
             text = { Text("¿Quieres marcar como terminada \"${tareaACompletar?.titulo}\"?") },
             confirmButton = {
                 TextButton(onClick = {
-                    tareaACompletar?.let { viewModel.archivarTarea(it) }
+                    tareaACompletar?.let { viewModel.archivarTarea(it, context) }
                     mostrarDialogoCompletar = false
                 }) { Text("Completar") }
             },

@@ -1,6 +1,5 @@
 package com.example.mistareasapp.viewmodel.Habits
 
-import android.util.Log
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
@@ -16,10 +15,6 @@ enum class TipoVistaHabitos { FLASH, LISTADO, ESTADISTICAS }
 
 class HabitosViewModel(private val habitoDao: HabitoDao) : ViewModel() {
 
-    init {
-        Log.d("HABITOS_VM", "🚀 HabitosViewModel inicializado")
-    }
-
     // --- ESTADO DE NAVEGACIÓN INTERNA ---
     var vistaActual by mutableStateOf(TipoVistaHabitos.FLASH)
         private set
@@ -31,10 +26,6 @@ class HabitosViewModel(private val habitoDao: HabitoDao) : ViewModel() {
 
     // Todos los hábitos de la base de datos
     val todosLosHabitos: Flow<List<Habito>> = habitoDao.obtenerTodosLosHabitos()
-        .onEach { habitos ->
-            Log.d("HABITOS_VM", "📚 Hábitos desde Room: ${habitos.size}")
-            habitos.forEach { Log.d("HABITOS_VM", "  - ${it.nombre}") }
-        }
 
     // Categorías de hábitos
     val categoriasHabitos: Flow<List<CategoriaHabito>> = habitoDao.obtenerCategorias()
@@ -48,10 +39,8 @@ class HabitosViewModel(private val habitoDao: HabitoDao) : ViewModel() {
         todosLosHabitos,
         _fechaSeleccionada
     ) { listaHabitos, fecha ->
-        Log.d("HABITOS_VM", "🔄 Combinando datos - Hábitos: ${listaHabitos.size}, Fecha: $fecha")
         listaHabitos.map { habito ->
             val progreso = habitoDao.obtenerProgresoDiario(habito.id, fecha)
-            Log.d("HABITOS_VM", "  → ${habito.nombre}: progreso=$progreso")
             HabitoConProgreso(habito, progreso)
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -59,9 +48,9 @@ class HabitosViewModel(private val habitoDao: HabitoDao) : ViewModel() {
 
     // --- 2. GESTIÓN DE HÁBITOS (CRUD) ---
 
-    fun insertarHabito(habito: Habito) {
+    fun insertarHabito(habito: Habito, tareas: List<TareaHabito> = emptyList()) {
         viewModelScope.launch {
-            habitoDao.insertarHabito(habito)
+            habitoDao.insertarHabitoConTareas(habito, tareas)
         }
     }
 
@@ -138,6 +127,52 @@ class HabitosViewModel(private val habitoDao: HabitoDao) : ViewModel() {
                 fecha = _fechaSeleccionada.value,
                 valorProgreso = if (!yaEstabaCompletado) habito.vecesPorDia else 0,
                 completado = !yaEstabaCompletado
+            )
+
+            habitoDao.upsertProgreso(nuevoProgreso)
+        }
+    }
+
+    // --- 4. OBTENER TAREAS DE UN HÁBITO ---
+
+    fun obtenerTareasDeHabito(habitoId: Long) = habitoDao.obtenerTareasDeHabito(habitoId)
+
+    // --- 5. REGISTRAR CUMPLIMIENTO POR TAREAS ---
+
+    fun registrarCumplimientoTareas(habito: Habito, progresoActual: HabitoHistorial?, tareasCumplidasCount: Int) {
+        viewModelScope.launch {
+            val minimoRequerido = habito.minimoTareasCumplimiento ?: habito.vecesPorDia
+            val estaCompletado = tareasCumplidasCount >= minimoRequerido
+
+            val nuevoProgreso = progresoActual?.copy(
+                valorProgreso = tareasCumplidasCount,
+                completado = estaCompletado
+            ) ?: HabitoHistorial(
+                habitoId = habito.id,
+                fecha = _fechaSeleccionada.value,
+                valorProgreso = tareasCumplidasCount,
+                completado = estaCompletado
+            )
+
+            habitoDao.upsertProgreso(nuevoProgreso)
+        }
+    }
+
+    // --- 6. REGISTRAR CUMPLIMIENTO CUANTITATIVO ---
+
+    fun registrarCumplimientoCuantitativo(habito: Habito, progresoActual: HabitoHistorial?, cantidad: Int) {
+        viewModelScope.launch {
+            val objetivoFinal = habito.objetivoValor ?: habito.vecesPorDia
+            val estaCompletado = cantidad >= objetivoFinal
+
+            val nuevoProgreso = progresoActual?.copy(
+                valorProgreso = cantidad,
+                completado = estaCompletado
+            ) ?: HabitoHistorial(
+                habitoId = habito.id,
+                fecha = _fechaSeleccionada.value,
+                valorProgreso = cantidad,
+                completado = estaCompletado
             )
 
             habitoDao.upsertProgreso(nuevoProgreso)

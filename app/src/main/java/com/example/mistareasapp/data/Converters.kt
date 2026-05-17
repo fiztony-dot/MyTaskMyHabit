@@ -1,7 +1,9 @@
 package com.example.mistareasapp.data
 
 import androidx.room.TypeConverter
+import com.example.mistareasapp.data.habits.CriterioCumplimientoTareas
 import com.example.mistareasapp.data.habits.FrecuenciaHabito
+import com.example.mistareasapp.data.habits.TipoObjetivoHabito
 import com.example.mistareasapp.data.tasks.Prioridad
 import java.time.LocalDate
 import java.time.LocalTime
@@ -47,5 +49,25 @@ class Converters {
     @TypeConverter
     fun toFrecuencia(valor: String): FrecuenciaHabito {
         return FrecuenciaHabito.valueOf(valor)
+    }
+
+    @TypeConverter
+    fun fromTipoObjetivo(tipoObjetivo: TipoObjetivoHabito): String {
+        return tipoObjetivo.name
+    }
+
+    @TypeConverter
+    fun toTipoObjetivo(valor: String): TipoObjetivoHabito {
+        return TipoObjetivoHabito.valueOf(valor)
+    }
+
+    @TypeConverter
+    fun fromCriterioCumplimiento(criterio: CriterioCumplimientoTareas): String {
+        return criterio.name
+    }
+
+    @TypeConverter
+    fun toCriterioCumplimiento(valor: String): CriterioCumplimientoTareas {
+        return CriterioCumplimientoTareas.valueOf(valor)
     }
 }

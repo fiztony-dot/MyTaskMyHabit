@@ -124,7 +124,7 @@ fun PantallaCrearTarea(navController: NavController) {
                 onBack = { navController.popBackStack() },
                 onSave = { nuevaTarea ->
                     scope.launch {
-                        viewModel.insertar(nuevaTarea)
+                        viewModel.insertar(nuevaTarea, context)
                         navController.popBackStack()
                     }
                 }

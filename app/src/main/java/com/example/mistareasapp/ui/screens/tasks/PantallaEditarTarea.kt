@@ -223,7 +223,7 @@ fun PantallaEditarTarea(navController: NavController, tareaId: Int, viewModel: T
                                 // GUARDAMOS REPETICIÓN
                                 repeticion = if (fechaLimite == null) "Sin repetición" else repeticionSeleccionada
                             )
-                            viewModel.actualizar(tareaEditada)
+                            viewModel.actualizar(tareaEditada, contexto)
                             navController.popBackStack()
                         },
                         enabled = nombre.isNotBlank()

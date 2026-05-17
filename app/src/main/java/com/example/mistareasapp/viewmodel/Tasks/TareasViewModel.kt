@@ -6,6 +6,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.work.WorkManager
+import com.example.mistareasapp.core.notifications.tasks.NotificationHelper
 import com.example.mistareasapp.ui.components.tasks.OrdenCategorias
 import com.example.mistareasapp.data.tasks.Categoria
 import com.example.mistareasapp.data.tasks.CategoriaDao
@@ -216,9 +217,20 @@ class TareasViewModel(
 
     // --- 6. OPERACIONES DE TAREAS (CRUD) ---
 
-    fun insertar(tarea: Tarea) = viewModelScope.launch { tareaDao.insertar(tarea) }
+    fun insertar(tarea: Tarea, context: Context) = viewModelScope.launch {
+        val nuevoId = tareaDao.insertar(tarea)
+        if (tarea.fechaLimite != null) {
+            NotificationHelper.programarNotificacion(context, tarea.copy(id = nuevoId.toInt()))
+        }
+    }
 
-    fun actualizar(tarea: Tarea) = viewModelScope.launch { tareaDao.actualizar(tarea) }
+    fun actualizar(tarea: Tarea, context: Context) = viewModelScope.launch {
+        tareaDao.actualizar(tarea)
+        NotificationHelper.cancelarNotificacion(context, tarea.id)
+        if (tarea.fechaLimite != null && !tarea.estaCompletada) {
+            NotificationHelper.programarNotificacion(context, tarea)
+        }
+    }
 
     fun eliminar(tarea: Tarea) = viewModelScope.launch { tareaDao.eliminar(tarea) }
 
@@ -226,14 +238,8 @@ class TareasViewModel(
 
     fun completarTarea(tarea: Tarea, context: Context) {
         viewModelScope.launch {
-            actualizar(tarea.copy(estaCompletada = true))
-
-            // Cancelación de notificaciones en WorkManager
-            val wm = WorkManager.getInstance(context)
-            wm.cancelUniqueWork("notif_${tarea.id}")
-            wm.cancelUniqueWork("notif_${tarea.id}_principal")
-            wm.cancelUniqueWork("notif_${tarea.id}_repeticion")
-
+            tareaDao.actualizar(tarea.copy(estaCompletada = true))
+            NotificationHelper.cancelarNotificacion(context, tarea.id)
             Log.d("LOG-NOTIF", "🚫 Notificaciones canceladas para ID: ${tarea.id}")
 
             // Lógica de repetición
@@ -245,7 +251,7 @@ class TareasViewModel(
                     fechaLimite = nuevaFecha,
                     fechaCreacion = System.currentTimeMillis()
                 )
-                insertar(nuevaTarea)
+                insertar(nuevaTarea, context)
             }
         }
     }
@@ -333,7 +339,7 @@ class TareasViewModel(
                     estaCompletada = false,
                     fechaCreacion = System.currentTimeMillis()
                 )
-                insertar(nuevaTarea)
+                tareaDao.insertar(nuevaTarea)
                 _mensajeConfirmacion.emit("Tarea creada: $texto")
             } catch (e: Exception) {
                 _mensajeConfirmacion.emit("Error al guardar: ${e.message}")
@@ -341,15 +347,17 @@ class TareasViewModel(
         }
     }
 
-    fun eliminarTarea(tarea: Tarea) {
+    fun eliminarTarea(tarea: Tarea, context: Context) {
         viewModelScope.launch {
             tareaDao.eliminar(tarea)
+            NotificationHelper.cancelarNotificacion(context, tarea.id)
         }
     }
 
-    fun archivarTarea(tarea: Tarea) {
+    fun archivarTarea(tarea: Tarea, context: Context) {
         viewModelScope.launch {
-            actualizar(tarea.copy(estaCompletada = true))
+            tareaDao.actualizar(tarea.copy(estaCompletada = true))
+            NotificationHelper.cancelarNotificacion(context, tarea.id)
         }
     }
 

@@ -54,8 +54,20 @@ interface HabitoDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertarTareaHabito(tarea: TareaHabito)
 
-    @Query("SELECT * FROM habitos_tareas_especificas WHERE habitoId = :habitoId")
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertarTareasHabito(tareas: List<TareaHabito>)
+
+    @Query("SELECT * FROM habitos_tareas_especificas WHERE habitoId = :habitoId ORDER BY id ASC")
     fun obtenerTareasDeHabito(habitoId: Long): Flow<List<TareaHabito>>
+
+    @Transaction
+    suspend fun insertarHabitoConTareas(habito: Habito, tareas: List<TareaHabito>): Long {
+        val habitoId = insertarHabito(habito)
+        if (tareas.isNotEmpty()) {
+            insertarTareasHabito(tareas.map { it.copy(habitoId = habitoId) })
+        }
+        return habitoId
+    }
 
     // En HabitoDao.kt añade o actualiza:
 

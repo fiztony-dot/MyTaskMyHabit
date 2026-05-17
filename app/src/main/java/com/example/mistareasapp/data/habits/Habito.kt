@@ -15,9 +15,13 @@ data class Habito(
     val categoriaId: Long = 0,
     val fechaInicio: LocalDate = LocalDate.now(),
     val frecuencia: FrecuenciaHabito = FrecuenciaHabito.DIARIA,
+    val tipoObjetivo: TipoObjetivoHabito = TipoObjetivoHabito.FRECUENCIA,
     val vecesPorDia: Int = 1,
-    val objetivoValor: Int? = null, // <--- Añadir este campo
-    val unidad: String? = null,    // <--- Añadir este campo
+    val objetivoValor: Int? = null,
+    val unidad: String? = null,
+    val esCompuestoPorTareas: Boolean = false,
+    val criterioCumplimientoTareas: CriterioCumplimientoTareas = CriterioCumplimientoTareas.TODAS,
+    val minimoTareasCumplimiento: Int? = null,
     val objetivoRachaSemanas: Int = 4,
     val recordatoriosActivos: Boolean = false,
     val horaRecordatorio: LocalTime? = null,
