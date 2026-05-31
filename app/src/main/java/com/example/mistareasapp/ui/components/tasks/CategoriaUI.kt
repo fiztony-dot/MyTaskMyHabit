@@ -84,27 +84,26 @@ fun obtenerIcono(nombre: String): ImageVector {
  */
 fun obtenerColorIcono(nombreIcono: String?): Color {
     return when (nombreIcono) {
-        // --- Grupo Original ---
-        "shopping_cart" -> Color(0xFF4CAF50) // Verde (Súper)
-        "work" -> Color(0xFF2196F3)          // Azul (Trabajo)
-        "home" -> Color(0xFFFF9800)          // Naranja (Casa)
-        "star" -> Color(0xFFFFC107)          // Ámbar (Destacados)
-        "event" -> Color(0xFFE91E63)         // Rosa (Eventos)
-        "settings" -> Color(0xFF607D8B)      // Gris Azulado (Ajustes)
-        "person" -> Color(0xFF00BCD4)        // Cian (Personal)
-        "code" -> Color(0xFF9C27B0)          // Morado (Programación)
-        "lightbulb" -> Color(0xFFFFEB3B)     // Amarillo (Ideas)
-        "restaurant" -> Color(0xFFFF5722)    // Naranja Rojizo (Comida)
-        "directions_car" -> Color(0xFFF44336) // Rojo (Coche)
-        "fitness_center" -> Color(0xFF009688) // Turquesa (Gym)
-        "payments" -> Color(0xFF2E7D32)       // Verde Oscuro (Dinero)
-        "medical_services" -> Color(0xFFEF5350) // Rojo Suave (Salud)
-        "school" -> Color(0xFF3F51B5)         // Índigo (Estudios)
-        "pet_page" -> Color(0xFF795548)       // Marrón (Mascotas)
-        "favorite" -> Color(0xFFD81B60)       // Magenta (Favoritos)
-        "build" -> Color(0xFF455A64)          // Gris Hierro (Herramientas)
-        "call" -> Color(0xFF00C853)           // Verde Brillante (Llamadas)
-        "list" -> Color(0xFF616161)           // Gris medio (General)
-        else -> Color(0xFF757575)            // Gris por defecto
+        "shopping_cart"    -> Color(0xFF81C784) // Verde suave
+        "work"             -> Color(0xFF90CAF9) // Azul claro
+        "home"             -> Color(0xFFFFCC80) // Ámbar suave
+        "star"             -> Color(0xFFFFD54F) // Amarillo apagado
+        "event"            -> Color(0xFFF48FB1) // Rosa suave
+        "settings"         -> Color(0xFF90A4AE) // Gris azulado suave
+        "person"           -> Color(0xFF80DEEA) // Cian suave
+        "code"             -> Color(0xFFCE93D8) // Lavanda / Morado suave
+        "lightbulb"        -> Color(0xFFFFF176) // Amarillo muy suave
+        "restaurant"       -> Color(0xFFFFAB91) // Salmón suave
+        "directions_car"   -> Color(0xFFEF9A9A) // Rojo suave
+        "fitness_center"   -> Color(0xFF80CBC4) // Turquesa suave
+        "payments"         -> Color(0xFFA5D6A7) // Verde claro
+        "medical_services" -> Color(0xFFEF9A9A) // Rojo suave (salud)
+        "school"           -> Color(0xFF9FA8DA) // Índigo suave
+        "pet_page"         -> Color(0xFFBCAAA4) // Marrón suave
+        "favorite"         -> Color(0xFFF48FB1) // Rosa suave
+        "build"            -> Color(0xFFB0BEC5) // Gris claro
+        "call"             -> Color(0xFFA5D6A7) // Verde claro
+        "list"             -> Color(0xFF9E9E9E) // Gris medio
+        else               -> Color(0xFF757575)
     }
 }

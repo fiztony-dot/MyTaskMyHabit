@@ -65,6 +65,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.graphics.toColorInt
 import com.example.mistareasapp.data.habits.CategoriaHabito
 import com.example.mistareasapp.data.habits.CriterioCumplimientoTareas
@@ -72,6 +73,8 @@ import com.example.mistareasapp.data.habits.FrecuenciaHabito
 import com.example.mistareasapp.data.habits.Habito
 import com.example.mistareasapp.data.habits.TareaHabito
 import com.example.mistareasapp.data.habits.TipoObjetivoHabito
+import com.example.mistareasapp.EMOJIS_HABITO
+import com.example.mistareasapp.iconoAEmoji
 import com.example.mistareasapp.ui.components.tasks.obtenerColorIcono
 import com.example.mistareasapp.ui.components.tasks.obtenerIcono
 import com.example.mistareasapp.viewmodel.Habits.HabitosViewModel
@@ -81,7 +84,7 @@ import java.time.LocalTime
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 
-private data class TareaHabitoDraft(
+internal data class TareaHabitoDraft(
     val id: Int,
     val nombre: String,
     val descripcion: String = ""
@@ -121,6 +124,10 @@ fun CrearHabitoScreen(
     var descripcionNuevaTarea by remember { mutableStateOf("") }
     var siguienteIdTarea by remember { mutableStateOf(0) }
     val tareasDraft = remember { mutableStateListOf<TareaHabitoDraft>() }
+    var iconoSeleccionado by remember { mutableStateOf("⭐") }
+    var usarPorcentajeDias by remember { mutableStateOf(false) }
+    var porcentajeDiasTexto by remember { mutableStateOf("60") }
+    var diasSemanaSeleccionados by remember { mutableStateOf(setOf<Int>()) }
 
     val guardarHabito = {
         when {
@@ -161,6 +168,14 @@ fun CrearHabitoScreen(
                     (repeticionesPeriodo.toIntOrNull() ?: 1).coerceAtLeast(1)
                 }
 
+                val esPeriodico = frecuencia != FrecuenciaHabito.DIARIA && !esCompuestoPorTareas && tipoObjetivo == TipoObjetivoHabito.FRECUENCIA
+                val pctDias = if (esPeriodico && usarPorcentajeDias) porcentajeDiasTexto.toIntOrNull()?.coerceIn(1, 100) else null
+                val diasSemanaStr = if (
+                    frecuencia == FrecuenciaHabito.DIARIA &&
+                    diasSemanaSeleccionados.isNotEmpty() &&
+                    diasSemanaSeleccionados.size < 7
+                ) diasSemanaSeleccionados.sorted().joinToString(",") else null
+
                 val nuevoHabito = Habito(
                     nombre = nombre.trim(),
                     descripcion = descripcion.trim().ifBlank { null },
@@ -185,8 +200,10 @@ fun CrearHabitoScreen(
                     objetivoRachaSemanas = objetivoRachaSemanas.toIntOrNull() ?: 4,
                     recordatoriosActivos = recordatoriosActivos,
                     horaRecordatorio = if (recordatoriosActivos) horaRecordatorio else null,
-                    icono = categoriaSeleccionada?.icono ?: "favorite",
-                    colorHex = categoriaSeleccionada?.color ?: "#FF0000"
+                    icono = iconoSeleccionado,
+                    colorHex = categoriaSeleccionada?.color ?: "#FF0000",
+                    objetivoPorcentajeDias = pctDias,
+                    diasSemana = diasSemanaStr
                 )
 
                 val tareasPersistir = if (esCompuestoPorTareas) {
@@ -281,15 +298,23 @@ fun CrearHabitoScreen(
                     minLines = 3
                 )
 
+                SelectorEmojiHabito(
+                    emojiSeleccionado = iconoSeleccionado,
+                    onEmojiSeleccionado = { iconoSeleccionado = it }
+                )
+
                 SelectorCategoriaHabito(
                     categorias = categorias,
                     categoriaSeleccionada = categoriaSeleccionada,
-                    onCategoriaSeleccionada = { categoriaSeleccionadaId = it?.id }
+                    onCategoriaSeleccionada = {
+                        categoriaSeleccionadaId = it?.id
+                        if (it != null) iconoSeleccionado = iconoAEmoji(it.icono)
+                    }
                 )
 
                 if (categoriaSeleccionada == null) {
                     Text(
-                        text = "Si eliges una categoría, el hábito heredará su icono y su color.",
+                        text = "Si eliges una categoría, el emoji se actualizará automáticamente.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -328,14 +353,50 @@ fun CrearHabitoScreen(
                     onFrecuenciaSeleccionada = { frecuencia = it }
                 )
 
-                if (!esCompuestoPorTareas && tipoObjetivo == TipoObjetivoHabito.FRECUENCIA) {
-                    OutlinedTextField(
-                        value = repeticionesPeriodo,
-                        onValueChange = { repeticionesPeriodo = it.filter(Char::isDigit) },
-                        label = { Text(etiquetaFrecuenciaSimple(frecuencia)) },
-                        modifier = Modifier.fillMaxWidth(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                // Selector de días específicos (solo para hábitos DIARIOS)
+                if (frecuencia == FrecuenciaHabito.DIARIA) {
+                    SelectorDiasSemana(
+                        seleccionados = diasSemanaSeleccionados,
+                        onSeleccionCambiada = { diasSemanaSeleccionados = it }
                     )
+                }
+
+                if (!esCompuestoPorTareas && tipoObjetivo == TipoObjetivoHabito.FRECUENCIA) {
+                    if (frecuencia != FrecuenciaHabito.DIARIA) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("Definir objetivo por % de días", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                                Text(
+                                    "Ej: 60% de días del periodo",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Switch(checked = usarPorcentajeDias, onCheckedChange = { usarPorcentajeDias = it })
+                        }
+                    }
+                    if (!usarPorcentajeDias || frecuencia == FrecuenciaHabito.DIARIA) {
+                        OutlinedTextField(
+                            value = repeticionesPeriodo,
+                            onValueChange = { repeticionesPeriodo = it.filter(Char::isDigit) },
+                            label = { Text(etiquetaFrecuenciaSimple(frecuencia)) },
+                            modifier = Modifier.fillMaxWidth(),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                        )
+                    } else {
+                        OutlinedTextField(
+                            value = porcentajeDiasTexto,
+                            onValueChange = { v -> porcentajeDiasTexto = v.filter(Char::isDigit).take(3) },
+                            label = { Text("% de días del periodo (1-100)") },
+                            modifier = Modifier.fillMaxWidth(),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            suffix = { Text("%") }
+                        )
+                    }
                 }
 
                 if (!esCompuestoPorTareas && tipoObjetivo == TipoObjetivoHabito.CUANTITATIVO) {
@@ -586,7 +647,7 @@ fun CrearHabitoScreen(
 }
 
 @Composable
-private fun SeccionFormulario(
+internal fun SeccionFormulario(
     titulo: String,
     descripcion: String,
     content: @Composable () -> Unit
@@ -616,7 +677,7 @@ private fun SeccionFormulario(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SelectorCategoriaHabito(
+internal fun SelectorCategoriaHabito(
     categorias: List<CategoriaHabito>,
     categoriaSeleccionada: CategoriaHabito?,
     onCategoriaSeleccionada: (CategoriaHabito?) -> Unit
@@ -700,7 +761,7 @@ private fun SelectorCategoriaHabito(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SelectorTipoObjetivo(
+internal fun SelectorTipoObjetivo(
     tipoObjetivo: TipoObjetivoHabito,
     onTipoObjetivoSeleccionado: (TipoObjetivoHabito) -> Unit,
     enabled: Boolean
@@ -741,7 +802,7 @@ private fun SelectorTipoObjetivo(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SelectorFrecuenciaHabito(
+internal fun SelectorFrecuenciaHabito(
     frecuenciaActual: FrecuenciaHabito,
     onFrecuenciaSeleccionada: (FrecuenciaHabito) -> Unit
 ) {
@@ -780,7 +841,7 @@ private fun SelectorFrecuenciaHabito(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SelectorCriterioCumplimiento(
+internal fun SelectorCriterioCumplimiento(
     criterio: CriterioCumplimientoTareas,
     onCriterioSeleccionado: (CriterioCumplimientoTareas) -> Unit
 ) {
@@ -829,7 +890,7 @@ private fun SelectorCriterioCumplimiento(
 }
 
 @Composable
-private fun TimePickerField(
+internal fun TimePickerField(
     hora: LocalTime,
     onHoraSeleccionada: (LocalTime) -> Unit
 ) {
@@ -852,38 +913,128 @@ private fun TimePickerField(
     }
 }
 
-private fun FrecuenciaHabito.toLabel(): String = when (this) {
+internal fun FrecuenciaHabito.toLabel(): String = when (this) {
     FrecuenciaHabito.DIARIA -> "Diaria"
     FrecuenciaHabito.SEMANAL -> "Semanal"
     FrecuenciaHabito.MENSUAL -> "Mensual"
 }
 
-private fun FrecuenciaHabito.toPeriodoLabel(): String = when (this) {
+internal fun FrecuenciaHabito.toPeriodoLabel(): String = when (this) {
     FrecuenciaHabito.DIARIA -> "Por día"
     FrecuenciaHabito.SEMANAL -> "Por semana"
     FrecuenciaHabito.MENSUAL -> "Por mes"
 }
 
-private fun TipoObjetivoHabito.toLabel(): String = when (this) {
+internal fun TipoObjetivoHabito.toLabel(): String = when (this) {
     TipoObjetivoHabito.FRECUENCIA -> "Frecuencia"
     TipoObjetivoHabito.CUANTITATIVO -> "Cuantitativo"
 }
 
-private fun CriterioCumplimientoTareas.toLabel(): String = when (this) {
+internal fun CriterioCumplimientoTareas.toLabel(): String = when (this) {
     CriterioCumplimientoTareas.TODAS -> "Todas las tareas"
     CriterioCumplimientoTareas.PARCIAL -> "Cumplimiento parcial"
 }
 
-private fun etiquetaFrecuenciaSimple(frecuencia: FrecuenciaHabito): String = when (frecuencia) {
+internal fun etiquetaFrecuenciaSimple(frecuencia: FrecuenciaHabito): String = when (frecuencia) {
     FrecuenciaHabito.DIARIA -> "Veces por día"
     FrecuenciaHabito.SEMANAL -> "Veces por semana"
     FrecuenciaHabito.MENSUAL -> "Veces por mes"
 }
 
-private fun colorCategoria(categoria: CategoriaHabito): Color {
+@Composable
+internal fun SelectorDiasSemana(
+    seleccionados: Set<Int>,
+    onSeleccionCambiada: (Set<Int>) -> Unit
+) {
+    val dias = listOf(1 to "L", 2 to "M", 3 to "X", 4 to "J", 5 to "V", 6 to "S", 7 to "D")
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(
+            text = "Días de la semana",
+            fontWeight = FontWeight.SemiBold,
+            fontSize = 13.sp
+        )
+        Text(
+            text = if (seleccionados.isEmpty() || seleccionados.size == 7)
+                "Aplica todos los días"
+            else
+                "Solo los días marcados",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceEvenly
+        ) {
+            dias.forEach { (valor, etiqueta) ->
+                val seleccionado = valor in seleccionados
+                Surface(
+                    onClick = {
+                        onSeleccionCambiada(
+                            if (seleccionado) seleccionados - valor else seleccionados + valor
+                        )
+                    },
+                    shape = RoundedCornerShape(50),
+                    color = if (seleccionado) MaterialTheme.colorScheme.primaryContainer
+                            else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Text(
+                            text = etiqueta,
+                            fontSize = 12.sp,
+                            fontWeight = if (seleccionado) FontWeight.Bold else FontWeight.Normal,
+                            color = if (seleccionado) MaterialTheme.colorScheme.onPrimaryContainer
+                                    else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+internal fun colorCategoria(categoria: CategoriaHabito): Color {
     return try {
         Color(categoria.color.toColorInt())
     } catch (_: Exception) {
         obtenerColorIcono(categoria.icono)
+    }
+}
+
+@Composable
+internal fun SelectorEmojiHabito(
+    emojiSeleccionado: String,
+    onEmojiSeleccionado: (String) -> Unit
+) {
+    val columnas = 6
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(
+            "Icono",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        EMOJIS_HABITO.chunked(columnas).forEach { fila ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                fila.forEach { emoji ->
+                    Surface(
+                        onClick = { onEmojiSeleccionado(emoji) },
+                        shape = RoundedCornerShape(8.dp),
+                        color = if (emoji == emojiSeleccionado)
+                            MaterialTheme.colorScheme.primaryContainer
+                        else
+                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                        modifier = Modifier.size(44.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Text(emoji, fontSize = 22.sp)
+                        }
+                    }
+                }
+                repeat(columnas - fila.size) { Spacer(Modifier.size(44.dp)) }
+            }
+        }
     }
 }

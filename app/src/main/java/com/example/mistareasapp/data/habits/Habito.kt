@@ -3,6 +3,7 @@ package com.example.mistareasapp.data.habits
 
 import androidx.room.Entity
 import androidx.room.PrimaryKey
+import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalTime
 
@@ -27,5 +28,20 @@ data class Habito(
     val horaRecordatorio: LocalTime? = null,
     val icono: String = "favorite",
     val colorHex: String = "#FF0000",
-    val activo: Boolean = true
+    val activo: Boolean = true,
+    val fechaModificacion: LocalDate? = null,
+    val pausado: Boolean = false,
+    val fechaInicioPausa: LocalDate? = null,
+    val fechaFinPausa: LocalDate? = null,
+    val objetivoPorcentajeDias: Int? = null,
+    // Días de la semana en que aplica el hábito (solo para frecuencia DIARIA).
+    // Cadena "1,3,5" = lunes, miércoles, viernes. Null = todos los días.
+    val diasSemana: String? = null
 )
+
+/** Devuelve el conjunto de DayOfWeek en que aplica este hábito, o null si aplica todos los días. */
+fun Habito.diasSemanaSet(): Set<DayOfWeek>? = diasSemana
+    ?.split(",")
+    ?.mapNotNull { token -> token.trim().toIntOrNull()?.let { n -> runCatching { DayOfWeek.of(n) }.getOrNull() } }
+    ?.toSet()
+    ?.takeIf { it.isNotEmpty() && it.size < 7 }

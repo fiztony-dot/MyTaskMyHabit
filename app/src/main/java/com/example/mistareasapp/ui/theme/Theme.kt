@@ -10,45 +10,43 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 
-// --- ESQUEMA OSCURO (El que usa tu App según las fotos) ---
 private val DarkColorScheme = darkColorScheme(
-    primary = BlancoTexto, //botones principales, color  texto título  TopAppBar, iconos seleccionados BottomBar
-    onPrimary = Fondo, //Define el color que se dibuja encima del color primary. Es el color de "contraste".
+    primary              = M3Primary,
+    onPrimary            = M3OnPrimary,
+    primaryContainer     = M3PrimaryContainer,
+    onPrimaryContainer   = M3Primary,
 
-    // Las barras (TopBar/BottomBar) y Cards leerán este color por defecto
-    surface = GrisSuperficie, // Topbar
-    onSurface = BlancoTexto,
-    surfaceContainer = GrisSuperficie, // Bottombar
+    secondary            = M3Secondary,
+    onSecondary          = M3OnSecondary,
+    secondaryContainer   = M3SecondaryContainer,
+    onSecondaryContainer = Color(0xFFE8DEF8),
 
-    // El fondo del Scaffold y NavHost leerá este
-    background = Fondo,
-    onBackground = BlancoTexto,
+    background           = M3Background,
+    onBackground         = M3OnSurface,
 
-    // Colores secundarios para elementos de acento
-    secondary = GrisBotonAdd,
-    onSecondary = Color.Black,
+    surface              = M3Surface,
+    onSurface            = M3OnSurface,
+    surfaceVariant       = M3SurfaceVariant,
+    onSurfaceVariant     = M3OnSurfaceVariant,
+    surfaceContainer     = M3SurfaceContainer,
 
-    // ✅ Este controla el color del "óvalo/chicle" de selección
-    secondaryContainer = Color(0xFF3D3D43),
+    outline              = M3Outline,
+    outlineVariant       = Color(0xFF49454F),
 
-    error = PrioridadAlta,
-    outline = GrisDetalles
+    error                = Color(0xFFF2B8B5),
+    onError              = Color(0xFF601410),
 )
 
-// --- ESQUEMA CLARO (Opcional, por si algún día lo activas) ---
 private val LightScheme = lightColorScheme(
-    primary = Color(0xFF415F91),
-    background = Color(0xFFF9F9FF),
-    surface = Color(0xFFF9F9FF),
-    onBackground = Color(0xFF191C20),
-    onSurface = Color(0xFF191C20)
+    primary    = Color(0xFF6750A4),
+    background = Color(0xFFFFFBFE),
+    surface    = Color(0xFFFFFBFE),
+    onSurface  = Color(0xFF1C1B1F)
 )
 
 @Composable
 fun MisTareasAppTheme(
-    // Forzamos darkTheme a true para que siempre se vea el diseño gris "Premium"
     darkTheme: Boolean = true,
-    // Desactivamos dynamicColor para que Android no cambie tus grises por colores del fondo de pantalla
     dynamicColor: Boolean = false,
     content: @Composable () -> Unit
 ) {
@@ -63,8 +61,7 @@ fun MisTareasAppTheme(
 
     MaterialTheme(
         colorScheme = colorScheme,
-        typography = Typography, // Asegúrate de tener el archivo Typography.kt creado
+        typography = Typography,
         content = content
     )
 }
-

@@ -53,6 +53,8 @@ import com.example.mistareasapp.data.tasks.Prioridad
 import com.example.mistareasapp.data.tasks.Tarea
 import com.example.mistareasapp.ui.screens.habits.PantallaHabitos
 import com.example.mistareasapp.ui.screens.habits.PantallaGestionCategoriasHabitos
+import com.example.mistareasapp.ui.screens.habits.PantallaPausados
+import com.example.mistareasapp.ui.screens.habits.PantallaVistaMensualHabito
 import com.example.mistareasapp.ui.screens.tasks.PantallaCrearTarea
 import com.example.mistareasapp.ui.screens.tasks.PantallaEditarTarea
 import com.example.mistareasapp.ui.screens.tasks.PantallaGestionCategorias
@@ -69,6 +71,8 @@ import com.example.mistareasapp.ui.screens.GestionDatosScreen
 import com.example.mistareasapp.ui.screens.tasks.PantallaConfiguracion
 import com.example.mistareasapp.ui.components.habits.AccionesTopBarHabitos
 import com.example.mistareasapp.ui.screens.habits.CrearHabitoScreen
+import com.example.mistareasapp.ui.screens.habits.EditarHabitoScreen
+import com.example.mistareasapp.ui.screens.habits.PantallaMantenimientoHabitos
 import com.example.mistareasapp.viewmodel.Habits.HabitosViewModel
 import com.example.mistareasapp.viewmodel.Habits.HabitosViewModelFactory
 
@@ -236,39 +240,42 @@ fun MisTareasApp() {
                                         }
                                     }
                                     HorizontalDivider()
-                                    // Submenu de Tablas de Referencia
-                                    var expandirTablas by remember { mutableStateOf(false) }
-                                    Box {
+                                    // Items específicos por pestaña
+                                    if (rutaActual == Rutas.PantallaTareas.ruta) {
                                         DropdownMenuItem(
-                                            text = { Text("Tablas de Referencia") },
-                                            onClick = { expandirTablas = !expandirTablas },
-                                            leadingIcon = { Icon(Icons.Default.TableChart, null) },
-                                            trailingIcon = { Icon(Icons.Default.KeyboardArrowRight, null) }
+                                            text = { Text("Categorías de tareas") },
+                                            onClick = {
+                                                mostrarMenuPrincipal = false
+                                                navController.navigate("categorias")
+                                            },
+                                            leadingIcon = { Icon(Icons.Default.TableChart, null) }
                                         )
-                                        DropdownMenu(
-                                            expanded = expandirTablas,
-                                            onDismissRequest = { expandirTablas = false },
-                                            offset = DpOffset(150.dp, 0.dp)
-                                        ) {
-                                            DropdownMenuItem(
-                                                text = { Text("Categorias Tareas") },
-                                                onClick = {
-                                                    mostrarMenuPrincipal = false
-                                                    expandirTablas = false
-                                                    navController.navigate("categorias")
-                                                },
-                                                leadingIcon = { Icon(Icons.Default.TableChart, null) }
-                                            )
-                                            DropdownMenuItem(
-                                                text = { Text("Categorias Hábitos") },
-                                                onClick = {
-                                                    mostrarMenuPrincipal = false
-                                                    expandirTablas = false
-                                                    navController.navigate("categorias_habitos")
-                                                },
-                                                leadingIcon = { Icon(Icons.Default.TableChart, null) }
-                                            )
-                                        }
+                                    }
+                                    if (rutaActual == Rutas.PantallaHabitos.ruta) {
+                                        DropdownMenuItem(
+                                            text = { Text("Gestión de hábitos") },
+                                            onClick = {
+                                                mostrarMenuPrincipal = false
+                                                navController.navigate("mantenimiento_habitos")
+                                            },
+                                            leadingIcon = { Icon(Icons.Default.EditNote, null) }
+                                        )
+                                        DropdownMenuItem(
+                                            text = { Text("Hábitos pausados") },
+                                            onClick = {
+                                                mostrarMenuPrincipal = false
+                                                navController.navigate("habitos_pausados")
+                                            },
+                                            leadingIcon = { Icon(Icons.Default.Pause, null) }
+                                        )
+                                        DropdownMenuItem(
+                                            text = { Text("Categorías de hábitos") },
+                                            onClick = {
+                                                mostrarMenuPrincipal = false
+                                                navController.navigate("categorias_habitos")
+                                            },
+                                            leadingIcon = { Icon(Icons.Default.TableChart, null) }
+                                        )
                                     }
                                     HorizontalDivider()
                                     DropdownMenuItem(
@@ -386,6 +393,45 @@ fun MisTareasApp() {
                     CrearHabitoScreen(
                         viewModel = habitosViewModel,
                         onGuardar = { navController.popBackStack() }
+                    )
+                }
+
+                composable(
+                    route = "editar_habito/{habitoId}",
+                    arguments = listOf(navArgument("habitoId") { type = NavType.LongType })
+                ) { backStackEntry ->
+                    val id = backStackEntry.arguments?.getLong("habitoId") ?: return@composable
+                    EditarHabitoScreen(
+                        habitoId = id,
+                        viewModel = habitosViewModel,
+                        onGuardar = { navController.popBackStack() }
+                    )
+                }
+
+                composable("mantenimiento_habitos") {
+                    PantallaMantenimientoHabitos(
+                        viewModel = habitosViewModel,
+                        navController = navController,
+                        modifier = Modifier.padding(innerPadding).fillMaxSize()
+                    )
+                }
+
+                composable("habitos_pausados") {
+                    PantallaPausados(
+                        viewModel = habitosViewModel,
+                        navController = navController
+                    )
+                }
+
+                composable(
+                    route = "vista_mensual/{habitoId}",
+                    arguments = listOf(navArgument("habitoId") { type = NavType.LongType })
+                ) { backStackEntry ->
+                    val id = backStackEntry.arguments?.getLong("habitoId") ?: return@composable
+                    PantallaVistaMensualHabito(
+                        habitoId = id,
+                        viewModel = habitosViewModel,
+                        navController = navController
                     )
                 }
 

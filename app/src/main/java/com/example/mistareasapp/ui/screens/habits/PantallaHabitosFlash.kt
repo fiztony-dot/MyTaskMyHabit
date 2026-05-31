@@ -1,26 +1,43 @@
-// ui/screens/habits/PantallaHabitosFlash.kt
-
 package com.example.mistareasapp.ui.screens.habits
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.window.Dialog
 import androidx.core.graphics.toColorInt
+import androidx.navigation.NavHostController
+import java.time.LocalDate
+import com.example.mistareasapp.data.habits.CategoriaHabito
 import com.example.mistareasapp.data.habits.FrecuenciaHabito
-import com.example.mistareasapp.obtenerIconoPorNombre
+import com.example.mistareasapp.data.habits.TipoObjetivoHabito
+import com.example.mistareasapp.iconoAEmoji
+import com.example.mistareasapp.ui.theme.M3CardHabito
 import com.example.mistareasapp.ui.components.habits.SelectorFechaConProgreso
 import com.example.mistareasapp.viewmodel.Habits.HabitoConProgreso
 import com.example.mistareasapp.viewmodel.Habits.HabitosViewModel
@@ -28,52 +45,73 @@ import com.example.mistareasapp.viewmodel.Habits.HabitosViewModel
 @Composable
 fun PantallaHabitosFlash(
     viewModel: HabitosViewModel,
+    navController: NavHostController,
     progresoGeneral: Float = 0f,
     modifier: Modifier = Modifier
 ) {
     val fechaSeleccionada by viewModel.fechaSeleccionada.collectAsState()
     val habitosConProgreso by viewModel.habitosConProgreso.collectAsState()
 
-
     val totalHabitos = habitosConProgreso.size
     val habitosCompletados = habitosConProgreso.count { it.estaCompletado }
-    val progresoCalculado = if (totalHabitos > 0) (habitosCompletados.toFloat() / totalHabitos) else 0f
-    // Usar el progresoGeneral pasado como parámetro
+    val progresoCalculado = if (totalHabitos > 0) habitosCompletados.toFloat() / totalHabitos else 0f
     val progreso = if (progresoGeneral > 0) progresoGeneral else progresoCalculado
+    val categorias by viewModel.categoriasHabitos.collectAsState(initial = emptyList())
+    val agrupar = viewModel.agruparPorCategoria
 
     Column(modifier = modifier.fillMaxSize().padding(horizontal = 16.dp)) {
-
         Spacer(modifier = Modifier.height(8.dp))
-
-        // Selector de fecha con progreso (componente reutilizable)
         SelectorFechaConProgreso(
             fechaSeleccionada = fechaSeleccionada,
             progresoGeneral = progreso,
             onFechaAnterior = { viewModel.cambiarFecha(fechaSeleccionada.minusDays(1)) },
             onFechaSiguiente = { viewModel.cambiarFecha(fechaSeleccionada.plusDays(1)) }
         )
-
         Spacer(modifier = Modifier.height(8.dp))
-
-        // Lista de Hábitos del día
         LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            items(habitosConProgreso) { item ->
-                HabitoFlashItem(item, viewModel)
+            if (agrupar) {
+                habitosConProgresoPorCategoria(habitosConProgreso, categorias) { item ->
+                    HabitoFlashItem(item, viewModel, navController)
+                }
+            } else {
+                items(habitosConProgreso) { item ->
+                    HabitoFlashItem(item, viewModel, navController)
+                }
             }
         }
     }
 }
 
+/** Emite items agrupados por categoría dentro de un LazyListScope. */
+fun LazyListScope.habitosConProgresoPorCategoria(
+    habitos: List<HabitoConProgreso>,
+    categorias: List<CategoriaHabito>,
+    itemContent: @Composable (HabitoConProgreso) -> Unit
+) {
+    val porCategoria = categorias.map { cat ->
+        cat to habitos.filter { it.habito.categoriaId == cat.id }
+    }.filter { it.second.isNotEmpty() }
+    val sinCategoria = habitos.filter { h -> categorias.none { it.id == h.habito.categoriaId } }
+
+    porCategoria.forEach { (cat, lista) ->
+        item(key = "cat_${cat.id}") { CabeceraCategoria(cat.nombre, cat.color) }
+        items(lista, key = { it.habito.id }) { itemContent(it) }
+    }
+    if (sinCategoria.isNotEmpty()) {
+        item(key = "cat_sin") { CabeceraCategoria("Sin categoría", null) }
+        items(sinCategoria, key = { it.habito.id }) { itemContent(it) }
+    }
+}
+
 @Composable
-fun HabitoFlashItem(item: HabitoConProgreso, viewModel: HabitosViewModel) {
+fun HabitoFlashItem(item: HabitoConProgreso, viewModel: HabitosViewModel, navController: NavHostController) {
     val habito = item.habito
     val progreso = item.progreso
     val estaCompletado = item.estaCompletado
     val valorActual = item.valorActual
 
-    // El objetivo puede ser vecesPorDia o un valor numérico (objetivoValor)
-    val totalGoal = habito.objetivoValor ?: habito.vecesPorDia
-    val porcentaje = if (totalGoal > 0) (valorActual.toFloat() / totalGoal).coerceIn(0f, 1f) else 0f
+    var mostrarDialogoTareas by remember { mutableStateOf(false) }
+    var mostrarDialogoCuantitativo by remember { mutableStateOf(false) }
 
     val colorHabito = try {
         Color(habito.colorHex.toColorInt())
@@ -81,107 +119,457 @@ fun HabitoFlashItem(item: HabitoConProgreso, viewModel: HabitosViewModel) {
         MaterialTheme.colorScheme.primary
     }
 
+    val esCuantitativo = habito.tipoObjetivo == TipoObjetivoHabito.CUANTITATIVO
+    val esPorTareas = habito.esCompuestoPorTareas
+    val esDiaria = habito.frecuencia == FrecuenciaHabito.DIARIA
+    val objetivo = habito.objetivoValor ?: habito.vecesPorDia
+    val valorPeriodo = item.valorPeriodo
+    val completadosPeriodo = item.completadosPeriodo
+
+    // Objetivo por % de días (solo para hábitos no diarios de frecuencia)
+    val hoyLocal = LocalDate.now()
+    val diasEnPeriodo = when (habito.frecuencia) {
+        FrecuenciaHabito.SEMANAL -> 7
+        FrecuenciaHabito.MENSUAL -> hoyLocal.lengthOfMonth()
+        FrecuenciaHabito.DIARIA -> 1
+    }
+    val objetivoDiasPct: Int? = habito.objetivoPorcentajeDias?.let { pct ->
+        kotlin.math.ceil(diasEnPeriodo * pct / 100.0).toInt().coerceAtLeast(1)
+    }
+    // Objetivo efectivo de días: si hay %, usa ese; si no, vecesPorDia
+    val objetivoDias = objetivoDiasPct ?: habito.vecesPorDia
+
+    // Completado visual:
+    // - Cuantitativo no-diario → cualquier valor registrado en el periodo
+    // - Cuantitativo diario → valor actual >= objetivo
+    // - Tareas no-diario → ¿el periodo alcanza el objetivo? (periodo)
+    // - Simple no-diario → binario: ¿está marcado HOY? (igual que diario)
+    // - Resto → flag completado del día
+    val completadoVisual = when {
+        esCuantitativo && !esDiaria -> valorPeriodo > 0
+        esCuantitativo -> valorActual >= objetivo
+        !esDiaria && esPorTareas -> completadosPeriodo >= objetivoDias
+        else -> estaCompletado
+    }
+
+    // Porcentaje para el checkbox de cuantitativas (usa el periodo)
+    val porcentajePeriodo = if (objetivo > 0) (valorPeriodo.toFloat() / objetivo).coerceIn(0f, 1f) else 0f
+    // Porcentaje para hábitos de frecuencia no diarios
+    val porcentajeDias = if (objetivoDias > 0) (completadosPeriodo.toFloat() / objetivoDias).coerceIn(0f, 1f) else 0f
+    // Porcentaje diario (para barra de progreso en diarias)
+    val porcentajeDiario = if (objetivo > 0) (valorActual.toFloat() / objetivo).coerceIn(0f, 1f) else 0f
+
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
-        )
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = M3CardHabito),
+        elevation = CardDefaults.cardElevation(2.dp)
     ) {
-        Column(modifier = Modifier.padding(8.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                // 1. Icono dinámico
-                Icon(
-                    imageVector = obtenerIconoPorNombre(habito.icono),
-                    contentDescription = null,
-                    tint = colorHabito,
-                    modifier = Modifier.size(20.dp)
-                )
+        // Colores para texto sobre card clara
+        val cardTexto = Color(0xFF1A1A1A)
+        val cardTextoSub = Color(0xFF555555)
+        val cardIcono = Color(0xFF444444)
 
+        Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+
+                // Emoji sin fondo
+                Text(
+                    text = iconoAEmoji(habito.icono),
+                    fontSize = 24.sp,
+                    modifier = Modifier.size(36.dp).wrapContentSize(Alignment.Center)
+                )
                 Spacer(modifier = Modifier.width(10.dp))
 
-                // 2. Textos centrales (Nombre y Subtítulo dinámico)
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = habito.nombre,
                         fontWeight = FontWeight.Bold,
                         fontSize = 14.sp,
-                        color = MaterialTheme.colorScheme.onSurface
+                        color = cardTexto
                     )
-
-                    // Texto de frecuencia (1x/día, 5d/sem, etc)
-                    val freqText = when(habito.frecuencia) {
-                        FrecuenciaHabito.DIARIA -> "${habito.vecesPorDia}x/día"
-                        FrecuenciaHabito.SEMANAL -> if(habito.objetivoValor != null) "${habito.objetivoValor} ${habito.unidad ?: ""}/sem" else "5d/sem"
-                        FrecuenciaHabito.MENSUAL -> "Mensual"
+                    val unidad = habito.unidad?.let { " $it" } ?: ""
+                    val freqText = when (habito.frecuencia) {
+                        FrecuenciaHabito.DIARIA -> if (esCuantitativo) "$objetivo$unidad/día" else "${habito.vecesPorDia}x/día"
+                        FrecuenciaHabito.SEMANAL -> if (esCuantitativo) "$objetivo$unidad/sem" else "${objetivoDias}x/sem"
+                        FrecuenciaHabito.MENSUAL -> if (esCuantitativo) "$objetivo$unidad/mes" else "${objetivoDias}x/mes"
                     }
-
-                    // Texto de progreso numérico (• 55/150 (37%))
-                    val progressText = if (habito.objetivoValor != null || habito.vecesPorDia > 1) {
-                        "  •  $valorActual/$totalGoal (${(porcentaje * 100).toInt()}%)"
-                    } else ""
-
+                    val progressText = when {
+                        esCuantitativo -> {
+                            val pct = (porcentajePeriodo * 100).toInt()
+                            "  •  $valorPeriodo/$objetivo ($pct%)"
+                        }
+                        esPorTareas -> "  •  $valorActual/$objetivo tareas"
+                        !esDiaria -> {
+                            val pct = (porcentajeDias * 100).toInt()
+                            "  •  $completadosPeriodo/$objetivoDias días ($pct%)"
+                        }
+                        else -> ""
+                    }
                     Text(
                         text = "$freqText$progressText",
                         fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = cardTextoSub
                     )
                 }
 
-                // 3. Badge de Acción/Estado - CUADRADO con fondo blanco y texto azul oscuro
-                Surface(
-                    onClick = {
-                        if (totalGoal > 1) viewModel.incrementarProgreso(habito, progreso)
-                        else viewModel.toggleHabitoCompleto(habito, progreso)
-                    },
-                    color = Color.White,
-                    shape = RoundedCornerShape(8.dp),
-                    modifier = Modifier.size(36.dp)
+                // Botón editar
+                IconButton(
+                    onClick = { navController.navigate("editar_habito/${habito.id}") },
+                    modifier = Modifier.size(32.dp)
                 ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        if (estaCompletado) {
-                            Icon(
-                                Icons.Default.Check,
-                                contentDescription = null,
-                                tint = Color(0xFF1565C0),
-                                modifier = Modifier.size(18.dp)
-                            )
-                        } else {
-                            val badgeContent = when {
-                                habito.objetivoValor != null -> "${(porcentaje * 100).toInt()}%"
-                                habito.vecesPorDia > 1 -> "$valorActual/$totalGoal"
-                                else -> ""
-                            }
+                    Icon(Icons.Default.Edit, contentDescription = "Editar", tint = cardIcono, modifier = Modifier.size(16.dp))
+                }
 
-                            if (badgeContent.isNotEmpty()) {
-                                Text(
-                                    text = badgeContent,
-                                    color = Color(0xFF1565C0),
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 10.sp
-                                )
-                            } else {
-                                Icon(
-                                    Icons.Default.Check,
-                                    contentDescription = null,
-                                    tint = Color(0xFF1565C0).copy(alpha = 0.3f),
-                                    modifier = Modifier.size(18.dp)
-                                )
+                // 3 estados: verde pastel=cumplido, naranja pastel=tareas parcial, blanco=sin progreso
+                val esVerde = completadoVisual
+                val esNaranja = esPorTareas && !estaCompletado && valorActual > 0
+                val pastGreen  = Color(0xFFA8D5A2)
+                val pastOrange = Color(0xFFFFCB87)
+                val checkShape = RoundedCornerShape(8.dp)
+                val checkBg     = when { esVerde -> pastGreen; esNaranja -> pastOrange; else -> Color.White }
+                val checkBorder = when { esVerde -> Color(0xFF7CB87A); esNaranja -> Color(0xFFFFAA50); else -> Color(0xFFBBBBBB) }
+                val checkContent= when { esVerde -> Color(0xFF2E7D32); esNaranja -> Color(0xFFBF5000); else -> Color(0xFFAAAAAA) }
+
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(checkShape)
+                        .background(checkBg)
+                        .border(1.5.dp, checkBorder, checkShape)
+                        .clickable {
+                            when {
+                                esPorTareas -> mostrarDialogoTareas = true
+                                esCuantitativo -> mostrarDialogoCuantitativo = true
+                                else -> viewModel.toggleHabitoCompleto(habito, progreso)
+                            }
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    when {
+                        esCuantitativo -> Text(
+                            text = "${(porcentajePeriodo * 100).toInt()}%",
+                            color = checkContent,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 10.sp
+                        )
+                        esPorTareas && estaCompletado -> Icon(
+                            Icons.Default.Check,
+                            contentDescription = "Completado",
+                            tint = checkContent,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        esPorTareas -> Text(
+                            text = "$valorActual/$objetivo",
+                            color = checkContent,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 9.sp
+                        )
+                        // Para hábitos simples (diarios o no-diarios), el checkbox es binario:
+                        // ✓ si completado hoy, vacío si no.
+                        estaCompletado -> Icon(
+                            Icons.Default.Check,
+                            contentDescription = "Completado",
+                            tint = checkContent,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        else -> {} // sin marcar: caja blanca vacía
+                    }
+                }
+            }
+
+            // Barra de progreso solo para cuantitativos
+            if (esCuantitativo && objetivo > 0) {
+                Spacer(modifier = Modifier.height(6.dp))
+                LinearProgressIndicator(
+                    progress = { if (esDiaria) porcentajeDiario else porcentajePeriodo },
+                    modifier = Modifier.fillMaxWidth().height(3.dp).clip(CircleShape),
+                    color = MaterialTheme.colorScheme.primary,
+                    trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
+                )
+            }
+        }
+    }
+
+    val fechaSeleccionada by viewModel.fechaSeleccionada.collectAsState()
+
+    if (mostrarDialogoTareas) {
+        DialogoTareasHabito(
+            habito = habito,
+            progreso = progreso,
+            fecha = fechaSeleccionada,
+            viewModel = viewModel,
+            onDismiss = { mostrarDialogoTareas = false }
+        )
+    }
+    if (mostrarDialogoCuantitativo) {
+        DialogoCuantitativo(
+            habito = habito,
+            progreso = progreso,
+            fecha = fechaSeleccionada,
+            viewModel = viewModel,
+            onDismiss = { mostrarDialogoCuantitativo = false }
+        )
+    }
+}
+
+// --- CABECERA DE CATEGORÍA (compartida por Flash y Listado) ---
+
+@Composable
+fun CabeceraCategoria(nombre: String, colorHex: String?) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 4.dp, end = 4.dp, top = 10.dp, bottom = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        if (colorHex != null) {
+            val color = try { Color(android.graphics.Color.parseColor(colorHex)) }
+                        catch (_: Exception) { MaterialTheme.colorScheme.primary }
+            Box(
+                modifier = Modifier
+                    .size(8.dp)
+                    .background(color, CircleShape)
+            )
+        }
+        Text(
+            text = nombre.uppercase(),
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            letterSpacing = 1.sp
+        )
+        HorizontalDivider(
+            modifier = Modifier.weight(1f),
+            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+        )
+    }
+}
+
+// --- DIÁLOGO TAREAS ---
+
+@Composable
+fun DialogoTareasHabito(
+    habito: com.example.mistareasapp.data.habits.Habito,
+    progreso: com.example.mistareasapp.data.habits.HabitoHistorial?,
+    fecha: java.time.LocalDate,
+    viewModel: HabitosViewModel,
+    onDismiss: () -> Unit
+) {
+    val tareas by viewModel.obtenerTareasDeHabito(habito.id).collectAsState(initial = emptyList())
+    val tareasHistorial by viewModel.obtenerEstadoTareasPorFecha(habito.id, fecha).collectAsState(initial = emptyList())
+
+    // Inicializa desde el historial de esa fecha concreta; si no hay historial todas quedan sin marcar
+    var estadoTareas by remember(tareas, tareasHistorial) {
+        val historialMap = tareasHistorial.associateBy { it.tareaId }
+        mutableStateOf(tareas.associate { tarea ->
+            tarea.id to (historialMap[tarea.id]?.completada ?: false)
+        })
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(habito.nombre, fontWeight = FontWeight.Bold) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                if (tareas.isEmpty()) {
+                    Text("Este hábito no tiene tareas definidas.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                } else {
+                    tareas.forEach { tarea ->
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                            Checkbox(
+                                checked = estadoTareas[tarea.id] ?: false,
+                                onCheckedChange = { checked ->
+                                    estadoTareas = estadoTareas.toMutableMap().also { it[tarea.id] = checked }
+                                }
+                            )
+                            Column {
+                                Text(tarea.nombre, fontSize = 14.sp)
+                                if (!tarea.descripcion.isNullOrBlank()) {
+                                    Text(tarea.descripcion, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
                             }
                         }
                     }
                 }
             }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                viewModel.registrarCumplimientoTareas(habito, progreso, estadoTareas, fecha)
+                onDismiss()
+            }) { Text("Guardar") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } }
+    )
+}
 
-            // 4. Barra de progreso inferior (se muestra si tiene objetivo numérico o varias veces al día)
-            if (habito.objetivoValor != null || habito.vecesPorDia > 1) {
-                Spacer(modifier = Modifier.height(6.dp))
+// --- DIÁLOGO CUANTITATIVO ---
+
+@Composable
+fun DialogoCuantitativo(
+    habito: com.example.mistareasapp.data.habits.Habito,
+    progreso: com.example.mistareasapp.data.habits.HabitoHistorial?,
+    fecha: java.time.LocalDate,
+    viewModel: HabitosViewModel,
+    onDismiss: () -> Unit
+) {
+    val objetivo = habito.objetivoValor ?: habito.vecesPorDia
+    val unidad = habito.unidad ?: ""
+    var valor by remember { mutableStateOf(progreso?.valorProgreso ?: 0) }
+    val porcentaje = if (objetivo > 0) (valor.toFloat() / objetivo).coerceIn(0f, 1f) else 0f
+
+    val quickValues = when {
+        objetivo <= 20 -> listOf(1, 2, 5)
+        objetivo <= 100 -> listOf(5, 10, 25)
+        objetivo <= 1000 -> listOf(10, 50, 100)
+        else -> listOf(100, 500, 1000)
+    }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Card(shape = RoundedCornerShape(20.dp), modifier = Modifier.fillMaxWidth()) {
+            Column(
+                modifier = Modifier.padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                // Título y cerrar
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(habito.nombre, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleLarge)
+                    IconButton(onClick = onDismiss) {
+                        Icon(Icons.Default.Close, contentDescription = "Cerrar")
+                    }
+                }
+
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "Objetivo: $objetivo $unidad",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+
+                Spacer(Modifier.height(16.dp))
+
+                // Valor grande
+                Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.Center) {
+                    Text(
+                        "$valor",
+                        fontSize = 52.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Text(
+                        " / $objetivo",
+                        fontSize = 24.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                }
+
+                Spacer(Modifier.height(8.dp))
+
+                // Barra de progreso
                 LinearProgressIndicator(
                     progress = { porcentaje },
-                    modifier = Modifier.fillMaxWidth().height(3.dp).clip(CircleShape),
-                    color = if (habito.objetivoValor != null) Color(0xFF64B5F6) else colorHabito,
-                    trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
+                    modifier = Modifier.fillMaxWidth().height(8.dp).clip(CircleShape),
+                    color = MaterialTheme.colorScheme.primary
                 )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "${(porcentaje * 100).toInt()}% completado",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                Spacer(Modifier.height(20.dp))
+                Text("Cantidad registrada", style = MaterialTheme.typography.labelMedium)
+                Spacer(Modifier.height(8.dp))
+
+                // Fila -/input/+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    FilledTonalIconButton(
+                        onClick = { if (valor > 0) valor-- },
+                        modifier = Modifier.size(44.dp)
+                    ) {
+                        Icon(Icons.Default.Remove, contentDescription = "Restar 1")
+                    }
+                    OutlinedTextField(
+                        value = valor.toString(),
+                        onValueChange = { valor = it.toIntOrNull()?.coerceAtLeast(0) ?: valor },
+                        modifier = Modifier.weight(1f),
+                        textStyle = LocalTextStyle.current.copy(
+                            textAlign = TextAlign.Center,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 20.sp
+                        ),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true
+                    )
+                    FilledTonalIconButton(
+                        onClick = { valor++ },
+                        modifier = Modifier.size(44.dp)
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = "Sumar 1")
+                    }
+                }
+                if (unidad.isNotBlank()) {
+                    Text(unidad, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+
+                Spacer(Modifier.height(12.dp))
+
+                // Botones rápidos — fila de negativos
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    quickValues.forEach { v ->
+                        OutlinedButton(
+                            onClick = { valor = (valor - v).coerceAtLeast(0) },
+                            modifier = Modifier.weight(1f),
+                            contentPadding = PaddingValues(4.dp)
+                        ) { Text("-$v", fontSize = 12.sp) }
+                    }
+                }
+
+                // Botones rápidos — fila de positivos
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    quickValues.forEach { v ->
+                        Button(
+                            onClick = { valor += v },
+                            modifier = Modifier.weight(1f),
+                            contentPadding = PaddingValues(4.dp)
+                        ) { Text("+$v", fontSize = 12.sp) }
+                    }
+                }
+
+                Spacer(Modifier.height(16.dp))
+
+                // Cancelar / Guardar
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    OutlinedButton(onClick = onDismiss, modifier = Modifier.weight(1f)) { Text("Cancelar") }
+                    Button(
+                        onClick = {
+                            viewModel.registrarCumplimientoCuantitativo(habito, progreso, valor, fecha)
+                            onDismiss()
+                        },
+                        modifier = Modifier.weight(1f)
+                    ) { Text("Guardar") }
+                }
             }
         }
     }

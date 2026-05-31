@@ -10,26 +10,19 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
+import java.time.temporal.WeekFields
 import java.util.Locale
 
-/**
- * Componente reutilizable que muestra un selector de fecha con navegación
- * y el porcentaje de cumplimiento general.
- *
- * @param fechaSeleccionada Fecha actualmente seleccionada
- * @param progresoGeneral Porcentaje de cumplimiento (0.0 a 1.0)
- * @param onFechaAnterior Callback cuando se navega al día anterior
- * @param onFechaSiguiente Callback cuando se navega al día siguiente
- * @param modifier Modificador opcional
- */
 @Composable
 fun SelectorFechaConProgreso(
     fechaSeleccionada: LocalDate,
     progresoGeneral: Float,
     onFechaAnterior: () -> Unit,
     onFechaSiguiente: () -> Unit,
+    modoSemanal: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     Row(
@@ -37,7 +30,6 @@ fun SelectorFechaConProgreso(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Selector de fecha con flechas
         Row(
             modifier = Modifier.weight(1f),
             horizontalArrangement = Arrangement.Center,
@@ -51,24 +43,37 @@ fun SelectorFechaConProgreso(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier.weight(1f)
             ) {
-                Text(
-                    text = fechaSeleccionada.format(
-                        DateTimeFormatter.ofPattern("d 'de' MMMM", Locale("es"))
-                    ),
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = if (fechaSeleccionada == LocalDate.now()) {
-                        "hoy"
-                    } else {
-                        fechaSeleccionada.format(
-                            DateTimeFormatter.ofPattern("EEEE", Locale("es"))
-                        )
-                    },
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                if (modoSemanal) {
+                    val lunes = fechaSeleccionada.with(DayOfWeek.MONDAY)
+                    val domingo = lunes.plusDays(6)
+                    val fmtCorto = DateTimeFormatter.ofPattern("d MMM", Locale("es"))
+                    Text(
+                        text = "${lunes.format(fmtCorto)} – ${domingo.format(fmtCorto)}",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                    val semanaActual = LocalDate.now().get(WeekFields.of(Locale("es")).weekOfWeekBasedYear())
+                    val semana = lunes.get(WeekFields.of(Locale("es")).weekOfWeekBasedYear())
+                    Text(
+                        text = if (semana == semanaActual) "esta semana" else "semana $semana",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                } else {
+                    Text(
+                        text = fechaSeleccionada.format(
+                            DateTimeFormatter.ofPattern("d 'de' MMMM", Locale("es"))
+                        ),
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = if (fechaSeleccionada == LocalDate.now()) "hoy" else
+                            fechaSeleccionada.format(DateTimeFormatter.ofPattern("EEEE", Locale("es"))),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
 
             IconButton(onClick = onFechaSiguiente) {
@@ -76,7 +81,6 @@ fun SelectorFechaConProgreso(
             }
         }
 
-        // Indicador de cumplimiento
         Text(
             text = "${(progresoGeneral * 100).toInt()}%",
             fontWeight = FontWeight.Bold,
@@ -86,4 +90,3 @@ fun SelectorFechaConProgreso(
         )
     }
 }
-

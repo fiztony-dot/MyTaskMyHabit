@@ -1,6 +1,7 @@
 package com.example.mistareasapp.ui.components.tasks
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -79,24 +80,25 @@ fun TareaCard(
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(IntrinsicSize.Min), // Mantiene la altura basada en el contenido
+                .height(IntrinsicSize.Min)
+                .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f), RoundedCornerShape(16.dp)),
             shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = ColorCard),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxSize(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
 
-                // --- BLOQUE A: BARRA INDICADORA DE PRIORIDAD (IZQUIERDA) ---
+                // --- BLOQUE A: BARRA DE PRIORIDAD FINA (IZQUIERDA) ---
                 Box(
                     modifier = Modifier
                         .fillMaxHeight()
-                        .width(30.dp)
+                        .width(4.dp)
                         .background(
-                            if (tarea.estaCompletada) Color.Gray.copy(alpha = 0.2f)
-                            else colorPrioridad.copy(alpha = 0.30f)
+                            if (tarea.estaCompletada) Color.Gray.copy(alpha = 0.3f)
+                            else colorPrioridad
                         )
                 )
 
@@ -104,7 +106,7 @@ fun TareaCard(
                 Column(
                     modifier = Modifier
                         .weight(1f)
-                        .padding(start = 12.dp, end = 8.dp, top = 12.dp, bottom = 12.dp)
+                        .padding(start = 14.dp, end = 8.dp, top = 12.dp, bottom = 12.dp)
                 ) {
                     // Fila 1: Título y estado de repetición
                     Row(verticalAlignment = Alignment.CenterVertically) {

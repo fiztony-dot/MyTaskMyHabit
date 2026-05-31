@@ -18,6 +18,7 @@ import com.example.mistareasapp.data.habits.HabitoDao
 import com.example.mistareasapp.data.habits.CategoriaHabito
 import com.example.mistareasapp.data.habits.FrecuenciaHabito
 import com.example.mistareasapp.data.habits.TareaHabito
+import com.example.mistareasapp.data.habits.TareaHabitoHistorial
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -171,10 +172,49 @@ val MIGRATION_9_10 = object : Migration(9, 10) {
     }
 }
 
+val MIGRATION_10_11 = object : Migration(10, 11) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        database.execSQL("ALTER TABLE habitos ADD COLUMN fechaModificacion INTEGER DEFAULT NULL")
+    }
+}
+
+val MIGRATION_11_12 = object : Migration(11, 12) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        database.execSQL("ALTER TABLE habitos ADD COLUMN pausado INTEGER NOT NULL DEFAULT 0")
+        database.execSQL("ALTER TABLE habitos ADD COLUMN fechaInicioPausa INTEGER DEFAULT NULL")
+        database.execSQL("ALTER TABLE habitos ADD COLUMN fechaFinPausa INTEGER DEFAULT NULL")
+    }
+}
+
+val MIGRATION_12_13 = object : Migration(12, 13) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        database.execSQL("ALTER TABLE habitos ADD COLUMN objetivoPorcentajeDias INTEGER DEFAULT NULL")
+    }
+}
+
+val MIGRATION_13_14 = object : Migration(13, 14) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        // Días de la semana en que aplica el hábito (solo DIARIA)
+        database.execSQL("ALTER TABLE habitos ADD COLUMN diasSemana TEXT DEFAULT NULL")
+        // Historial de estado de tareas por fecha
+        database.execSQL("""
+            CREATE TABLE IF NOT EXISTS `tareas_habito_historial` (
+                `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                `tareaId` INTEGER NOT NULL,
+                `habitoId` INTEGER NOT NULL,
+                `fecha` INTEGER NOT NULL,
+                `completada` INTEGER NOT NULL
+            )
+        """.trimIndent())
+        database.execSQL("CREATE INDEX IF NOT EXISTS `index_tareas_habito_historial_tareaId_fecha` ON `tareas_habito_historial` (`tareaId`, `fecha`)")
+        database.execSQL("CREATE INDEX IF NOT EXISTS `index_tareas_habito_historial_habitoId_fecha` ON `tareas_habito_historial` (`habitoId`, `fecha`)")
+    }
+}
+
 @TypeConverters(Converters::class)
 @Database(
-    entities = [Tarea::class, Categoria::class, Habito::class, HabitoHistorial::class, CategoriaHabito::class, TareaHabito::class],
-    version = 10,
+    entities = [Tarea::class, Categoria::class, Habito::class, HabitoHistorial::class, CategoriaHabito::class, TareaHabito::class, TareaHabitoHistorial::class],
+    version = 14,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -194,7 +234,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "tareas_db"
                 )
-                    .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10)
+                    .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14)
                     .addCallback(DatabaseCallback(context))
                     .setJournalMode(JournalMode.TRUNCATE)
                     .build()
