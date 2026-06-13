@@ -12,6 +12,11 @@ import android.os.Build
 import android.os.PowerManager
 import android.provider.Settings
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import com.example.mistareasapp.ui.screens.SplashScreen
 import kotlinx.coroutines.delay
 
 class MainActivity : ComponentActivity() {
@@ -19,18 +24,19 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         setContent {
-            MisTareasApp()
+            var mostrarSplash by remember { mutableStateOf(true) }
 
-            // Usamos LaunchedEffect para que esto solo ocurra UNA VEZ
-            // y cuando la interfaz ya sea visible.
-            LaunchedEffect(Unit) {
-                // Primero lo más ligero: Notificaciones
-                checkNotificationPermission()
+            if (mostrarSplash) {
+                SplashScreen(onComplete = { mostrarSplash = false })
+            } else {
+                MisTareasApp()
 
-              // Esperamos un segundo antes de lanzar lo de la batería
-                // para evitar que el móvil se colapse con dos diálogos
-                delay(1000)
-                solicitarIgnorarOptimizacionBateria()
+                // Solicitar permisos solo después de que el splash haya terminado
+                LaunchedEffect(Unit) {
+                    checkNotificationPermission()
+                    delay(1000)
+                    solicitarIgnorarOptimizacionBateria()
+                }
             }
         }
     }

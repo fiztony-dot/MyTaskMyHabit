@@ -49,6 +49,9 @@ import com.example.mistareasapp.core.ai.crearSpeechLauncher
 // --- 8. Clases del Proyecto (Local) ---
 import com.example.mistareasapp.data.AppDatabase
 import com.example.mistareasapp.data.DatabaseBackup
+import com.example.mistareasapp.data.habits.HabitosBackup
+import com.example.mistareasapp.data.habits.HabitosImportacion
+import com.example.mistareasapp.data.tasks.TareasBackupJson
 import com.example.mistareasapp.data.tasks.Prioridad
 import com.example.mistareasapp.data.tasks.Tarea
 import com.example.mistareasapp.ui.screens.habits.PantallaHabitos
@@ -72,6 +75,10 @@ import com.example.mistareasapp.ui.screens.tasks.PantallaConfiguracion
 import com.example.mistareasapp.ui.components.habits.AccionesTopBarHabitos
 import com.example.mistareasapp.ui.screens.habits.CrearHabitoScreen
 import com.example.mistareasapp.ui.screens.habits.EditarHabitoScreen
+import com.example.mistareasapp.ui.screens.habits.PantallaAuditoriaHabitos
+import com.example.mistareasapp.ui.screens.habits.PantallaDetalleCalculoGeneral
+import com.example.mistareasapp.ui.screens.habits.PantallaCalculosHabitos
+import com.example.mistareasapp.ui.screens.habits.PantallaDetalleCalculoHabito
 import com.example.mistareasapp.ui.screens.habits.PantallaMantenimientoHabitos
 import com.example.mistareasapp.viewmodel.Habits.HabitosViewModel
 import com.example.mistareasapp.viewmodel.Habits.HabitosViewModelFactory
@@ -109,15 +116,20 @@ fun MisTareasApp() {
     val textoBusqueda by viewModel.textoBusqueda.collectAsStateWithLifecycle()
     val tareasActivas = listaTareas.count { !it.estaCompletada }
 
-    // Para mostrar en Hábitos el % de cumplimiento
+    // Para mostrar en Hábitos el % de cumplimiento (media ponderada por días de vida efectivos)
     val habitosConProgreso by habitosViewModel.habitosConProgreso.collectAsState(initial = emptyList())
-    val totalHabitos = habitosConProgreso.size
-    val habitosCompletados = habitosConProgreso.count { it.estaCompletado }
-    val progresoGeneral = if (totalHabitos > 0) (habitosCompletados.toFloat() / totalHabitos) else 0f
+    val pesoTotalHabitos = habitosConProgreso.sumOf { (minOf(it.diasVidaEfectivos, 180) * it.habito.dificultad).toLong() }
+    val progresoGeneral = if (pesoTotalHabitos > 0)
+        (habitosConProgreso.sumOf { it.porcentajeHistorico.coerceIn(0f, 1f).toDouble() * minOf(it.diasVidaEfectivos, 180) * it.habito.dificultad } / pesoTotalHabitos).toFloat()
+    else 0f
 
 
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val rutaActual = navBackStackEntry?.destination?.route
+
+    // Estado de búsqueda y filtro del módulo de hábitos
+    val textoBusquedaHabitos by habitosViewModel.textoBusqueda.collectAsState()
+    val categoriaFiltroHabitos by habitosViewModel.categoriaFiltro.collectAsState()
 
     // --- 3. PERMISOS ---
     val permisoLauncher = rememberLauncherForActivityResult(
@@ -134,26 +146,40 @@ fun MisTareasApp() {
         }
     }
 
-    // --- 3B. BACKUP Y RESTORE ---
+    // --- 3B. BACKUP Y RESTORE (módulo específico) ---
     var mostrarConfirmacionRestore by remember { mutableStateOf(false) }
     var mostrarInstruccionesPostRestore by remember { mutableStateOf(false) }
+    // Indica qué módulo está pendiente de restaurar al confirmar el diálogo
+    var restoreEsHabitos by remember { mutableStateOf(false) }
 
-    val exportarLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.CreateDocument("application/octet-stream")
-    ) { uri ->
-        uri?.let {
-            DatabaseBackup.exportDatabase(context, it)
-            Toast.makeText(context, "Backup guardado correctamente", Toast.LENGTH_SHORT).show()
-        }
+    // Launchers de TAREAS
+    val exportarTareasLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/json")
+    ) { uri -> uri?.let { TareasBackupJson.exportar(context, it) } }
+
+    val importarTareasLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri -> uri?.let { TareasBackupJson.importar(context, it); mostrarInstruccionesPostRestore = true } }
+
+    // Launchers de HÁBITOS
+    val exportarHabitosLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/json")
+    ) { uri -> uri?.let { HabitosBackup.exportar(context, it) } }
+
+    val importarHabitosLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri -> uri?.let { HabitosBackup.importar(context, it); mostrarInstruccionesPostRestore = true } }
+
+    // Helpers para lanzar según el módulo activo
+    fun lanzarExportar() {
+        if (rutaActual == Rutas.PantallaHabitos.ruta)
+            exportarHabitosLauncher.launch("backup_habitos_${System.currentTimeMillis()}.json")
+        else
+            exportarTareasLauncher.launch("backup_tareas_${System.currentTimeMillis()}.json")
     }
-
-    val importarLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocument()
-    ) { uri ->
-        uri?.let {
-            DatabaseBackup.importDatabase(context, it)
-            mostrarInstruccionesPostRestore = true
-        }
+    fun lanzarImportar() {
+        if (restoreEsHabitos) importarHabitosLauncher.launch(arrayOf("application/json", "application/octet-stream"))
+        else importarTareasLauncher.launch(arrayOf("application/json", "application/octet-stream"))
     }
 
      // --- 4. RECONOCIMIENTO DE VOZ ---
@@ -184,6 +210,45 @@ fun MisTareasApp() {
     }
 
     var mostrarMenuPrincipal by remember { mutableStateOf(false) }
+    var mostrarDialogoImportacion by remember { mutableStateOf(false) }
+    var resultadoImportacion by remember { mutableStateOf<String?>(null) }
+
+    // Importación: guardamos la URI del primer fichero mientras el usuario elige el segundo
+    var uriDefinicionPendiente by remember { mutableStateOf<android.net.Uri?>(null) }
+
+    // Launcher fichero 2: historial → lanza la importación
+    val importarHistorialLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uriHist ->
+        val uriDef = uriDefinicionPendiente
+        uriDefinicionPendiente = null
+        if (uriHist != null && uriDef != null) {
+            scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                val resultado = HabitosImportacion.importar(context, uriDef, uriHist)
+                withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    resultadoImportacion = when (resultado) {
+                        is HabitosImportacion.Resultado.Exito ->
+                            "✅ Importación completada:\n" +
+                            "• ${resultado.habitos} hábitos importados\n" +
+                            "• ${resultado.registrosHistorial} registros de historial\n\n" +
+                            "Cierra y reabre la app para que los cambios surtan efecto."
+                        is HabitosImportacion.Resultado.Error ->
+                            "❌ Error durante la importación:\n${resultado.mensaje}"
+                    }
+                }
+            }
+        }
+    }
+
+    // Launcher fichero 1: definición → abre el picker del historial
+    val importarDefinicionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uriDef ->
+        if (uriDef != null) {
+            uriDefinicionPendiente = uriDef
+            importarHistorialLauncher.launch(arrayOf("application/json", "application/octet-stream", "*/*"))
+        }
+    }
 
     // --- 5. INTERFAZ ---
     MisTareasAppTheme {
@@ -219,20 +284,22 @@ fun MisTareasApp() {
                                             onDismissRequest = { expandirCopias = false },
                                             offset = DpOffset(150.dp, 0.dp)
                                         ) {
+                                            val moduloLabel = if (rutaActual == Rutas.PantallaHabitos.ruta) "Hábitos" else "Tareas"
                                             DropdownMenuItem(
-                                                text = { Text("Guardar Backup") },
+                                                text = { Text("Guardar backup de $moduloLabel") },
                                                 onClick = {
                                                     mostrarMenuPrincipal = false
                                                     expandirCopias = false
-                                                    exportarLauncher.launch("backup_tareas_${System.currentTimeMillis()}.db")
+                                                    lanzarExportar()
                                                 },
                                                 leadingIcon = { Icon(Icons.Default.Backup, null) }
                                             )
                                             DropdownMenuItem(
-                                                text = { Text("Restaurar Backup") },
+                                                text = { Text("Restaurar backup de $moduloLabel") },
                                                 onClick = {
                                                     mostrarMenuPrincipal = false
                                                     expandirCopias = false
+                                                    restoreEsHabitos = (rutaActual == Rutas.PantallaHabitos.ruta)
                                                     mostrarConfirmacionRestore = true
                                                 },
                                                 leadingIcon = { Icon(Icons.Default.Restore, null) }
@@ -276,6 +343,22 @@ fun MisTareasApp() {
                                             },
                                             leadingIcon = { Icon(Icons.Default.TableChart, null) }
                                         )
+                                        DropdownMenuItem(
+                                            text = { Text("% de cumplimiento") },
+                                            onClick = {
+                                                mostrarMenuPrincipal = false
+                                                navController.navigate("calculos_habitos")
+                                            },
+                                            leadingIcon = { Icon(Icons.Default.Calculate, null) }
+                                        )
+                                        DropdownMenuItem(
+                                            text = { Text("Importar datos") },
+                                            onClick = {
+                                                mostrarMenuPrincipal = false
+                                                mostrarDialogoImportacion = true
+                                            },
+                                            leadingIcon = { Icon(Icons.Default.FileDownload, null) }
+                                        )
                                     }
                                     HorizontalDivider()
                                     DropdownMenuItem(
@@ -304,8 +387,8 @@ fun MisTareasApp() {
                                     viewModel = habitosViewModel,
                                     navController = navController,
                                     onLanzarVoz = { lanzarEscucha() },
-                                    textoBusqueda = textoBusqueda,
-                                    filtroActual = filtroActual
+                                    textoBusqueda = textoBusquedaHabitos,
+                                    filtroActual = categoriaFiltroHabitos
                                 )
                             }
                         }
@@ -439,6 +522,44 @@ fun MisTareasApp() {
                     GestionDatosScreen(viewModel = viewModel)
                 }
 
+                composable("calculos_habitos") {
+                    PantallaCalculosHabitos(
+                        viewModel = habitosViewModel,
+                        navController = navController
+                    )
+                }
+
+                composable("detalle_calculo_general") {
+                    PantallaDetalleCalculoGeneral(
+                        viewModel = habitosViewModel,
+                        navController = navController
+                    )
+                }
+
+                composable(
+                    route = "auditoria_habitos?habitoId={habitoId}",
+                    arguments = listOf(navArgument("habitoId") { type = NavType.LongType; defaultValue = -1L })
+                ) { backStackEntry ->
+                    val idArg = backStackEntry.arguments?.getLong("habitoId") ?: -1L
+                    PantallaAuditoriaHabitos(
+                        viewModel = habitosViewModel,
+                        navController = navController,
+                        habitoIdInicial = if (idArg >= 0) idArg else null
+                    )
+                }
+
+                composable(
+                    route = "detalle_calculo/{habitoId}",
+                    arguments = listOf(navArgument("habitoId") { type = NavType.LongType })
+                ) { backStackEntry ->
+                    val id = backStackEntry.arguments?.getLong("habitoId") ?: return@composable
+                    PantallaDetalleCalculoHabito(
+                        habitoId = id,
+                        viewModel = habitosViewModel,
+                        navController = navController
+                    )
+                }
+
                 composable("configuracion") {
                     PantallaConfiguracion(
                         navController,
@@ -461,14 +582,15 @@ fun MisTareasApp() {
 
         // Diálogo de confirmación para restaurar
         if (mostrarConfirmacionRestore) {
+            val moduloNombre = if (restoreEsHabitos) "hábitos" else "tareas"
             AlertDialog(
                 onDismissRequest = { mostrarConfirmacionRestore = false },
-                title = { Text("Restaurar Backup") },
-                text = { Text("Esto reemplazará los datos actuales con los del backup. ¿Deseas continuar?") },
+                title = { Text("Restaurar backup de $moduloNombre") },
+                text = { Text("Esto reemplazará todos los datos de $moduloNombre con los del archivo de backup. ¿Deseas continuar?") },
                 confirmButton = {
                     TextButton(onClick = {
                         mostrarConfirmacionRestore = false
-                        importarLauncher.launch(arrayOf("application/octet-stream", "application/x-sqlite3"))
+                        lanzarImportar()
                     }) {
                         Text("RESTAURAR", color = Color.Red)
                     }
@@ -491,6 +613,47 @@ fun MisTareasApp() {
                     TextButton(onClick = { mostrarInstruccionesPostRestore = false }) {
                         Text("ACEPTAR")
                     }
+                }
+            )
+        }
+
+        // Diálogo de confirmación de importación
+        if (mostrarDialogoImportacion) {
+            AlertDialog(
+                onDismissRequest = { mostrarDialogoImportacion = false },
+                title = { Text("Importar datos de hábitos") },
+                text = {
+                    Text(
+                        "Se pedirán dos ficheros mediante el selector del sistema:\n\n" +
+                        "1️⃣ habitos_definicion.json\n" +
+                        "2️⃣ habitos_historial.json\n\n" +
+                        "⚠️ ATENCIÓN: Se eliminarán todos los hábitos e historial actuales " +
+                        "antes de importar. Si falla, los datos anteriores quedan intactos.\n\n" +
+                        "¿Deseas continuar?"
+                    )
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        mostrarDialogoImportacion = false
+                        importarDefinicionLauncher.launch(
+                            arrayOf("application/json", "application/octet-stream", "*/*")
+                        )
+                    }) { Text("SELECCIONAR FICHEROS", color = Color.Red) }
+                },
+                dismissButton = {
+                    TextButton(onClick = { mostrarDialogoImportacion = false }) { Text("CANCELAR") }
+                }
+            )
+        }
+
+        // Diálogo de resultado de importación
+        resultadoImportacion?.let { mensaje ->
+            AlertDialog(
+                onDismissRequest = { resultadoImportacion = null },
+                title = { Text("Resultado de la importación") },
+                text = { Text(mensaje) },
+                confirmButton = {
+                    TextButton(onClick = { resultadoImportacion = null }) { Text("ACEPTAR") }
                 }
             )
         }

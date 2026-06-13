@@ -3,6 +3,7 @@ package com.example.mistareasapp.ui.screens.habits
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -12,6 +13,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CalendarViewMonth
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
@@ -28,10 +31,12 @@ import androidx.navigation.NavHostController
 import java.time.Instant
 import java.time.ZoneOffset
 import com.example.mistareasapp.data.habits.FrecuenciaHabito
+import com.example.mistareasapp.data.habits.TipoMedicion
 import com.example.mistareasapp.data.habits.TipoObjetivoHabito
 import com.example.mistareasapp.data.habits.diasSemanaSet
 import com.example.mistareasapp.ui.components.habits.SelectorFechaConProgreso
 import com.example.mistareasapp.iconoAEmoji
+import com.example.mistareasapp.iconoEfectivoHabito
 import com.example.mistareasapp.ui.theme.M3CardHabito
 import com.example.mistareasapp.viewmodel.Habits.HabitoConHistorialSemanal
 import com.example.mistareasapp.viewmodel.Habits.HabitosViewModel
@@ -48,8 +53,10 @@ fun PantallaHabitosListado(viewModel: HabitosViewModel, navController: NavHostCo
     val agrupar = viewModel.agruparPorCategoria
 
     val totalHabitos = habitosSemana.size
-    val progresoGeneral = if (totalHabitos > 0)
-        habitosSemana.map { it.porcentajeSemanal(hoy) }.average().toFloat()
+    // Barra general: media ponderada por min(diasEfectivos,180)×dificultad
+    val pesoTotal = habitosSemana.sumOf { (minOf(it.diasVidaEfectivos, 180) * it.habito.dificultad).toLong() }
+    val progresoGeneral = if (pesoTotal > 0)
+        (habitosSemana.sumOf { it.porcentajeHistorico.coerceIn(0f, 1f).toDouble() * minOf(it.diasVidaEfectivos, 180) * it.habito.dificultad } / pesoTotal).toFloat()
     else 0f
 
     Column(modifier = modifier.fillMaxSize().padding(horizontal = 16.dp)) {
@@ -73,18 +80,18 @@ fun PantallaHabitosListado(viewModel: HabitosViewModel, navController: NavHostCo
                 porCategoria.forEach { (cat, lista) ->
                     item(key = "cat_${cat.id}") { CabeceraCategoria(cat.nombre, cat.color) }
                     items(lista, key = { it.habito.id }) {
-                        HabitoListadoCard(it, hoy, viewModel, navController)
+                        HabitoListadoCard(it, hoy, viewModel, navController, categorias)
                     }
                 }
                 if (sinCategoria.isNotEmpty()) {
                     item(key = "cat_sin") { CabeceraCategoria("Sin categoría", null) }
                     items(sinCategoria, key = { it.habito.id }) {
-                        HabitoListadoCard(it, hoy, viewModel, navController)
+                        HabitoListadoCard(it, hoy, viewModel, navController, categorias)
                     }
                 }
             } else {
                 items(habitosSemana) { item ->
-                    HabitoListadoCard(item, hoy, viewModel, navController)
+                    HabitoListadoCard(item, hoy, viewModel, navController, categorias)
                 }
             }
         }
@@ -93,18 +100,80 @@ fun PantallaHabitosListado(viewModel: HabitosViewModel, navController: NavHostCo
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HabitoListadoCard(item: HabitoConHistorialSemanal, hoy: LocalDate, viewModel: HabitosViewModel, navController: NavHostController) {
+fun HabitoListadoCard(item: HabitoConHistorialSemanal, hoy: LocalDate, viewModel: HabitosViewModel, navController: NavHostController, categorias: List<com.example.mistareasapp.data.habits.CategoriaHabito> = emptyList()) {
     val habito = item.habito
     val colorHabito = Color(android.graphics.Color.parseColor(habito.colorHex))
-    val porcentaje = item.porcentajeSemanal(hoy)
-    val porcentajeTexto = "${(porcentaje * 100).toInt()}%"
+    val esSemanal = habito.frecuencia == FrecuenciaHabito.SEMANAL
 
     val esCuantitativo = habito.tipoObjetivo == TipoObjetivoHabito.CUANTITATIVO
     val esPorTareas = habito.esCompuestoPorTareas
     val esDiaria = habito.frecuencia == FrecuenciaHabito.DIARIA
 
+    // Versión vigente en la semana mostrada (para objetivos históricos correctos)
+    val version = item.versionActiva
+    val objetivoVersionado = version?.objetivoValor ?: habito.objetivoValor ?: version?.vecesPorDia ?: habito.vecesPorDia
+    val vecesPorDiaVersionado = version?.vecesPorDia ?: habito.vecesPorDia
+    val pctDiasVersionado = version?.objetivoPorcentajeDias ?: habito.objetivoPorcentajeDias
+    val unidad = (version?.unidad ?: habito.unidad)?.let { " $it" } ?: ""
+    val esSinTope = habito.tipoMedicion == com.example.mistareasapp.data.habits.TipoMedicion.PROPORCIONAL_SIN_TOPE
+    // Mínimo de tareas para considerar el hábito cumplido (para 3-state checkbox)
+    val minimoTareasCirculo = when (habito.criterioCumplimientoTareas) {
+        com.example.mistareasapp.data.habits.CriterioCumplimientoTareas.TODAS -> vecesPorDiaVersionado
+        com.example.mistareasapp.data.habits.CriterioCumplimientoTareas.PARCIAL -> habito.minimoTareasCumplimiento ?: vecesPorDiaVersionado
+    }
+
+    // Cumplimiento de la semana mostrada (para badge inferior, usando objetivos versionados)
+    val porcentajeSemanaActual: Float = run {
+        val semanaEntradas = item.historialSemana
+        val raw = if (esCuantitativo) {
+            val acum = semanaEntradas.values.sumOf { it?.valorProgreso ?: 0 }
+            val obj = objetivoVersionado
+            if (obj > 0) acum.toFloat() / obj else 0f
+        } else {
+            val diasAplicables = habito.diasSemanaSet()
+            val aplicables = semanaEntradas.entries.filter { (f, _) ->
+                !f.isAfter(hoy) && (diasAplicables == null || f.dayOfWeek in diasAplicables)
+            }
+            val objetivo = pctDiasVersionado?.let { pct ->
+                val total = semanaEntradas.size
+                kotlin.math.ceil(total * pct / 100.0).toInt().coerceAtLeast(1)
+            } ?: vecesPorDiaVersionado
+            val completados = aplicables.count { (_, h) -> h?.completado == true }
+            if (objetivo > 0) completados.toFloat() / objetivo else 0f
+        }
+        // Punto 7: para SIN_TOPE el badge puede superar 100%
+        if (esSinTope) raw.coerceAtLeast(0f) else raw.coerceIn(0f, 1f)
+    }
+
+    // Texto de objetivo (usa versión vigente)
+    val objetivo = objetivoVersionado
+    val diasEnPeriodo = when (habito.frecuencia) {
+        FrecuenciaHabito.SEMANAL -> 7
+        FrecuenciaHabito.MENSUAL -> hoy.lengthOfMonth()
+        FrecuenciaHabito.DIARIA -> 1
+    }
+    val objetivoDiasPct: Int? = pctDiasVersionado?.let { pct ->
+        kotlin.math.ceil(diasEnPeriodo * pct / 100.0).toInt().coerceAtLeast(1)
+    }
+    val objetivoDias = objetivoDiasPct ?: vecesPorDiaVersionado
+
+    // Acumulado de la semana en curso para hábitos cuantitativos semanales
+    val acumuladoSemana = if (esCuantitativo && habito.frecuencia == FrecuenciaHabito.SEMANAL)
+        item.historialSemana.values.sumOf { it?.valorProgreso ?: 0 } else 0
+
+    val freqText = when (habito.frecuencia) {
+        FrecuenciaHabito.DIARIA -> if (esCuantitativo) "$objetivo$unidad/día" else "${vecesPorDiaVersionado}x/día"
+        FrecuenciaHabito.SEMANAL -> if (esCuantitativo) "$objetivo$unidad/sem · $acumuladoSemana/$objetivo$unidad" else "${objetivoDias}x/sem"
+        FrecuenciaHabito.MENSUAL -> if (esCuantitativo) "$objetivo$unidad/mes" else "${objetivoDias}x/mes"
+    }
+
+    val pausasHabito by viewModel.obtenerPausasHabitoFlow(habito.id)
+        .collectAsState(initial = emptyList())
+
     var dialogoFecha by remember { mutableStateOf<LocalDate?>(null) }
     var mostrarPausaDialog by remember { mutableStateOf(false) }
+    var mostrarHistorialPausas by remember { mutableStateOf(false) }
+    var pausaAEliminar by remember { mutableStateOf<com.example.mistareasapp.data.habits.HabitoPausa?>(null) }
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -119,15 +188,32 @@ fun HabitoListadoCard(item: HabitoConHistorialSemanal, hoy: LocalDate, viewModel
 
         Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
 
-            // Header: emoji sin fondo + nombre
+            // Header: emoji + nombre + objetivo + % histórico (esquina superior derecha)
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = iconoAEmoji(habito.icono),
+                    text = iconoAEmoji(iconoEfectivoHabito(habito.categoriaId, habito.icono, categorias)),
                     fontSize = 24.sp,
                     modifier = Modifier.size(36.dp).wrapContentSize(Alignment.Center)
                 )
                 Spacer(modifier = Modifier.width(10.dp))
-                Text(habito.nombre, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = cardTexto, modifier = Modifier.weight(1f))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(habito.nombre, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = cardTexto)
+                    Text(freqText, fontSize = 11.sp, color = cardTextoSub)
+                }
+                Spacer(modifier = Modifier.width(4.dp))
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(
+                        text = "histórico",
+                        fontSize = 8.sp,
+                        color = cardTextoSub
+                    )
+                    Text(
+                        text = "${kotlin.math.round(item.porcentajeHistorico * 100).toInt()}%",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = cardTexto
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(10.dp))
@@ -145,22 +231,33 @@ fun HabitoListadoCard(item: HabitoConHistorialSemanal, hoy: LocalDate, viewModel
                     val literalDia = fecha.dayOfWeek.getDisplayName(TextStyle.SHORT, Locale("es"))
 
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        val colorHoyLabel = Color(0xFF4F378B)  // púrpura oscuro, contraste sobre fondo claro
                         Text(
                             literalDia.take(2),
                             style = MaterialTheme.typography.labelSmall,
-                            color = if (fecha == hoy) colorHabito else cardTextoSub,
+                            color = if (fecha == hoy) colorHoyLabel else cardTextoSub,
                             fontWeight = if (fecha == hoy) FontWeight.Bold else FontWeight.Normal
                         )
                         Spacer(modifier = Modifier.height(6.dp))
                         val valorProgreso = historial?.valorProgreso ?: 0
-                        val esVerdeCirculo = aplica && (if (esCuantitativo && !esDiaria) valorProgreso > 0 else completado)
-                        val esNaranjaCirculo = aplica && esPorTareas && !completado && valorProgreso > 0
+                        // 3 estados para por tareas: 0→blanco, >0&&<min→naranja, >=min&&>0→verde
+                        val esVerdeCirculo = aplica && when {
+                            esPorTareas -> valorProgreso >= minimoTareasCirculo && valorProgreso > 0
+                            esCuantitativo && !esDiaria -> valorProgreso > 0
+                            else -> completado
+                        }
+                        val esNaranjaCirculo = aplica && esPorTareas && valorProgreso > 0 && valorProgreso < minimoTareasCirculo
                         val pastGreenCirculo  = Color(0xFFA8D5A2)
                         val pastOrangeCirculo = Color(0xFFFFCB87)
+                        val colorHoyBg     = Color(0xFFE8D5FF)  // lavanda claro para fondo del círculo hoy
+                        val colorHoyBorder = Color(0xFF4F378B)  // púrpura oscuro, contraste suficiente
+                        val colorHoyText   = Color(0xFF4F378B)
+                        val esHoy = fecha == hoy
                         val borderColor = when {
                             !aplica -> Color(0xFFD5D5D5)
                             esVerdeCirculo -> Color(0xFF7CB87A)
                             esNaranjaCirculo -> Color(0xFFFFAA50)
+                            esHoy -> colorHoyBorder
                             esPasadaOHoy -> Color(0xFFBBBBBB)
                             else -> Color(0xFFCCCCCC)
                         }
@@ -168,6 +265,7 @@ fun HabitoListadoCard(item: HabitoConHistorialSemanal, hoy: LocalDate, viewModel
                             !aplica -> Color(0xFFE8E8E8)
                             esVerdeCirculo -> pastGreenCirculo
                             esNaranjaCirculo -> pastOrangeCirculo
+                            esHoy -> Color.White  // Hoy sin fondo coloreado, solo número morado
                             esPasadaOHoy -> Color.White
                             else -> Color(0xFFF0F0F0)
                         }
@@ -175,7 +273,8 @@ fun HabitoListadoCard(item: HabitoConHistorialSemanal, hoy: LocalDate, viewModel
                             !aplica -> Color(0xFFCCCCCC)
                             esVerdeCirculo -> Color(0xFF2E7D32)
                             esNaranjaCirculo -> Color(0xFFBF5000)
-                            esPasadaOHoy -> if (fecha == hoy) colorHabito else Color(0xFFAAAAAA)
+                            esHoy -> colorHoyText
+                            esPasadaOHoy -> Color(0xFFAAAAAA)
                             else -> Color(0xFFCCCCCC)
                         }
                         val diaShape = RoundedCornerShape(8.dp)
@@ -198,8 +297,7 @@ fun HabitoListadoCard(item: HabitoConHistorialSemanal, hoy: LocalDate, viewModel
                             when {
                                 !aplica -> Text("–", fontSize = 10.sp, color = contentColor)
                                 esVerdeCirculo && esCuantitativo -> {
-                                    val objetivo = habito.objetivoValor ?: habito.vecesPorDia
-                                    val pct = if (objetivo > 0) (valorProgreso.toFloat() / objetivo * 100).toInt() else 0
+                                    val pct = if (objetivoVersionado > 0) (valorProgreso.toFloat() / objetivoVersionado * 100).toInt() else 0
                                     Text("$pct%", fontSize = 7.sp, color = contentColor, fontWeight = FontWeight.Bold)
                                 }
                                 esVerdeCirculo -> Icon(
@@ -209,12 +307,10 @@ fun HabitoListadoCard(item: HabitoConHistorialSemanal, hoy: LocalDate, viewModel
                                     tint = contentColor
                                 )
                                 esNaranjaCirculo -> {
-                                    val objetivo = habito.objetivoValor ?: habito.vecesPorDia
-                                    Text("$valorProgreso/$objetivo", fontSize = 7.sp, color = contentColor, fontWeight = FontWeight.Bold)
+                                    Text("$valorProgreso/$objetivoVersionado", fontSize = 7.sp, color = contentColor, fontWeight = FontWeight.Bold)
                                 }
                                 esCuantitativo && esPasadaOHoy && valorProgreso > 0 -> {
-                                    val objetivo = habito.objetivoValor ?: habito.vecesPorDia
-                                    val pct = if (objetivo > 0) (valorProgreso.toFloat() / objetivo * 100).toInt() else 0
+                                    val pct = if (objetivoVersionado > 0) (valorProgreso.toFloat() / objetivoVersionado * 100).toInt() else 0
                                     Text("$pct%", fontSize = 7.sp, color = contentColor, fontWeight = FontWeight.Bold)
                                 }
                                 else -> Text(
@@ -229,20 +325,37 @@ fun HabitoListadoCard(item: HabitoConHistorialSemanal, hoy: LocalDate, viewModel
                 }
             }
 
-            // Fila de acciones: badge + editar + vista mensual + pausar
+            // Fila de acciones: badge semanal (solo semanales) + editar + vista mensual + pausar
             Spacer(modifier = Modifier.height(6.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                val badgeColor = when {
-                    porcentaje >= 0.8f -> Color(0xFF4CAF50)
-                    porcentaje >= 0.5f -> Color(0xFFFFB74D)
-                    else -> Color(0xFFCF6679)
+                if (esSemanal) {
+                    val badgeColor = when {
+                        porcentajeSemanaActual >= 0.8f -> Color(0xFF4CAF50)
+                        porcentajeSemanaActual >= 0.5f -> Color(0xFFFFB74D)
+                        else -> Color(0xFFCF6679)
+                    }
+                    Badge(containerColor = badgeColor) {
+                        Text("${kotlin.math.round(porcentajeSemanaActual * 100).toInt()}%", color = Color.White)
+                    }
                 }
-                Badge(containerColor = badgeColor) {
-                    Text(porcentajeTexto, color = Color.White)
+                // Icono periodos pausados (visible solo si hay alguno)
+                if (pausasHabito.isNotEmpty()) {
+                    Spacer(Modifier.width(2.dp))
+                    IconButton(
+                        onClick = { mostrarHistorialPausas = true },
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.History,
+                            contentDescription = "Ver periodos pausados",
+                            tint = cardIcono,
+                            modifier = Modifier.size(17.dp)
+                        )
+                    }
                 }
                 Spacer(Modifier.width(6.dp))
                 IconButton(
@@ -301,6 +414,65 @@ fun HabitoListadoCard(item: HabitoConHistorialSemanal, hoy: LocalDate, viewModel
                 }
             )
         }
+    }
+
+    // Diálogo historial de periodos pausados
+    if (mostrarHistorialPausas) {
+        AlertDialog(
+            onDismissRequest = { mostrarHistorialPausas = false },
+            title = { Text("Periodos pausados — ${habito.nombre}", fontWeight = FontWeight.Bold, fontSize = 14.sp) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    if (pausasHabito.isEmpty()) {
+                        Text("Sin periodos pausados.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    } else {
+                        val fmt = java.time.format.DateTimeFormatter.ofPattern("d MMM yyyy", java.util.Locale("es"))
+                        pausasHabito.forEach { p ->
+                            val inicio = p.fechaInicio.format(fmt)
+                            val fin = p.fechaFin?.format(fmt) ?: "activo"
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Box(modifier = Modifier.size(8.dp).background(Color(0xFFFFAA50), androidx.compose.foundation.shape.CircleShape))
+                                Spacer(Modifier.width(6.dp))
+                                Text("$inicio → $fin", fontSize = 13.sp, modifier = Modifier.weight(1f))
+                                IconButton(
+                                    onClick = { pausaAEliminar = p },
+                                    modifier = Modifier.size(28.dp)
+                                ) {
+                                    Icon(Icons.Default.Delete, null,
+                                        tint = MaterialTheme.colorScheme.error,
+                                        modifier = Modifier.size(16.dp))
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { mostrarHistorialPausas = false }) { Text("Cerrar") }
+            }
+        )
+    }
+
+    // Confirmación de borrado de pausa
+    pausaAEliminar?.let { p ->
+        val fmt = java.time.format.DateTimeFormatter.ofPattern("d MMM yyyy", java.util.Locale("es"))
+        AlertDialog(
+            onDismissRequest = { pausaAEliminar = null },
+            title = { Text("Eliminar periodo pausado") },
+            text = { Text("¿Eliminar el periodo ${p.fechaInicio.format(fmt)} → ${p.fechaFin?.format(fmt) ?: "activo"}?") },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.eliminarPausa(p.id)
+                    pausaAEliminar = null
+                }) { Text("Eliminar", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { pausaAEliminar = null }) { Text("Cancelar") }
+            }
+        )
     }
 
     // Diálogos por fecha

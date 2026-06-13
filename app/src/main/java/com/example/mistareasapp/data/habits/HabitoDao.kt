@@ -47,7 +47,7 @@ interface HabitoDao {
     @Delete
     suspend fun eliminarCategoria(categoria: CategoriaHabito)
 
-    @Query("SELECT * FROM habitos_categorias")
+    @Query("SELECT * FROM habitos_categorias ORDER BY orden ASC, id ASC")
     fun obtenerCategorias(): Flow<List<CategoriaHabito>>
 
     // --- GESTIÓN DE TAREAS ESPECÍFICAS ---
@@ -65,6 +65,9 @@ interface HabitoDao {
 
     @Query("SELECT * FROM habitos_tareas_especificas WHERE habitoId = :habitoId ORDER BY id ASC")
     fun obtenerTareasDeHabito(habitoId: Long): Flow<List<TareaHabito>>
+
+    @Query("SELECT COUNT(*) FROM habitos_tareas_especificas WHERE habitoId = :habitoId")
+    suspend fun contarTareasDeHabito(habitoId: Long): Int
 
     @Transaction
     suspend fun insertarHabitoConTareas(habito: Habito, tareas: List<TareaHabito>): Long {
@@ -113,4 +116,43 @@ interface HabitoDao {
 
     @Query("DELETE FROM tareas_habito_historial WHERE habitoId = :habitoId")
     suspend fun eliminarTareasHistorialDeHabito(habitoId: Long)
+
+    // --- VERSIONADO DE DEFINICIÓN ---
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertarVersion(version: HabitoVersion)
+
+    /** Versiones de definición de un hábito, ordenadas cronológicamente (ASC). */
+    @Query("SELECT * FROM habitos_versiones WHERE habitoId = :habitoId ORDER BY fechaInicio ASC")
+    suspend fun obtenerVersiones(habitoId: Long): List<HabitoVersion>
+
+    @Query("DELETE FROM habitos_versiones WHERE habitoId = :habitoId")
+    suspend fun eliminarVersionesDeHabito(habitoId: Long)
+
+    /**
+     * Flow que Room actualiza automáticamente cada vez que cambia habitos_historial.
+     * Sustituye al _refreshTrigger manual.
+     */
+    @Query("SELECT COUNT(*) FROM habitos_historial")
+    fun observarCambiosHistorial(): Flow<Int>
+
+    // --- HISTORIAL DE PAUSAS ---
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertarPausa(pausa: HabitoPausa): Long
+
+    @Query("SELECT * FROM habitos_pausas WHERE habitoId = :habitoId ORDER BY fechaInicio ASC")
+    suspend fun obtenerPausas(habitoId: Long): List<HabitoPausa>
+
+    @Query("SELECT * FROM habitos_pausas WHERE habitoId = :habitoId ORDER BY fechaInicio ASC")
+    fun obtenerPausasFlow(habitoId: Long): Flow<List<HabitoPausa>>
+
+    @Query("UPDATE habitos_pausas SET fechaFin = :fechaFin WHERE habitoId = :habitoId AND fechaFin IS NULL")
+    suspend fun cerrarPausaActiva(habitoId: Long, fechaFin: LocalDate)
+
+    @Query("DELETE FROM habitos_pausas WHERE habitoId = :habitoId")
+    suspend fun eliminarPausasDeHabito(habitoId: Long)
+
+    @Query("DELETE FROM habitos_pausas WHERE id = :id")
+    suspend fun eliminarPausaPorId(id: Long)
 }

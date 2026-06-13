@@ -6,10 +6,14 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.ArrowDropUp
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
@@ -23,7 +27,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
-import com.example.mistareasapp.EMOJIS_HABITO
+import com.example.mistareasapp.EMOJIS_CATEGORIA
 import com.example.mistareasapp.data.habits.CategoriaHabito
 import com.example.mistareasapp.viewmodel.Habits.HabitosViewModel
 
@@ -125,8 +129,24 @@ fun PantallaGestionCategoriasHabitos(
                                 Text("Toca el emoji para cambiarlo", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             },
                             trailingContent = {
-                                IconButton(onClick = { viewModel.eliminarCategoriaHabito(categoria) }) {
-                                    Icon(Icons.Default.Delete, null, tint = Color(0xFFCF6679))
+                                Row {
+                                    IconButton(
+                                        onClick = { viewModel.moverCategoriaArriba(categoria, categorias) },
+                                        modifier = Modifier.size(36.dp),
+                                        enabled = categorias.indexOfFirst { it.id == categoria.id } > 0
+                                    ) {
+                                        Icon(Icons.Default.ArrowDropUp, null, modifier = Modifier.size(20.dp))
+                                    }
+                                    IconButton(
+                                        onClick = { viewModel.moverCategoriaAbajo(categoria, categorias) },
+                                        modifier = Modifier.size(36.dp),
+                                        enabled = categorias.indexOfFirst { it.id == categoria.id } < categorias.lastIndex
+                                    ) {
+                                        Icon(Icons.Default.ArrowDropDown, null, modifier = Modifier.size(20.dp))
+                                    }
+                                    IconButton(onClick = { viewModel.eliminarCategoriaHabito(categoria) }) {
+                                        Icon(Icons.Default.Delete, null, tint = Color(0xFFCF6679))
+                                    }
                                 }
                             }
                         )
@@ -139,11 +159,17 @@ fun PantallaGestionCategoriasHabitos(
     if (mostrarDialogoEmojis) {
         AlertDialog(
             onDismissRequest = { mostrarDialogoEmojis = false },
-            title = { Text("Elige un emoji") },
+            title = { Text("Elige un icono para la categoría") },
             text = {
                 val columnas = 6
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    EMOJIS_HABITO.chunked(columnas).forEach { fila ->
+                val scrollState = androidx.compose.foundation.rememberScrollState()
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(scrollState),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    EMOJIS_CATEGORIA.chunked(columnas).forEach { fila ->
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceEvenly

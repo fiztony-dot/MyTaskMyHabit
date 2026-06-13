@@ -17,8 +17,11 @@ import com.example.mistareasapp.data.habits.HabitoHistorial
 import com.example.mistareasapp.data.habits.HabitoDao
 import com.example.mistareasapp.data.habits.CategoriaHabito
 import com.example.mistareasapp.data.habits.FrecuenciaHabito
+import com.example.mistareasapp.data.habits.HabitoPausa
+import com.example.mistareasapp.data.habits.HabitoVersion
 import com.example.mistareasapp.data.habits.TareaHabito
 import com.example.mistareasapp.data.habits.TareaHabitoHistorial
+import com.example.mistareasapp.data.habits.toVersion
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -211,10 +214,134 @@ val MIGRATION_13_14 = object : Migration(13, 14) {
     }
 }
 
+val MIGRATION_14_15 = object : Migration(14, 15) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        database.execSQL("ALTER TABLE habitos ADD COLUMN puedeSuperar100 INTEGER NOT NULL DEFAULT 0")
+    }
+}
+
+val MIGRATION_15_16 = object : Migration(15, 16) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        // Nueva tabla de versiones de definición de hábito
+        database.execSQL("""
+            CREATE TABLE IF NOT EXISTS `habitos_versiones` (
+                `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                `habitoId` INTEGER NOT NULL,
+                `fechaInicio` INTEGER NOT NULL,
+                `frecuencia` TEXT NOT NULL,
+                `tipoObjetivo` TEXT NOT NULL,
+                `vecesPorDia` INTEGER NOT NULL,
+                `objetivoValor` INTEGER,
+                `unidad` TEXT,
+                `esCompuestoPorTareas` INTEGER NOT NULL,
+                `minimoTareasCumplimiento` INTEGER,
+                `objetivoPorcentajeDias` INTEGER,
+                `puedeSuperar100` INTEGER NOT NULL DEFAULT 0,
+                `diasSemana` TEXT
+            )
+        """.trimIndent())
+        database.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_habitos_versiones_habitoId_fechaInicio` " +
+            "ON `habitos_versiones` (`habitoId`, `fechaInicio`)"
+        )
+        // Poblar con la definición actual de cada hábito (primera versión = desde fechaInicio del hábito)
+        database.execSQL("""
+            INSERT INTO `habitos_versiones`
+                (`habitoId`, `fechaInicio`, `frecuencia`, `tipoObjetivo`, `vecesPorDia`,
+                 `objetivoValor`, `unidad`, `esCompuestoPorTareas`, `minimoTareasCumplimiento`,
+                 `objetivoPorcentajeDias`, `puedeSuperar100`, `diasSemana`)
+            SELECT `id`, `fechaInicio`, `frecuencia`, `tipoObjetivo`, `vecesPorDia`,
+                   `objetivoValor`, `unidad`, `esCompuestoPorTareas`, `minimoTareasCumplimiento`,
+                   `objetivoPorcentajeDias`, `puedeSuperar100`, `diasSemana`
+            FROM `habitos`
+        """.trimIndent())
+    }
+}
+
+val MIGRATION_16_17 = object : Migration(16, 17) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        // Nuevo campo tipoMedicion en habitos
+        database.execSQL("ALTER TABLE habitos ADD COLUMN tipoMedicion TEXT NOT NULL DEFAULT 'PROPORCIONAL_CON_TOPE'")
+        // Migrar: puedeSuperar100=true → PROPORCIONAL_SIN_TOPE
+        database.execSQL("UPDATE habitos SET tipoMedicion = 'PROPORCIONAL_SIN_TOPE' WHERE puedeSuperar100 = 1")
+        // Nuevo campo tipoMedicion en versiones
+        database.execSQL("ALTER TABLE habitos_versiones ADD COLUMN tipoMedicion TEXT NOT NULL DEFAULT 'PROPORCIONAL_CON_TOPE'")
+        database.execSQL("UPDATE habitos_versiones SET tipoMedicion = 'PROPORCIONAL_SIN_TOPE' WHERE puedeSuperar100 = 1")
+    }
+}
+
+val MIGRATION_17_18 = object : Migration(17, 18) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        // Nueva tabla para historial completo de periodos pausados
+        database.execSQL("""
+            CREATE TABLE IF NOT EXISTS `habitos_pausas` (
+                `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                `habitoId` INTEGER NOT NULL,
+                `fechaInicio` INTEGER NOT NULL,
+                `fechaFin` INTEGER
+            )
+        """.trimIndent())
+        database.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_habitos_pausas_habitoId` ON `habitos_pausas` (`habitoId`)"
+        )
+        // Migrar pausas existentes (campo único) a la nueva tabla
+        database.execSQL("""
+            INSERT INTO `habitos_pausas` (`habitoId`, `fechaInicio`, `fechaFin`)
+            SELECT `id`, `fechaInicioPausa`, `fechaFinPausa`
+            FROM `habitos`
+            WHERE `fechaInicioPausa` IS NOT NULL
+        """.trimIndent())
+    }
+}
+
+val MIGRATION_18_19 = object : Migration(18, 19) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        database.execSQL("ALTER TABLE habitos ADD COLUMN dificultad INTEGER NOT NULL DEFAULT 3")
+        // Pre-cargar dificultades según tabla de referencia
+        listOf(
+            "Día sin Alcohol" to 3, "Push Up" to 2, "Bisoprolol" to 1,
+            "Complementos Nutricionales" to 1, "Imagen" to 2, "Inglés" to 4,
+            "Estiramientos" to 4, "Ejercicio" to 5, "Pasos" to 5,
+            "Care Nutrition" to 4, "Tai-Chi" to 3, "Natación" to 4
+        ).forEach { (nombre, dif) ->
+            database.execSQL(
+                "UPDATE habitos SET dificultad = $dif WHERE nombre = '${nombre.replace("'", "''")}'"
+            )
+        }
+    }
+}
+
+val MIGRATION_19_20 = object : Migration(19, 20) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        // Actualizar iconos de categorías por nombre (case-insensitive)
+        // Ejercicio → 🤸, Salud → 🩺
+        // También cubre las creadas por el importer (nombre en minúsculas)
+        listOf("Ejercicio", "ejercicio", "Deporte", "deporte").forEach { nombre ->
+            database.execSQL("UPDATE habitos_categorias SET icono = '🤸' WHERE LOWER(nombre) = LOWER('$nombre')")
+        }
+        listOf("Salud", "salud").forEach { nombre ->
+            database.execSQL("UPDATE habitos_categorias SET icono = '🩺' WHERE LOWER(nombre) = LOWER('$nombre')")
+        }
+        // Bienestar ya tiene 🧘 en iconoAEmoji (self_improvement → 🧘), no cambia
+        // Aprendizaje sin cambios
+    }
+}
+
+val MIGRATION_20_21 = object : Migration(20, 21) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        database.execSQL("ALTER TABLE habitos_categorias ADD COLUMN orden INTEGER NOT NULL DEFAULT 0")
+        // Orden inicial: 1=Aprendizaje, 2=Salud, 3=Bienestar, 4=Ejercicio/Deporte
+        database.execSQL("UPDATE habitos_categorias SET orden = 1 WHERE LOWER(nombre) = 'aprendizaje'")
+        database.execSQL("UPDATE habitos_categorias SET orden = 2 WHERE LOWER(nombre) = 'salud'")
+        database.execSQL("UPDATE habitos_categorias SET orden = 3 WHERE LOWER(nombre) = 'bienestar'")
+        database.execSQL("UPDATE habitos_categorias SET orden = 4 WHERE LOWER(nombre) IN ('ejercicio','deporte')")
+    }
+}
+
 @TypeConverters(Converters::class)
 @Database(
-    entities = [Tarea::class, Categoria::class, Habito::class, HabitoHistorial::class, CategoriaHabito::class, TareaHabito::class, TareaHabitoHistorial::class],
-    version = 14,
+    entities = [Tarea::class, Categoria::class, Habito::class, HabitoHistorial::class, CategoriaHabito::class, TareaHabito::class, TareaHabitoHistorial::class, HabitoVersion::class, HabitoPausa::class],
+    version = 21,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -234,7 +361,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "tareas_db"
                 )
-                    .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14)
+                    .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21)
                     .addCallback(DatabaseCallback(context))
                     .setJournalMode(JournalMode.TRUNCATE)
                     .build()

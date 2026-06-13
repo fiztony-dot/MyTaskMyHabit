@@ -9,5 +9,6 @@ data class CategoriaHabito(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val nombre: String,
     val icono: String = "category",
-    val color: String = "#757575"
+    val color: String = "#757575",
+    val orden: Int = 0
 )

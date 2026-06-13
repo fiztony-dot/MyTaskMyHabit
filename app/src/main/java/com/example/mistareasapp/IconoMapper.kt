@@ -4,6 +4,28 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.ui.graphics.vector.ImageVector
 
+/** Catálogo ampliado de emojis para categorías, organizado por grupos. */
+val EMOJIS_CATEGORIA = listOf(
+    // Ejercicio / Deporte
+    "🤸", "🏃", "🚴", "🏊", "🏋️", "⚽", "🎾", "🏀", "🥊", "🧗", "🎿", "🏄", "🏇", "🤺", "🥋",
+    // Salud / Medicina
+    "🩺", "💊", "🏥", "🩻", "💉", "🧬", "🫀", "🧠", "🦷", "🩹", "🫁", "🌡️",
+    // Bienestar / Mente
+    "🧘", "😴", "🛁", "🌸", "🍵", "☕", "🌅", "🌙", "🕯️", "🛀", "🎭", "🌺",
+    // Aprendizaje / Cultura
+    "📚", "📖", "✍️", "🎓", "🔬", "🎨", "🎸", "🎵", "📐", "🔭", "🖊️", "🎤",
+    // Naturaleza
+    "🌱", "🌳", "🌺", "🍃", "🌊", "⛰️", "🌤️", "🌿", "🍀", "🌻", "🦋",
+    // Alimentación
+    "🍎", "🥦", "🥗", "🍽️", "🥤", "💧", "🫐", "🥕", "🧃",
+    // Objetos / Hogar
+    "💼", "🏠", "🛒", "⚙️", "💡", "🔧", "📱", "💻", "📅", "🗓️", "🧹", "🔑",
+    // Finanzas / Trabajo
+    "💰", "📊", "📈", "🏦", "💳", "🤝",
+    // Miscelánea
+    "⭐", "🔥", "💪", "❤️", "👤", "🎯", "🚀", "✅", "🎁", "🏆", "🌍", "🕊️"
+)
+
 val EMOJIS_HABITO = listOf(
     "💊", "💪", "🏃", "🧘", "📚", "🚫",
     "💧", "🌿", "❤️", "😴", "🎵", "🎨",
@@ -30,9 +52,9 @@ fun iconoAEmoji(nombre: String?): String {
         "lightbulb"          -> "💡"
         "restaurant"         -> "🍽️"
         "directions_car"     -> "🚗"
-        "fitness_center"     -> "💪"
+        "fitness_center"     -> "🤸️"
         "payments"           -> "💰"
-        "medical_services"   -> "🏥"
+        "medical_services"   -> "🩺️"
         "school"             -> "📚"
         "pets", "pet_page"   -> "🐾"
         "build"              -> "🔧"
@@ -56,6 +78,13 @@ fun iconoAEmoji(nombre: String?): String {
         else                 -> "⭐"
     }
 }
+
+/** Devuelve el icono efectivo del hábito: el de su categoría si existe, o el propio como fallback. */
+fun iconoEfectivoHabito(
+    habitoCategoriaId: Long,
+    habitoIcono: String,
+    categorias: List<com.example.mistareasapp.data.habits.CategoriaHabito>
+): String = categorias.firstOrNull { it.id == habitoCategoriaId }?.icono ?: habitoIcono
 
 fun obtenerIconoPorNombre(nombre: String?): ImageVector {
     return when (nombre) {

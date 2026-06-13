@@ -6,6 +6,10 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.FilterList
+import androidx.compose.material.icons.filled.FilterListOff
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -21,16 +25,37 @@ fun AccionesTopBarHabitos(
     navController: NavHostController,
     onLanzarVoz: () -> Unit,
     textoBusqueda: String,
-    filtroActual: String?
+    filtroActual: Long?
 ) {
-    var expandedAdd by remember { mutableStateOf(false) }
+    // Botón de búsqueda
+    IconButton(onClick = {
+        viewModel.buscadorVisible = !viewModel.buscadorVisible
+        if (!viewModel.buscadorVisible) viewModel.actualizarBusqueda("")
+    }) {
+        Icon(
+            imageVector = if (viewModel.buscadorVisible) Icons.Default.Close else Icons.Default.Search,
+            contentDescription = "Buscar",
+            tint = if (textoBusqueda.isNotEmpty()) MaterialTheme.colorScheme.primary
+                   else LocalContentColor.current
+        )
+    }
+
+    // Botón de filtro por categoría
+    IconButton(onClick = { viewModel.mostrarBarraFiltro = !viewModel.mostrarBarraFiltro }) {
+        Icon(
+            imageVector = if (filtroActual != null) Icons.Default.FilterListOff else Icons.Default.FilterList,
+            contentDescription = "Filtrar por categoría",
+            tint = if (filtroActual != null) MaterialTheme.colorScheme.primary
+                   else LocalContentColor.current
+        )
+    }
+
+    // Botón añadir hábito
     val rotation by animateFloatAsState(
-        targetValue = if (expandedAdd) 45f else 0f,
+        targetValue = 0f,
         animationSpec = tween(durationMillis = 200),
         label = "rotation"
     )
-
-    // Botón + simple - navega a pantalla de crear
     IconButton(onClick = { navController.navigate("crear_habito") }) {
         Surface(
             shape = CircleShape,
@@ -39,7 +64,7 @@ fun AccionesTopBarHabitos(
         ) {
             Icon(
                 imageVector = Icons.Default.Add,
-                contentDescription = "Añadir",
+                contentDescription = "Añadir hábito",
                 tint = Color.Black,
                 modifier = Modifier
                     .padding(8.dp)

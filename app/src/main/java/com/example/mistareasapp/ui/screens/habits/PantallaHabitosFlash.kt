@@ -8,6 +8,10 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
@@ -37,6 +41,7 @@ import com.example.mistareasapp.data.habits.CategoriaHabito
 import com.example.mistareasapp.data.habits.FrecuenciaHabito
 import com.example.mistareasapp.data.habits.TipoObjetivoHabito
 import com.example.mistareasapp.iconoAEmoji
+import com.example.mistareasapp.iconoEfectivoHabito
 import com.example.mistareasapp.ui.theme.M3CardHabito
 import com.example.mistareasapp.ui.components.habits.SelectorFechaConProgreso
 import com.example.mistareasapp.viewmodel.Habits.HabitoConProgreso
@@ -52,9 +57,11 @@ fun PantallaHabitosFlash(
     val fechaSeleccionada by viewModel.fechaSeleccionada.collectAsState()
     val habitosConProgreso by viewModel.habitosConProgreso.collectAsState()
 
-    val totalHabitos = habitosConProgreso.size
-    val habitosCompletados = habitosConProgreso.count { it.estaCompletado }
-    val progresoCalculado = if (totalHabitos > 0) habitosCompletados.toFloat() / totalHabitos else 0f
+    // Barra general: media ponderada por min(diasEfectivos,180)×dificultad
+    val pesoTotal = habitosConProgreso.sumOf { (minOf(it.diasVidaEfectivos, 180) * it.habito.dificultad).toLong() }
+    val progresoCalculado = if (pesoTotal > 0)
+        (habitosConProgreso.sumOf { it.porcentajeHistorico.coerceIn(0f, 1f).toDouble() * minOf(it.diasVidaEfectivos, 180) * it.habito.dificultad } / pesoTotal).toFloat()
+    else 0f
     val progreso = if (progresoGeneral > 0) progresoGeneral else progresoCalculado
     val categorias by viewModel.categoriasHabitos.collectAsState(initial = emptyList())
     val agrupar = viewModel.agruparPorCategoria
@@ -71,11 +78,11 @@ fun PantallaHabitosFlash(
         LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             if (agrupar) {
                 habitosConProgresoPorCategoria(habitosConProgreso, categorias) { item ->
-                    HabitoFlashItem(item, viewModel, navController)
+                    HabitoFlashItem(item, viewModel, navController, categorias)
                 }
             } else {
                 items(habitosConProgreso) { item ->
-                    HabitoFlashItem(item, viewModel, navController)
+                    HabitoFlashItem(item, viewModel, navController, categorias)
                 }
             }
         }
@@ -104,7 +111,7 @@ fun LazyListScope.habitosConProgresoPorCategoria(
 }
 
 @Composable
-fun HabitoFlashItem(item: HabitoConProgreso, viewModel: HabitosViewModel, navController: NavHostController) {
+fun HabitoFlashItem(item: HabitoConProgreso, viewModel: HabitosViewModel, navController: NavHostController, categorias: List<CategoriaHabito> = emptyList()) {
     val habito = item.habito
     val progreso = item.progreso
     val estaCompletado = item.estaCompletado
@@ -123,6 +130,8 @@ fun HabitoFlashItem(item: HabitoConProgreso, viewModel: HabitosViewModel, navCon
     val esPorTareas = habito.esCompuestoPorTareas
     val esDiaria = habito.frecuencia == FrecuenciaHabito.DIARIA
     val objetivo = habito.objetivoValor ?: habito.vecesPorDia
+    // Para hábitos por tareas: usar el total real de tareas como denominador
+    val totalTareasReal = if (esPorTareas) item.totalTareas.takeIf { it > 0 } ?: (habito.minimoTareasCumplimiento ?: habito.vecesPorDia) else objetivo
     val valorPeriodo = item.valorPeriodo
     val completadosPeriodo = item.completadosPeriodo
 
@@ -145,18 +154,31 @@ fun HabitoFlashItem(item: HabitoConProgreso, viewModel: HabitosViewModel, navCon
     // - Tareas no-diario → ¿el periodo alcanza el objetivo? (periodo)
     // - Simple no-diario → binario: ¿está marcado HOY? (igual que diario)
     // - Resto → flag completado del día
+    val minimoTareas = when (habito.criterioCumplimientoTareas) {
+        com.example.mistareasapp.data.habits.CriterioCumplimientoTareas.TODAS -> totalTareasReal
+        com.example.mistareasapp.data.habits.CriterioCumplimientoTareas.PARCIAL -> habito.minimoTareasCumplimiento ?: totalTareasReal
+    }
     val completadoVisual = when {
-        esCuantitativo && !esDiaria -> valorPeriodo > 0
+        esCuantitativo && !esDiaria -> valorActual > 0
         esCuantitativo -> valorActual >= objetivo
         !esDiaria && esPorTareas -> completadosPeriodo >= objetivoDias
+        esPorTareas -> valorActual >= minimoTareas
         else -> estaCompletado
     }
 
+    // Tipo de medición: si es SIN_TOPE y no es diaria, no limitamos al 100%
+    val superarPermitido = habito.tipoMedicion == com.example.mistareasapp.data.habits.TipoMedicion.PROPORCIONAL_SIN_TOPE
     // Porcentaje para el checkbox de cuantitativas (usa el periodo)
-    val porcentajePeriodo = if (objetivo > 0) (valorPeriodo.toFloat() / objetivo).coerceIn(0f, 1f) else 0f
+    val porcentajePeriodo = if (objetivo > 0) {
+        val raw = valorPeriodo.toFloat() / objetivo
+        if (superarPermitido) raw.coerceAtLeast(0f) else raw.coerceIn(0f, 1f)
+    } else 0f
     // Porcentaje para hábitos de frecuencia no diarios
-    val porcentajeDias = if (objetivoDias > 0) (completadosPeriodo.toFloat() / objetivoDias).coerceIn(0f, 1f) else 0f
-    // Porcentaje diario (para barra de progreso en diarias)
+    val porcentajeDias = if (objetivoDias > 0) {
+        val raw = completadosPeriodo.toFloat() / objetivoDias
+        if (superarPermitido) raw.coerceAtLeast(0f) else raw.coerceIn(0f, 1f)
+    } else 0f
+    // Porcentaje diario (para barra de progreso visual — siempre 0-1)
     val porcentajeDiario = if (objetivo > 0) (valorActual.toFloat() / objetivo).coerceIn(0f, 1f) else 0f
 
     Card(
@@ -173,9 +195,9 @@ fun HabitoFlashItem(item: HabitoConProgreso, viewModel: HabitosViewModel, navCon
         Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
 
-                // Emoji sin fondo
+                // Icono de categoría (fallback al propio del hábito)
                 Text(
-                    text = iconoAEmoji(habito.icono),
+                    text = iconoAEmoji(iconoEfectivoHabito(habito.categoriaId, habito.icono, categorias)),
                     fontSize = 24.sp,
                     modifier = Modifier.size(36.dp).wrapContentSize(Alignment.Center)
                 )
@@ -190,7 +212,7 @@ fun HabitoFlashItem(item: HabitoConProgreso, viewModel: HabitosViewModel, navCon
                     )
                     val unidad = habito.unidad?.let { " $it" } ?: ""
                     val freqText = when (habito.frecuencia) {
-                        FrecuenciaHabito.DIARIA -> if (esCuantitativo) "$objetivo$unidad/día" else "${habito.vecesPorDia}x/día"
+                        FrecuenciaHabito.DIARIA -> if (esCuantitativo) "$objetivo$unidad/día" else if (esPorTareas) "${totalTareasReal} tareas" else "${habito.vecesPorDia}x/día"
                         FrecuenciaHabito.SEMANAL -> if (esCuantitativo) "$objetivo$unidad/sem" else "${objetivoDias}x/sem"
                         FrecuenciaHabito.MENSUAL -> if (esCuantitativo) "$objetivo$unidad/mes" else "${objetivoDias}x/mes"
                     }
@@ -199,7 +221,7 @@ fun HabitoFlashItem(item: HabitoConProgreso, viewModel: HabitosViewModel, navCon
                             val pct = (porcentajePeriodo * 100).toInt()
                             "  •  $valorPeriodo/$objetivo ($pct%)"
                         }
-                        esPorTareas -> "  •  $valorActual/$objetivo tareas"
+                        esPorTareas -> "  •  $valorActual/$totalTareasReal tareas"
                         !esDiaria -> {
                             val pct = (porcentajeDias * 100).toInt()
                             "  •  $completadosPeriodo/$objetivoDias días ($pct%)"
@@ -221,9 +243,10 @@ fun HabitoFlashItem(item: HabitoConProgreso, viewModel: HabitosViewModel, navCon
                     Icon(Icons.Default.Edit, contentDescription = "Editar", tint = cardIcono, modifier = Modifier.size(16.dp))
                 }
 
-                // 3 estados: verde pastel=cumplido, naranja pastel=tareas parcial, blanco=sin progreso
-                val esVerde = completadoVisual
-                val esNaranja = esPorTareas && !estaCompletado && valorActual > 0
+                // 3 estados según spec:
+                // tareasCompletadas==0 → blanco; >0 && <minimo → naranja; >=minimo → verde
+                val esVerde = if (esPorTareas) valorActual >= minimoTareas && valorActual > 0 else completadoVisual
+                val esNaranja = esPorTareas && valorActual > 0 && valorActual < minimoTareas
                 val pastGreen  = Color(0xFFA8D5A2)
                 val pastOrange = Color(0xFFFFCB87)
                 val checkShape = RoundedCornerShape(8.dp)
@@ -247,24 +270,31 @@ fun HabitoFlashItem(item: HabitoConProgreso, viewModel: HabitosViewModel, navCon
                     contentAlignment = Alignment.Center
                 ) {
                     when {
+                        esCuantitativo && !esDiaria -> if (valorActual > 0) Icon(
+                            Icons.Default.Check,
+                            contentDescription = "Registrado hoy",
+                            tint = checkContent,
+                            modifier = Modifier.size(18.dp)
+                        ) else Unit  // vacío si nada hoy
                         esCuantitativo -> Text(
-                            text = "${(porcentajePeriodo * 100).toInt()}%",
+                            text = "${(porcentajeDiario * 100).toInt()}%",
                             color = checkContent,
                             fontWeight = FontWeight.Bold,
                             fontSize = 10.sp
                         )
-                        esPorTareas && estaCompletado -> Icon(
+                        esPorTareas && esVerde -> Icon(
                             Icons.Default.Check,
                             contentDescription = "Completado",
                             tint = checkContent,
                             modifier = Modifier.size(18.dp)
                         )
-                        esPorTareas -> Text(
-                            text = "$valorActual/$objetivo",
+                        esPorTareas && esNaranja -> Text(
+                            text = "$valorActual/$totalTareasReal",
                             color = checkContent,
                             fontWeight = FontWeight.Bold,
                             fontSize = 9.sp
                         )
+                        // esPorTareas && valorActual==0 → caja blanca vacía (sin contenido)
                         // Para hábitos simples (diarios o no-diarios), el checkbox es binario:
                         // ✓ si completado hoy, vacío si no.
                         estaCompletado -> Icon(
@@ -282,7 +312,7 @@ fun HabitoFlashItem(item: HabitoConProgreso, viewModel: HabitosViewModel, navCon
             if (esCuantitativo && objetivo > 0) {
                 Spacer(modifier = Modifier.height(6.dp))
                 LinearProgressIndicator(
-                    progress = { if (esDiaria) porcentajeDiario else porcentajePeriodo },
+                    progress = { (if (esDiaria) porcentajeDiario else porcentajePeriodo).coerceIn(0f, 1f) },
                     modifier = Modifier.fillMaxWidth().height(3.dp).clip(CircleShape),
                     color = MaterialTheme.colorScheme.primary,
                     trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
@@ -376,6 +406,25 @@ fun DialogoTareasHabito(
                 if (tareas.isEmpty()) {
                     Text("Este hábito no tiene tareas definidas.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 } else {
+                    val todasMarcadas = tareas.all { estadoTareas[it.id] == true }
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Checkbox(
+                            checked = todasMarcadas,
+                            onCheckedChange = { marcarTodas ->
+                                estadoTareas = tareas.associate { it.id to marcarTodas }
+                            }
+                        )
+                        Text(
+                            if (todasMarcadas) "Deseleccionar todas" else "Seleccionar todas",
+                            fontSize = 13.sp,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                    HorizontalDivider()
                     tareas.forEach { tarea ->
                         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                             Checkbox(
@@ -418,6 +467,13 @@ fun DialogoCuantitativo(
     val objetivo = habito.objetivoValor ?: habito.vecesPorDia
     val unidad = habito.unidad ?: ""
     var valor by remember { mutableStateOf(progreso?.valorProgreso ?: 0) }
+    // TextFieldValue con selección inicial de todo el texto para poder escribir sin borrar antes
+    var textoValor by remember {
+        val initText = if (valor == 0) "" else valor.toString()
+        mutableStateOf(TextFieldValue(text = initText, selection = TextRange(0, initText.length)))
+    }
+    val focusRequester = remember { FocusRequester() }
+    LaunchedEffect(Unit) { focusRequester.requestFocus() }
     val porcentaje = if (objetivo > 0) (valor.toFloat() / objetivo).coerceIn(0f, 1f) else 0f
 
     val quickValues = when {
@@ -496,25 +552,39 @@ fun DialogoCuantitativo(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     FilledTonalIconButton(
-                        onClick = { if (valor > 0) valor-- },
+                        onClick = {
+                            val newVal = (valor - 1).coerceAtLeast(0)
+                            valor = newVal
+                            val t = if (newVal == 0) "" else newVal.toString()
+                            textoValor = TextFieldValue(t, TextRange(t.length))
+                        },
                         modifier = Modifier.size(44.dp)
                     ) {
                         Icon(Icons.Default.Remove, contentDescription = "Restar 1")
                     }
                     OutlinedTextField(
-                        value = valor.toString(),
-                        onValueChange = { valor = it.toIntOrNull()?.coerceAtLeast(0) ?: valor },
-                        modifier = Modifier.weight(1f),
+                        value = textoValor,
+                        onValueChange = { tv ->
+                            textoValor = tv
+                            valor = tv.text.toIntOrNull()?.coerceAtLeast(0) ?: 0
+                        },
+                        modifier = Modifier.weight(1f).focusRequester(focusRequester),
                         textStyle = LocalTextStyle.current.copy(
                             textAlign = TextAlign.Center,
                             fontWeight = FontWeight.Bold,
                             fontSize = 20.sp
                         ),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        singleLine = true
+                        singleLine = true,
+                        placeholder = { Text("0", textAlign = TextAlign.Center) }
                     )
                     FilledTonalIconButton(
-                        onClick = { valor++ },
+                        onClick = {
+                            val newVal = valor + 1
+                            valor = newVal
+                            val t = newVal.toString()
+                            textoValor = TextFieldValue(t, TextRange(t.length))
+                        },
                         modifier = Modifier.size(44.dp)
                     ) {
                         Icon(Icons.Default.Add, contentDescription = "Sumar 1")
@@ -533,7 +603,12 @@ fun DialogoCuantitativo(
                 ) {
                     quickValues.forEach { v ->
                         OutlinedButton(
-                            onClick = { valor = (valor - v).coerceAtLeast(0) },
+                            onClick = {
+                                val newVal = (valor - v).coerceAtLeast(0)
+                                valor = newVal
+                                val t = if (newVal == 0) "" else newVal.toString()
+                                textoValor = TextFieldValue(t, TextRange(t.length))
+                            },
                             modifier = Modifier.weight(1f),
                             contentPadding = PaddingValues(4.dp)
                         ) { Text("-$v", fontSize = 12.sp) }
@@ -547,7 +622,12 @@ fun DialogoCuantitativo(
                 ) {
                     quickValues.forEach { v ->
                         Button(
-                            onClick = { valor += v },
+                            onClick = {
+                                val newVal = valor + v
+                                valor = newVal
+                                val t = newVal.toString()
+                                textoValor = TextFieldValue(t, TextRange(t.length))
+                            },
                             modifier = Modifier.weight(1f),
                             contentPadding = PaddingValues(4.dp)
                         ) { Text("+$v", fontSize = 12.sp) }

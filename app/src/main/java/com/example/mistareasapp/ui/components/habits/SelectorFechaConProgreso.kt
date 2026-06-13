@@ -8,6 +8,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import java.time.DayOfWeek
@@ -81,11 +82,19 @@ fun SelectorFechaConProgreso(
             }
         }
 
+        val pct = kotlin.math.round(progresoGeneral * 100).toInt()
+        val colorSemaforo = when {
+            pct >= 90 -> Color(0xFF2E7D32)  // verde
+            pct >= 80 -> Color(0xFF558B2F)  // verde claro
+            pct >= 60 -> Color(0xFFF9A825)  // amarillo
+            pct >= 50 -> Color(0xFFE65100)  // naranja
+            else      -> Color(0xFFC62828)  // rojo
+        }
         Text(
-            text = "${(progresoGeneral * 100).toInt()}%",
+            text = "$pct%",
             fontWeight = FontWeight.Bold,
             fontSize = MaterialTheme.typography.headlineSmall.fontSize,
-            color = MaterialTheme.colorScheme.primary,
+            color = colorSemaforo,
             modifier = Modifier.padding(end = 8.dp)
         )
     }

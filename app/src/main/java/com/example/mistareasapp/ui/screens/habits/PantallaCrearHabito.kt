@@ -124,10 +124,11 @@ fun CrearHabitoScreen(
     var descripcionNuevaTarea by remember { mutableStateOf("") }
     var siguienteIdTarea by remember { mutableStateOf(0) }
     val tareasDraft = remember { mutableStateListOf<TareaHabitoDraft>() }
-    var iconoSeleccionado by remember { mutableStateOf("⭐") }
+    var dificultad by remember { mutableStateOf(3) }
     var usarPorcentajeDias by remember { mutableStateOf(false) }
     var porcentajeDiasTexto by remember { mutableStateOf("60") }
     var diasSemanaSeleccionados by remember { mutableStateOf(setOf<Int>()) }
+    var tipoMedicion by remember { mutableStateOf(com.example.mistareasapp.data.habits.TipoMedicion.PROPORCIONAL_CON_TOPE) }
 
     val guardarHabito = {
         when {
@@ -200,10 +201,12 @@ fun CrearHabitoScreen(
                     objetivoRachaSemanas = objetivoRachaSemanas.toIntOrNull() ?: 4,
                     recordatoriosActivos = recordatoriosActivos,
                     horaRecordatorio = if (recordatoriosActivos) horaRecordatorio else null,
-                    icono = iconoSeleccionado,
+                    icono = categoriaSeleccionada?.icono ?: "star",
                     colorHex = categoriaSeleccionada?.color ?: "#FF0000",
                     objetivoPorcentajeDias = pctDias,
-                    diasSemana = diasSemanaStr
+                    diasSemana = diasSemanaStr,
+                    tipoMedicion = tipoMedicion,
+                    dificultad = dificultad
                 )
 
                 val tareasPersistir = if (esCompuestoPorTareas) {
@@ -298,27 +301,16 @@ fun CrearHabitoScreen(
                     minLines = 3
                 )
 
-                SelectorEmojiHabito(
-                    emojiSeleccionado = iconoSeleccionado,
-                    onEmojiSeleccionado = { iconoSeleccionado = it }
-                )
-
                 SelectorCategoriaHabito(
                     categorias = categorias,
                     categoriaSeleccionada = categoriaSeleccionada,
-                    onCategoriaSeleccionada = {
-                        categoriaSeleccionadaId = it?.id
-                        if (it != null) iconoSeleccionado = iconoAEmoji(it.icono)
-                    }
+                    onCategoriaSeleccionada = { categoriaSeleccionadaId = it?.id }
                 )
 
-                if (categoriaSeleccionada == null) {
-                    Text(
-                        text = "Si eliges una categoría, el emoji se actualizará automáticamente.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
+                SelectorDificultad(
+                    dificultad = dificultad,
+                    onDificultadSeleccionada = { dificultad = it }
+                )
             }
 
             SeccionFormulario(
@@ -360,6 +352,12 @@ fun CrearHabitoScreen(
                         onSeleccionCambiada = { diasSemanaSeleccionados = it }
                     )
                 }
+
+                // Tipo de medición del cumplimiento
+                SelectorTipoMedicion(
+                    tipoMedicion = tipoMedicion,
+                    onTipoSeleccionado = { tipoMedicion = it }
+                )
 
                 if (!esCompuestoPorTareas && tipoObjetivo == TipoObjetivoHabito.FRECUENCIA) {
                     if (frecuencia != FrecuenciaHabito.DIARIA) {
@@ -993,11 +991,116 @@ internal fun SelectorDiasSemana(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun SelectorTipoMedicion(
+    tipoMedicion: com.example.mistareasapp.data.habits.TipoMedicion,
+    onTipoSeleccionado: (com.example.mistareasapp.data.habits.TipoMedicion) -> Unit
+) {
+    var expandido by remember { mutableStateOf(false) }
+
+    ExposedDropdownMenuBox(
+        expanded = expandido,
+        onExpandedChange = { expandido = !expandido }
+    ) {
+        OutlinedTextField(
+            value = when (tipoMedicion) {
+                com.example.mistareasapp.data.habits.TipoMedicion.BINARIO -> "Binario (0% o 100%)"
+                com.example.mistareasapp.data.habits.TipoMedicion.PROPORCIONAL_CON_TOPE -> "Proporcional (máx 100%)"
+                com.example.mistareasapp.data.habits.TipoMedicion.PROPORCIONAL_SIN_TOPE -> "Proporcional (sin tope)"
+            },
+            onValueChange = {},
+            readOnly = true,
+            label = { Text("Tipo de medición") },
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandido) },
+            modifier = Modifier.menuAnchor().fillMaxWidth()
+        )
+        ExposedDropdownMenu(expanded = expandido, onDismissRequest = { expandido = false }) {
+            com.example.mistareasapp.data.habits.TipoMedicion.values().forEach { opcion ->
+                DropdownMenuItem(
+                    text = {
+                        Column {
+                            Text(
+                                when (opcion) {
+                                    com.example.mistareasapp.data.habits.TipoMedicion.BINARIO -> "Binario"
+                                    com.example.mistareasapp.data.habits.TipoMedicion.PROPORCIONAL_CON_TOPE -> "Proporcional con tope"
+                                    com.example.mistareasapp.data.habits.TipoMedicion.PROPORCIONAL_SIN_TOPE -> "Proporcional sin tope"
+                                }
+                            )
+                            Text(
+                                when (opcion) {
+                                    com.example.mistareasapp.data.habits.TipoMedicion.BINARIO -> "El hábito se cumple o no, 0% o 100%"
+                                    com.example.mistareasapp.data.habits.TipoMedicion.PROPORCIONAL_CON_TOPE -> "Porcentaje real, máximo 100%"
+                                    com.example.mistareasapp.data.habits.TipoMedicion.PROPORCIONAL_SIN_TOPE -> "Porcentaje real sin límite"
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    },
+                    onClick = { onTipoSeleccionado(opcion); expandido = false }
+                )
+            }
+        }
+    }
+}
+
 internal fun colorCategoria(categoria: CategoriaHabito): Color {
     return try {
         Color(categoria.color.toColorInt())
     } catch (_: Exception) {
         obtenerColorIcono(categoria.icono)
+    }
+}
+
+@Composable
+internal fun SelectorDificultad(
+    dificultad: Int,
+    onDificultadSeleccionada: (Int) -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("Dificultad", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+            Text("$dificultad / 5", fontSize = 13.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+        }
+        Text(
+            text = when (dificultad) {
+                1 -> "Muy fácil — hábito automático, sin esfuerzo"
+                2 -> "Fácil — requiere poca disciplina"
+                3 -> "Moderado — esfuerzo consistente"
+                4 -> "Difícil — requiere alta motivación"
+                else -> "Muy difícil — cambio profundo de comportamiento"
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            (1..5).forEach { nivel ->
+                Surface(
+                    onClick = { onDificultadSeleccionada(nivel) },
+                    shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
+                    color = if (nivel <= dificultad) MaterialTheme.colorScheme.primaryContainer
+                            else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Box(modifier = Modifier.padding(vertical = 10.dp), contentAlignment = Alignment.Center) {
+                        Text(
+                            text = "$nivel",
+                            fontWeight = if (nivel <= dificultad) FontWeight.Bold else FontWeight.Normal,
+                            color = if (nivel <= dificultad) MaterialTheme.colorScheme.onPrimaryContainer
+                                    else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 

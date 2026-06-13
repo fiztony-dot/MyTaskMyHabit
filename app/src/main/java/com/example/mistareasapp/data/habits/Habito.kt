@@ -36,7 +36,13 @@ data class Habito(
     val objetivoPorcentajeDias: Int? = null,
     // Días de la semana en que aplica el hábito (solo para frecuencia DIARIA).
     // Cadena "1,3,5" = lunes, miércoles, viernes. Null = todos los días.
-    val diasSemana: String? = null
+    val diasSemana: String? = null,
+    // Legacy — mantenido para compatibilidad de DB, no usar en lógica nueva.
+    val puedeSuperar100: Boolean = false,
+    // Tipo de medición del cumplimiento (ver TipoMedicion).
+    val tipoMedicion: TipoMedicion = TipoMedicion.PROPORCIONAL_CON_TOPE,
+    // Dificultad subjetiva 1-5, usada en la fórmula del % general ponderado.
+    val dificultad: Int = 3
 )
 
 /** Devuelve el conjunto de DayOfWeek en que aplica este hábito, o null si aplica todos los días. */
