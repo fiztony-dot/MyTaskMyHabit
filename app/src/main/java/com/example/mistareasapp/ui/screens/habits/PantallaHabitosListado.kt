@@ -25,6 +25,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
@@ -108,6 +109,7 @@ fun HabitoListadoCard(item: HabitoConHistorialSemanal, hoy: LocalDate, viewModel
     val esCuantitativo = habito.tipoObjetivo == TipoObjetivoHabito.CUANTITATIVO
     val esPorTareas = habito.esCompuestoPorTareas
     val esDiaria = habito.frecuencia == FrecuenciaHabito.DIARIA
+    val esMensual = habito.frecuencia == FrecuenciaHabito.MENSUAL
 
     // Versión vigente en la semana mostrada (para objetivos históricos correctos)
     val version = item.versionActiva
@@ -294,11 +296,15 @@ fun HabitoListadoCard(item: HabitoConHistorialSemanal, hoy: LocalDate, viewModel
                                 ),
                             contentAlignment = Alignment.Center
                         ) {
+                            val unidadCorta = (version?.unidad ?: habito.unidad)?.take(3)?.trim() ?: ""
                             when {
                                 !aplica -> Text("–", fontSize = 10.sp, color = contentColor)
                                 esVerdeCirculo && esCuantitativo -> {
-                                    val pct = if (objetivoVersionado > 0) (valorProgreso.toFloat() / objetivoVersionado * 100).toInt() else 0
-                                    Text("$pct%", fontSize = 7.sp, color = contentColor, fontWeight = FontWeight.Bold)
+                                    Text(
+                                        if (unidadCorta.isNotEmpty()) "$valorProgreso\n$unidadCorta" else "$valorProgreso",
+                                        fontSize = 7.sp, color = contentColor, fontWeight = FontWeight.Bold,
+                                        textAlign = TextAlign.Center, lineHeight = 8.sp
+                                    )
                                 }
                                 esVerdeCirculo -> Icon(
                                     Icons.Default.Check,
@@ -310,8 +316,11 @@ fun HabitoListadoCard(item: HabitoConHistorialSemanal, hoy: LocalDate, viewModel
                                     Text("$valorProgreso/$objetivoVersionado", fontSize = 7.sp, color = contentColor, fontWeight = FontWeight.Bold)
                                 }
                                 esCuantitativo && esPasadaOHoy && valorProgreso > 0 -> {
-                                    val pct = if (objetivoVersionado > 0) (valorProgreso.toFloat() / objetivoVersionado * 100).toInt() else 0
-                                    Text("$pct%", fontSize = 7.sp, color = contentColor, fontWeight = FontWeight.Bold)
+                                    Text(
+                                        if (unidadCorta.isNotEmpty()) "$valorProgreso\n$unidadCorta" else "$valorProgreso",
+                                        fontSize = 7.sp, color = contentColor, fontWeight = FontWeight.Bold,
+                                        textAlign = TextAlign.Center, lineHeight = 8.sp
+                                    )
                                 }
                                 else -> Text(
                                     "${fecha.dayOfMonth}",
@@ -340,6 +349,24 @@ fun HabitoListadoCard(item: HabitoConHistorialSemanal, hoy: LocalDate, viewModel
                     }
                     Badge(containerColor = badgeColor) {
                         Text("${kotlin.math.round(porcentajeSemanaActual * 100).toInt()}%", color = Color.White)
+                    }
+                }
+                if (esMensual) {
+                    val pctMes = if (objetivoVersionado > 0) item.progresoMesActual.toFloat() / objetivoVersionado else 0f
+                    val badgeColorMes = when {
+                        pctMes >= 0.8f -> Color(0xFF4CAF50)
+                        pctMes >= 0.5f -> Color(0xFFFFB74D)
+                        else -> Color(0xFFCF6679)
+                    }
+                    val unidadCorta = (version?.unidad ?: habito.unidad)?.take(3)?.trim() ?: ""
+                    val badgeText = if (esCuantitativo) {
+                        if (unidadCorta.isNotEmpty()) "${item.progresoMesActual}/$objetivoVersionado $unidadCorta"
+                        else "${item.progresoMesActual}/$objetivoVersionado"
+                    } else {
+                        "${item.progresoMesActual}/$objetivoVersionado días"
+                    }
+                    Badge(containerColor = badgeColorMes) {
+                        Text(badgeText, color = Color.White)
                     }
                 }
                 // Icono periodos pausados (visible solo si hay alguno)

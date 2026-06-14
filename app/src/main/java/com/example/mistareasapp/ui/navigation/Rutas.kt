@@ -20,7 +20,9 @@ sealed class Rutas(val ruta: String) {
     object PantallaConfiguracion : Rutas("configuracion")
     object PantallaCrearHabito : Rutas("crear_habito")
 
-
-
-
+    // Módulo Lista de la Compra
+    object PantallaListaCompra : Rutas("lista_compra")
+    object PantallaGestionLugares : Rutas("lista_gestion_lugares")
+    object PantallaGestionCategoriasCompra : Rutas("lista_gestion_categorias")
+    object PantallaGestionProductos : Rutas("lista_gestion_productos")
 }

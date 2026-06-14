@@ -5,6 +5,7 @@ import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material.icons.filled.TaskAlt
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -41,6 +42,20 @@ fun BarraNavegacion(navController: NavHostController, rutaActual: String?) {
             onClick = {
                 if (rutaActual != Rutas.PantallaHabitos.ruta) {
                     navController.navigate(Rutas.PantallaHabitos.ruta) {
+                        popUpTo(Rutas.PantallaTareas.ruta) { saveState = true }
+                        launchSingleTop = true
+                        restoreState = true
+                    }
+                }
+            }
+        )
+        NavigationBarItem(
+            icon = { Icon(Icons.Default.ShoppingCart, contentDescription = "Compra") },
+            label = { Text("Compra") },
+            selected = rutaActual == Rutas.PantallaListaCompra.ruta,
+            onClick = {
+                if (rutaActual != Rutas.PantallaListaCompra.ruta) {
+                    navController.navigate(Rutas.PantallaListaCompra.ruta) {
                         popUpTo(Rutas.PantallaTareas.ruta) { saveState = true }
                         launchSingleTop = true
                         restoreState = true

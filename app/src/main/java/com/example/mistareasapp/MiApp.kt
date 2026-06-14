@@ -55,6 +55,12 @@ import com.example.mistareasapp.data.tasks.TareasBackupJson
 import com.example.mistareasapp.data.tasks.Prioridad
 import com.example.mistareasapp.data.tasks.Tarea
 import com.example.mistareasapp.ui.screens.habits.PantallaHabitos
+import com.example.mistareasapp.ui.screens.shopping.PantallaGestionCategoriasCompra
+import com.example.mistareasapp.ui.screens.shopping.PantallaGestionLugares
+import com.example.mistareasapp.ui.screens.shopping.PantallaGestionProductos
+import com.example.mistareasapp.ui.screens.shopping.PantallaListaCompra
+import com.example.mistareasapp.viewmodel.Shopping.ListaCompraViewModelFactory
+import com.example.mistareasapp.viewmodel.Shopping.ListaCompraViewModel
 import com.example.mistareasapp.ui.screens.habits.PantallaGestionCategoriasHabitos
 import com.example.mistareasapp.ui.screens.habits.PantallaPausados
 import com.example.mistareasapp.ui.screens.habits.PantallaVistaMensualHabito
@@ -88,6 +94,7 @@ fun obtenerTitulo(ruta: String?): String {
         ruta == Rutas.PantallaTareas.ruta -> "Mis Tareas"
         ruta?.startsWith("habitos") == true -> "Mis Habitos"
         ruta == Rutas.PantallaCrearTarea.ruta -> "Nueva Tarea"
+        ruta == Rutas.PantallaListaCompra.ruta -> "Lista de la Compra"
         else -> "Gestión"
     }
 }
@@ -108,6 +115,9 @@ fun MisTareasApp() {
 
     val habitosFactory = HabitosViewModelFactory(db.habitoDao())
     val habitosViewModel: HabitosViewModel = viewModel(factory = habitosFactory)
+
+    val listaCompraFactory = ListaCompraViewModelFactory(context.applicationContext as android.app.Application, db.listaCompraDao())
+    val listaCompraViewModel: ListaCompraViewModel = viewModel(factory = listaCompraFactory)
 
     // --- 2. NAVEGACIÓN ---
     val navController = rememberNavController()
@@ -254,7 +264,7 @@ fun MisTareasApp() {
     MisTareasAppTheme {
         Scaffold(
             topBar = {
-                if (rutaActual == Rutas.PantallaTareas.ruta || rutaActual == Rutas.PantallaHabitos.ruta) {
+                if (rutaActual == Rutas.PantallaTareas.ruta || rutaActual == Rutas.PantallaHabitos.ruta || rutaActual == Rutas.PantallaListaCompra.ruta) {
                     TopAppBar(
                         title = {
                             val tituloBase = obtenerTitulo(rutaActual).uppercase()
@@ -360,6 +370,32 @@ fun MisTareasApp() {
                                             leadingIcon = { Icon(Icons.Default.FileDownload, null) }
                                         )
                                     }
+                                    if (rutaActual == Rutas.PantallaListaCompra.ruta) {
+                                        DropdownMenuItem(
+                                            text = { Text("Gestionar lugares") },
+                                            onClick = {
+                                                mostrarMenuPrincipal = false
+                                                navController.navigate(Rutas.PantallaGestionLugares.ruta)
+                                            },
+                                            leadingIcon = { Icon(Icons.Default.LocationOn, null) }
+                                        )
+                                        DropdownMenuItem(
+                                            text = { Text("Gestionar categorías") },
+                                            onClick = {
+                                                mostrarMenuPrincipal = false
+                                                navController.navigate(Rutas.PantallaGestionCategoriasCompra.ruta)
+                                            },
+                                            leadingIcon = { Icon(Icons.Default.Category, null) }
+                                        )
+                                        DropdownMenuItem(
+                                            text = { Text("Gestionar productos") },
+                                            onClick = {
+                                                mostrarMenuPrincipal = false
+                                                navController.navigate(Rutas.PantallaGestionProductos.ruta)
+                                            },
+                                            leadingIcon = { Icon(Icons.Default.ShoppingBasket, null) }
+                                        )
+                                    }
                                     HorizontalDivider()
                                     DropdownMenuItem(
                                         text = { Text("Configuración") },
@@ -403,7 +439,7 @@ fun MisTareasApp() {
                 )
 
                 when {
-                    rutaActual == Rutas.PantallaTareas.ruta || rutaActual == Rutas.PantallaHabitos.ruta -> {
+                    rutaActual == Rutas.PantallaTareas.ruta || rutaActual == Rutas.PantallaHabitos.ruta || rutaActual == Rutas.PantallaListaCompra.ruta -> {
                         BarraNavegacion(navController, rutaActual)
                     }
                     rutaActual in rutasHabitos -> {
@@ -565,6 +601,35 @@ fun MisTareasApp() {
                         navController,
                         viewModel,
                         modifier = Modifier.padding(innerPadding).fillMaxSize()
+                    )
+                }
+
+                composable(Rutas.PantallaListaCompra.ruta) {
+                    PantallaListaCompra(
+                        navController = navController,
+                        vm = listaCompraViewModel,
+                        modifier = Modifier.padding(innerPadding).fillMaxSize()
+                    )
+                }
+
+                composable(Rutas.PantallaGestionLugares.ruta) {
+                    PantallaGestionLugares(
+                        navController = navController,
+                        vm = listaCompraViewModel
+                    )
+                }
+
+                composable(Rutas.PantallaGestionCategoriasCompra.ruta) {
+                    PantallaGestionCategoriasCompra(
+                        navController = navController,
+                        vm = listaCompraViewModel
+                    )
+                }
+
+                composable(Rutas.PantallaGestionProductos.ruta) {
+                    PantallaGestionProductos(
+                        navController = navController,
+                        vm = listaCompraViewModel
                     )
                 }
             }

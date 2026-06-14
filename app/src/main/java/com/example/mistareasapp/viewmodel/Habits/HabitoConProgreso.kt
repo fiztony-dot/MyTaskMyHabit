@@ -34,7 +34,9 @@ data class HabitoConHistorialSemanal(
     /** Días activos desde el inicio del hábito hasta hoy, sin contar pausas. */
     val diasVidaEfectivos: Int = 1,
     /** Versión de definición vigente al inicio de la semana mostrada. */
-    val versionActiva: HabitoVersion? = null
+    val versionActiva: HabitoVersion? = null,
+    /** Para hábitos MENSUAL: acumulado del mes hasta la fecha seleccionada (valor o días completados). */
+    val progresoMesActual: Int = 0
 ) {
     val estaCompletadoHoy: Boolean get() = progresoHoy?.completado ?: false
 
