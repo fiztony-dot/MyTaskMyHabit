@@ -22,9 +22,11 @@
         android:theme="@style/Theme.MisTareasApp">
         <receiver
             android:name=".ui.widgets.Tasks.MyAppWidget"
-            android:exported="false">
+            android:exported="false"
+            android:label="@string/widget_tareas_label">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
             </intent-filter>
 
             <meta-data
@@ -32,13 +34,6 @@
                 android:resource="@xml/my_app_widget_info" />
         </receiver>
 
-        <activity
-            android:name=".ui.widgets.Tasks.MyAppWidgetConfigureActivity"
-            android:exported="false">
-            <intent-filter>
-                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
-            </intent-filter>
-        </activity>
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -52,21 +47,12 @@
             </intent-filter>
         </activity>
         <receiver
-            android:name=".ui.widgets.Tasks.TareaWidgetReceiver"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
-            </intent-filter>
-
-            <meta-data
-                android:name="android.appwidget.provider"
-                android:resource="@xml/tarea_widget_info" />
-        </receiver>
-        <receiver
             android:name=".ui.widgets.shopping.ListaCompraWidgetReceiver"
-            android:exported="true">
+            android:exported="true"
+            android:label="@string/widget_compra_label">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
             </intent-filter>
             <meta-data
                 android:name="android.appwidget.provider"
