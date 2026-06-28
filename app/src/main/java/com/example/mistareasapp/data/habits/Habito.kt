@@ -42,7 +42,13 @@ data class Habito(
     // Tipo de medición del cumplimiento (ver TipoMedicion).
     val tipoMedicion: TipoMedicion = TipoMedicion.PROPORCIONAL_CON_TOPE,
     // Dificultad subjetiva 1-5, usada en la fórmula del % general ponderado.
-    val dificultad: Int = 3
+    val dificultad: Int = 3,
+    // Límite Máximo: valor máximo permitido por periodo.
+    val limiteMaximo: Double? = null,
+    // Límite Máximo: tramos JSON [{"desde":0,"hasta":10,"porcentaje":120}, ...].
+    val tramosLimite: String? = null,
+    // Límite Máximo: activa tabla de equivalencias UBE al registrar.
+    val ubeActivo: Boolean = false
 )
 
 /** Devuelve el conjunto de DayOfWeek en que aplica este hábito, o null si aplica todos los días. */

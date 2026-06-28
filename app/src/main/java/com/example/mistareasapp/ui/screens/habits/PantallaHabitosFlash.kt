@@ -46,6 +46,8 @@ import com.example.mistareasapp.ui.theme.M3CardHabito
 import com.example.mistareasapp.ui.components.habits.SelectorFechaConProgreso
 import com.example.mistareasapp.viewmodel.Habits.HabitoConProgreso
 import com.example.mistareasapp.viewmodel.Habits.HabitosViewModel
+import com.example.mistareasapp.data.habits.TipoBebidaUBE
+import com.example.mistareasapp.data.habits.mlAUbe
 
 @Composable
 fun PantallaHabitosFlash(
@@ -119,6 +121,7 @@ fun HabitoFlashItem(item: HabitoConProgreso, viewModel: HabitosViewModel, navCon
 
     var mostrarDialogoTareas by remember { mutableStateOf(false) }
     var mostrarDialogoCuantitativo by remember { mutableStateOf(false) }
+    var mostrarDialogoLimite by remember { mutableStateOf(false) }
 
     val colorHabito = try {
         Color(habito.colorHex.toColorInt())
@@ -127,8 +130,22 @@ fun HabitoFlashItem(item: HabitoConProgreso, viewModel: HabitosViewModel, navCon
     }
 
     val esCuantitativo = habito.tipoObjetivo == TipoObjetivoHabito.CUANTITATIVO
+    val esLimiteMaximo = habito.tipoObjetivo == TipoObjetivoHabito.LIMITE_MAXIMO
     val esPorTareas = habito.esCompuestoPorTareas
     val esDiaria = habito.frecuencia == FrecuenciaHabito.DIARIA
+    val fechaSeleccionada by viewModel.fechaSeleccionada.collectAsState()
+    // Límite efectivo del periodo actual (prorrateado si es el primer mes parcial)
+    val limiteMaximoEfectivo: Double = run {
+        val base = habito.limiteMaximo ?: 0.0
+        if (esLimiteMaximo && habito.frecuencia == FrecuenciaHabito.MENSUAL) {
+            val primerDiaMes = fechaSeleccionada.withDayOfMonth(1)
+            if (habito.fechaInicio.isAfter(primerDiaMes)) {
+                val diasTotales = fechaSeleccionada.lengthOfMonth().toDouble()
+                val diasActivos = (fechaSeleccionada.lengthOfMonth() - habito.fechaInicio.dayOfMonth + 1).toDouble()
+                base * diasActivos / diasTotales
+            } else base
+        } else base
+    }
     val objetivo = habito.objetivoValor ?: habito.vecesPorDia
     // Para hábitos por tareas: usar el total real de tareas como denominador
     val totalTareasReal = if (esPorTareas) item.totalTareas.takeIf { it > 0 } ?: (habito.minimoTareasCumplimiento ?: habito.vecesPorDia) else objetivo
@@ -211,12 +228,24 @@ fun HabitoFlashItem(item: HabitoConProgreso, viewModel: HabitosViewModel, navCon
                         color = cardTexto
                     )
                     val unidad = habito.unidad?.let { " $it" } ?: ""
-                    val freqText = when (habito.frecuencia) {
-                        FrecuenciaHabito.DIARIA -> if (esCuantitativo) "$objetivo$unidad/día" else if (esPorTareas) "${totalTareasReal} tareas" else "${habito.vecesPorDia}x/día"
-                        FrecuenciaHabito.SEMANAL -> if (esCuantitativo) "$objetivo$unidad/sem" else "${objetivoDias}x/sem"
-                        FrecuenciaHabito.MENSUAL -> if (esCuantitativo) "$objetivo$unidad/mes" else "${objetivoDias}x/mes"
+                    val freqText = when {
+                        esLimiteMaximo -> {
+                            val limStr = limiteMaximoEfectivo.toBigDecimal().stripTrailingZeros().toPlainString()
+                            "Límite: $limStr$unidad/${when(habito.frecuencia){ FrecuenciaHabito.DIARIA->"día"; FrecuenciaHabito.SEMANAL->"sem"; FrecuenciaHabito.MENSUAL->"mes" }}"
+                        }
+                        else -> when (habito.frecuencia) {
+                            FrecuenciaHabito.DIARIA -> if (esCuantitativo) "$objetivo$unidad/día" else if (esPorTareas) "${totalTareasReal} tareas" else "${habito.vecesPorDia}x/día"
+                            FrecuenciaHabito.SEMANAL -> if (esCuantitativo) "$objetivo$unidad/sem" else "${objetivoDias}x/sem"
+                            FrecuenciaHabito.MENSUAL -> if (esCuantitativo) "$objetivo$unidad/mes" else "${objetivoDias}x/mes"
+                        }
                     }
                     val progressText = when {
+                        esLimiteMaximo -> {
+                            val acum = item.valorPeriodoDecimal
+                            val acumStr = if (acum == acum.toLong().toDouble()) acum.toLong().toString() else "%.1f".format(acum)
+                            val limStr = if (limiteMaximoEfectivo == limiteMaximoEfectivo.toLong().toDouble()) limiteMaximoEfectivo.toLong().toString() else "%.1f".format(limiteMaximoEfectivo)
+                            "  •  $acumStr/$limStr$unidad"
+                        }
                         esCuantitativo -> {
                             val pct = (porcentajePeriodo * 100).toInt()
                             "  •  $valorPeriodo/$objetivo ($pct%)"
@@ -245,7 +274,11 @@ fun HabitoFlashItem(item: HabitoConProgreso, viewModel: HabitosViewModel, navCon
 
                 // 3 estados según spec:
                 // tareasCompletadas==0 → blanco; >0 && <minimo → naranja; >=minimo → verde
-                val esVerde = if (esPorTareas) valorActual >= minimoTareas && valorActual > 0 else completadoVisual
+                val esVerde = when {
+                    esLimiteMaximo -> item.valorPeriodoDecimal > 0 && item.valorPeriodoDecimal <= limiteMaximoEfectivo
+                    esPorTareas -> valorActual >= minimoTareas && valorActual > 0
+                    else -> completadoVisual
+                }
                 val esNaranja = esPorTareas && valorActual > 0 && valorActual < minimoTareas
                 val pastGreen  = Color(0xFFA8D5A2)
                 val pastOrange = Color(0xFFFFCB87)
@@ -262,6 +295,7 @@ fun HabitoFlashItem(item: HabitoConProgreso, viewModel: HabitosViewModel, navCon
                         .border(1.5.dp, checkBorder, checkShape)
                         .clickable {
                             when {
+                                esLimiteMaximo -> mostrarDialogoLimite = true
                                 esPorTareas -> mostrarDialogoTareas = true
                                 esCuantitativo -> mostrarDialogoCuantitativo = true
                                 else -> viewModel.toggleHabitoCompleto(habito, progreso)
@@ -270,12 +304,18 @@ fun HabitoFlashItem(item: HabitoConProgreso, viewModel: HabitosViewModel, navCon
                     contentAlignment = Alignment.Center
                 ) {
                     when {
+                        esLimiteMaximo -> if (item.valorPeriodoDecimal > 0) Icon(
+                            Icons.Default.Check,
+                            contentDescription = "Registrado",
+                            tint = checkContent,
+                            modifier = Modifier.size(18.dp)
+                        ) else Unit
                         esCuantitativo && !esDiaria -> if (valorActual > 0) Icon(
                             Icons.Default.Check,
                             contentDescription = "Registrado hoy",
                             tint = checkContent,
                             modifier = Modifier.size(18.dp)
-                        ) else Unit  // vacío si nada hoy
+                        ) else Unit
                         esCuantitativo -> Text(
                             text = "${(porcentajeDiario * 100).toInt()}%",
                             color = checkContent,
@@ -308,7 +348,18 @@ fun HabitoFlashItem(item: HabitoConProgreso, viewModel: HabitosViewModel, navCon
                 }
             }
 
-            // Barra de progreso solo para cuantitativos
+            // Barra de progreso para cuantitativos y límite máximo
+            if (esLimiteMaximo && limiteMaximoEfectivo > 0.0) {
+                Spacer(modifier = Modifier.height(6.dp))
+                val pctLimite = (item.valorPeriodoDecimal / limiteMaximoEfectivo).toFloat().coerceIn(0f, 1f)
+                val barColor = if (pctLimite >= 1f) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+                LinearProgressIndicator(
+                    progress = { pctLimite },
+                    modifier = Modifier.fillMaxWidth().height(3.dp).clip(CircleShape),
+                    color = barColor,
+                    trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
+                )
+            }
             if (esCuantitativo && objetivo > 0) {
                 Spacer(modifier = Modifier.height(6.dp))
                 LinearProgressIndicator(
@@ -320,8 +371,6 @@ fun HabitoFlashItem(item: HabitoConProgreso, viewModel: HabitosViewModel, navCon
             }
         }
     }
-
-    val fechaSeleccionada by viewModel.fechaSeleccionada.collectAsState()
 
     if (mostrarDialogoTareas) {
         DialogoTareasHabito(
@@ -339,6 +388,16 @@ fun HabitoFlashItem(item: HabitoConProgreso, viewModel: HabitosViewModel, navCon
             fecha = fechaSeleccionada,
             viewModel = viewModel,
             onDismiss = { mostrarDialogoCuantitativo = false }
+        )
+    }
+    if (mostrarDialogoLimite) {
+        DialogoLimiteMaximo(
+            habito = habito,
+            progreso = item,
+            limiteEfectivo = limiteMaximoEfectivo,
+            fecha = fechaSeleccionada,
+            viewModel = viewModel,
+            onDismiss = { mostrarDialogoLimite = false }
         )
     }
 }
@@ -648,6 +707,172 @@ fun DialogoCuantitativo(
                             onDismiss()
                         },
                         modifier = Modifier.weight(1f)
+                    ) { Text("Guardar") }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun DialogoLimiteMaximo(
+    habito: com.example.mistareasapp.data.habits.Habito,
+    progreso: HabitoConProgreso,
+    limiteEfectivo: Double = habito.limiteMaximo ?: 0.0,
+    fecha: LocalDate,
+    viewModel: HabitosViewModel,
+    onDismiss: () -> Unit
+) {
+    val limiteMaximo = limiteEfectivo
+    val acumulado = progreso.valorPeriodoDecimal
+    val unidad = habito.unidad ?: ""
+
+    var textoValor by remember { mutableStateOf("") }
+    var mostrarUbe by remember { mutableStateOf(false) }
+    var tipoBebida by remember { mutableStateOf(TipoBebidaUBE.CERVEZA_SIDRA) }
+    var textoMl by remember { mutableStateOf("") }
+    var expandidoBebida by remember { mutableStateOf(false) }
+
+    val valorDecimal = textoValor.replace(",", ".").toDoubleOrNull() ?: 0.0
+    val mlDecimal = textoMl.replace(",", ".").toDoubleOrNull() ?: 0.0
+
+    val focusRequester = remember { FocusRequester() }
+    LaunchedEffect(Unit) { focusRequester.requestFocus() }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            shape = RoundedCornerShape(16.dp),
+            tonalElevation = 4.dp,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(
+                modifier = Modifier.padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(habito.nombre, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+
+                // Acumulado vs límite
+                val pctActual = if (limiteMaximo > 0) (acumulado / limiteMaximo).toFloat().coerceIn(0f, 1f) else 0f
+                val colorBarra = if (acumulado > limiteMaximo) MaterialTheme.colorScheme.error
+                    else MaterialTheme.colorScheme.primary
+                val acumStr = if (acumulado == acumulado.toLong().toDouble()) acumulado.toLong().toString()
+                    else "%.1f".format(acumulado)
+                val limStr = if (limiteMaximo == limiteMaximo.toLong().toDouble()) limiteMaximo.toLong().toString()
+                    else "%.1f".format(limiteMaximo)
+                Text(
+                    "Acumulado: $acumStr / $limStr $unidad".trim(),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                LinearProgressIndicator(
+                    progress = { pctActual },
+                    modifier = Modifier.fillMaxWidth().height(8.dp).clip(CircleShape),
+                    color = colorBarra
+                )
+
+                HorizontalDivider()
+
+                // UBE converter (opcional)
+                if (habito.ubeActivo) {
+                    Text("Convertir a UBE", style = MaterialTheme.typography.labelMedium)
+                    // Selector bebida
+                    ExposedDropdownMenuBox(
+                        expanded = expandidoBebida,
+                        onExpandedChange = { expandidoBebida = it }
+                    ) {
+                        OutlinedTextField(
+                            value = tipoBebida.label,
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text("Tipo bebida") },
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandidoBebida) },
+                            modifier = Modifier.menuAnchor().fillMaxWidth()
+                        )
+                        ExposedDropdownMenu(
+                            expanded = expandidoBebida,
+                            onDismissRequest = { expandidoBebida = false }
+                        ) {
+                            TipoBebidaUBE.entries.forEach { tipo ->
+                                DropdownMenuItem(
+                                    text = { Text("${tipo.label} (${tipo.mlPorUbe.toInt()} ml/UBE)") },
+                                    onClick = { tipoBebida = tipo; expandidoBebida = false }
+                                )
+                            }
+                        }
+                    }
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedTextField(
+                            value = textoMl,
+                            onValueChange = { textoMl = it },
+                            label = { Text("ml") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            singleLine = true,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Button(
+                            onClick = {
+                                val ube = mlAUbe(mlDecimal, tipoBebida)
+                                textoValor = "%.2f".format(ube).trimEnd('0').trimEnd('.')
+                            },
+                            enabled = mlDecimal > 0
+                        ) { Text("→ UBE") }
+                    }
+                    HorizontalDivider()
+                }
+
+                // Campo valor a registrar
+                Text("Cantidad a registrar ($unidad)".trim(), style = MaterialTheme.typography.labelMedium)
+                OutlinedTextField(
+                    value = textoValor,
+                    onValueChange = { textoValor = it },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    singleLine = true,
+                    placeholder = { Text("0") },
+                    modifier = Modifier.fillMaxWidth().focusRequester(focusRequester),
+                    textStyle = MaterialTheme.typography.bodyLarge.copy(
+                        textAlign = TextAlign.Center,
+                        fontWeight = FontWeight.Bold
+                    )
+                )
+
+                // Botones rápidos
+                val quickValues = listOf(0.5, 1.0, 2.0, 5.0)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    quickValues.forEach { v ->
+                        OutlinedButton(
+                            onClick = {
+                                val nuevo = (valorDecimal + v)
+                                textoValor = if (nuevo == nuevo.toLong().toDouble()) nuevo.toLong().toString()
+                                    else "%.1f".format(nuevo)
+                            },
+                            modifier = Modifier.weight(1f),
+                            contentPadding = PaddingValues(4.dp)
+                        ) { Text("+${if (v == v.toLong().toDouble()) v.toLong() else v}", fontSize = 12.sp) }
+                    }
+                }
+
+                // Cancelar / Guardar
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    OutlinedButton(onClick = onDismiss, modifier = Modifier.weight(1f)) { Text("Cancelar") }
+                    Button(
+                        onClick = {
+                            if (valorDecimal > 0) {
+                                viewModel.registrarLimiteMaximo(habito, progreso.progreso, valorDecimal, fecha)
+                            }
+                            onDismiss()
+                        },
+                        modifier = Modifier.weight(1f),
+                        enabled = valorDecimal > 0
                     ) { Text("Guardar") }
                 }
             }

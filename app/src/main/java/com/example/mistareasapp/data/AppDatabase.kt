@@ -553,6 +553,20 @@ val MIGRATION_21_22 = object : Migration(21, 22) {
     }
 }
 
+val MIGRATION_22_23 = object : Migration(22, 23) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        // Campos de Límite Máximo en habitos
+        database.execSQL("ALTER TABLE habitos ADD COLUMN limiteMaximo REAL DEFAULT NULL")
+        database.execSQL("ALTER TABLE habitos ADD COLUMN tramosLimite TEXT DEFAULT NULL")
+        database.execSQL("ALTER TABLE habitos ADD COLUMN ubeActivo INTEGER NOT NULL DEFAULT 0")
+        // Valor decimal en historial (para hábitos de límite que registran decimales)
+        database.execSQL("ALTER TABLE habitos_historial ADD COLUMN valorProgresoDecimal REAL NOT NULL DEFAULT 0.0")
+        // Campos de Límite Máximo en versiones
+        database.execSQL("ALTER TABLE habitos_versiones ADD COLUMN limiteMaximo REAL DEFAULT NULL")
+        database.execSQL("ALTER TABLE habitos_versiones ADD COLUMN tramosLimite TEXT DEFAULT NULL")
+    }
+}
+
 val MIGRATION_20_21 = object : Migration(20, 21) {
     override fun migrate(database: SupportSQLiteDatabase) {
         database.execSQL("ALTER TABLE habitos_categorias ADD COLUMN orden INTEGER NOT NULL DEFAULT 0")
@@ -572,7 +586,7 @@ val MIGRATION_20_21 = object : Migration(20, 21) {
         TareaHabitoHistorial::class, HabitoVersion::class, HabitoPausa::class,
         ListaLugar::class, ListaCategoriaProducto::class, ListaProducto::class, ListaItem::class
     ],
-    version = 22,
+    version = 23,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -593,7 +607,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "tareas_db"
                 )
-                    .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21, MIGRATION_21_22)
+                    .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21, MIGRATION_21_22, MIGRATION_22_23)
                     .addCallback(DatabaseCallback(context))
                     .setJournalMode(JournalMode.TRUNCATE)
                     .build()

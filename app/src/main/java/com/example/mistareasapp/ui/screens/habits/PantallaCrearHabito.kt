@@ -129,6 +129,10 @@ fun CrearHabitoScreen(
     var porcentajeDiasTexto by remember { mutableStateOf("60") }
     var diasSemanaSeleccionados by remember { mutableStateOf(setOf<Int>()) }
     var tipoMedicion by remember { mutableStateOf(com.example.mistareasapp.data.habits.TipoMedicion.PROPORCIONAL_CON_TOPE) }
+    var limiteMaximoTexto by remember { mutableStateOf("") }
+    var unidadLimite by remember { mutableStateOf("") }
+    var tramosLimiteEdicion by remember { mutableStateOf(listOf<com.example.mistareasapp.data.habits.TramoLimite>()) }
+    var ubeActivo by remember { mutableStateOf(false) }
 
     val guardarHabito = {
         when {
@@ -146,6 +150,10 @@ fun CrearHabitoScreen(
 
             !esCompuestoPorTareas && tipoObjetivo == TipoObjetivoHabito.CUANTITATIVO && unidadMedida.isBlank() -> {
                 Toast.makeText(context, "La unidad de medida es obligatoria", Toast.LENGTH_SHORT).show()
+            }
+
+            !esCompuestoPorTareas && tipoObjetivo == TipoObjetivoHabito.LIMITE_MAXIMO && (limiteMaximoTexto.toDoubleOrNull() ?: 0.0) <= 0.0 -> {
+                Toast.makeText(context, "El límite máximo debe ser mayor que 0", Toast.LENGTH_SHORT).show()
             }
 
             esCompuestoPorTareas && tareasDraft.isEmpty() -> {
@@ -190,11 +198,15 @@ fun CrearHabitoScreen(
                     } else {
                         null
                     },
-                    unidad = if (!esCompuestoPorTareas && tipoObjetivo == TipoObjetivoHabito.CUANTITATIVO) {
-                        unidadMedida.trim().ifBlank { null }
-                    } else {
-                        null
+                    unidad = when {
+                        !esCompuestoPorTareas && tipoObjetivo == TipoObjetivoHabito.CUANTITATIVO -> unidadMedida.trim().ifBlank { null }
+                        !esCompuestoPorTareas && tipoObjetivo == TipoObjetivoHabito.LIMITE_MAXIMO -> unidadLimite.trim().ifBlank { null }
+                        else -> null
                     },
+                    limiteMaximo = if (!esCompuestoPorTareas && tipoObjetivo == TipoObjetivoHabito.LIMITE_MAXIMO) limiteMaximoTexto.toDoubleOrNull() else null,
+                    tramosLimite = if (!esCompuestoPorTareas && tipoObjetivo == TipoObjetivoHabito.LIMITE_MAXIMO && tramosLimiteEdicion.isNotEmpty())
+                        com.example.mistareasapp.data.habits.serializarTramos(tramosLimiteEdicion) else null,
+                    ubeActivo = tipoObjetivo == TipoObjetivoHabito.LIMITE_MAXIMO && ubeActivo,
                     esCompuestoPorTareas = esCompuestoPorTareas,
                     criterioCumplimientoTareas = if (esCompuestoPorTareas) criterioCumplimiento else CriterioCumplimientoTareas.TODAS,
                     minimoTareasCumplimiento = if (esCompuestoPorTareas && criterioCumplimiento == CriterioCumplimientoTareas.PARCIAL) minimoTareas else null,
@@ -412,6 +424,25 @@ fun CrearHabitoScreen(
                         label = { Text("Unidad de medida") },
                         placeholder = { Text("minutos, km, vasos, páginas...") },
                         modifier = Modifier.fillMaxWidth()
+                    )
+                }
+
+                if (!esCompuestoPorTareas && tipoObjetivo == TipoObjetivoHabito.LIMITE_MAXIMO) {
+                    SeccionLimiteMaximo(
+                        limiteMaximoTexto = limiteMaximoTexto,
+                        onLimiteMaximoChange = { nuevo ->
+                            limiteMaximoTexto = nuevo
+                            val lim = nuevo.toDoubleOrNull() ?: 0.0
+                            if (lim > 0.0 && tramosLimiteEdicion.isEmpty()) {
+                                tramosLimiteEdicion = com.example.mistareasapp.data.habits.tramosDefault(lim)
+                            }
+                        },
+                        unidad = unidadLimite,
+                        onUnidadChange = { unidadLimite = it },
+                        tramos = tramosLimiteEdicion,
+                        onTramosChange = { tramosLimiteEdicion = it },
+                        ubeActivo = ubeActivo,
+                        onUbeActivoChange = { ubeActivo = it }
                     )
                 }
 
@@ -926,6 +957,7 @@ internal fun FrecuenciaHabito.toPeriodoLabel(): String = when (this) {
 internal fun TipoObjetivoHabito.toLabel(): String = when (this) {
     TipoObjetivoHabito.FRECUENCIA -> "Frecuencia"
     TipoObjetivoHabito.CUANTITATIVO -> "Cuantitativo"
+    TipoObjetivoHabito.LIMITE_MAXIMO -> "Límite Máximo"
 }
 
 internal fun CriterioCumplimientoTareas.toLabel(): String = when (this) {
@@ -1050,6 +1082,126 @@ internal fun colorCategoria(categoria: CategoriaHabito): Color {
         Color(categoria.color.toColorInt())
     } catch (_: Exception) {
         obtenerColorIcono(categoria.icono)
+    }
+}
+
+@Composable
+internal fun SeccionLimiteMaximo(
+    limiteMaximoTexto: String,
+    onLimiteMaximoChange: (String) -> Unit,
+    unidad: String,
+    onUnidadChange: (String) -> Unit,
+    tramos: List<com.example.mistareasapp.data.habits.TramoLimite>,
+    onTramosChange: (List<com.example.mistareasapp.data.habits.TramoLimite>) -> Unit,
+    ubeActivo: Boolean,
+    onUbeActivoChange: (Boolean) -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedTextField(
+                value = limiteMaximoTexto,
+                onValueChange = onLimiteMaximoChange,
+                label = { Text("Límite máximo") },
+                modifier = Modifier.weight(1f),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                singleLine = true
+            )
+            OutlinedTextField(
+                value = unidad,
+                onValueChange = onUnidadChange,
+                label = { Text("Unidad") },
+                placeholder = { Text("UBE, ml...") },
+                modifier = Modifier.weight(1f),
+                singleLine = true
+            )
+        }
+
+        // Toggle UBE
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text("Tabla de equivalencias UBE", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                Text(
+                    "Permite registrar en ml (cerveza, vino, destilados)",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Switch(checked = ubeActivo, onCheckedChange = onUbeActivoChange)
+        }
+
+        // Editor de tramos
+        if (tramos.isNotEmpty()) {
+            Text("Tramos de cumplimiento", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+            Text(
+                "El límite exacto siempre = 100%. Los rangos son [desde, hasta).",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            tramos.forEachIndexed { idx, tramo ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    OutlinedTextField(
+                        value = tramo.desde.toBigDecimal().stripTrailingZeros().toPlainString(),
+                        onValueChange = { v ->
+                            v.toDoubleOrNull()?.let { d ->
+                                onTramosChange(tramos.toMutableList().also { it[idx] = tramo.copy(desde = d) })
+                            }
+                        },
+                        label = { Text("Desde") },
+                        modifier = Modifier.weight(1f),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        singleLine = true
+                    )
+                    OutlinedTextField(
+                        value = tramo.hasta?.toBigDecimal()?.stripTrailingZeros()?.toPlainString() ?: "∞",
+                        onValueChange = { v ->
+                            val nueva = if (v == "∞" || v.isBlank()) null else v.toDoubleOrNull()
+                            onTramosChange(tramos.toMutableList().also { it[idx] = tramo.copy(hasta = nueva) })
+                        },
+                        label = { Text("Hasta") },
+                        modifier = Modifier.weight(1f),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        singleLine = true
+                    )
+                    OutlinedTextField(
+                        value = tramo.porcentaje.toString(),
+                        onValueChange = { v ->
+                            v.toIntOrNull()?.let { p ->
+                                onTramosChange(tramos.toMutableList().also { it[idx] = tramo.copy(porcentaje = p) })
+                            }
+                        },
+                        label = { Text("%") },
+                        modifier = Modifier.weight(0.7f),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true
+                    )
+                    IconButton(
+                        onClick = { onTramosChange(tramos.toMutableList().also { it.removeAt(idx) }) },
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Icon(Icons.Default.Delete, contentDescription = "Eliminar tramo", tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp))
+                    }
+                }
+            }
+            TextButton(
+                onClick = {
+                    val ultimo = tramos.last()
+                    onTramosChange(tramos + com.example.mistareasapp.data.habits.TramoLimite(ultimo.hasta ?: 0.0, null, 0))
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(4.dp))
+                Text("Añadir tramo")
+            }
+        }
     }
 }
 

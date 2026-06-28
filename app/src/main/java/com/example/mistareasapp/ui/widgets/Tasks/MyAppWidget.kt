@@ -68,7 +68,6 @@ internal fun updateAppWidget(
     )
 
     views.setOnClickPendingIntent(R.id.widget_tareas_root, pendingIntent)
-    views.setOnClickPendingIntent(R.id.widget_tareas_mic, pendingIntent)
 
     appWidgetManager.updateAppWidget(appWidgetId, views)
 }

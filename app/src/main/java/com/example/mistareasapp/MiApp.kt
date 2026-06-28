@@ -125,6 +125,7 @@ fun MisTareasApp() {
     val filtroActual by viewModel.categoriaSeleccionada.collectAsState()
     val textoBusqueda by viewModel.textoBusqueda.collectAsStateWithLifecycle()
     val tareasActivas = listaTareas.count { !it.estaCompletada }
+    val itemsPendientesCompra by listaCompraViewModel.itemsPendientesCount.collectAsStateWithLifecycle()
 
     // Para mostrar en Hábitos el % de cumplimiento (media ponderada por días de vida efectivos)
     val habitosConProgreso by habitosViewModel.habitosConProgreso.collectAsState(initial = emptyList())
@@ -267,8 +268,15 @@ fun MisTareasApp() {
                 if (rutaActual == Rutas.PantallaTareas.ruta || rutaActual == Rutas.PantallaHabitos.ruta || rutaActual == Rutas.PantallaListaCompra.ruta) {
                     TopAppBar(
                         title = {
-                            val tituloBase = obtenerTitulo(rutaActual).uppercase()
-                            val tituloFinal = if (tareasActivas > 0) "$tituloBase ($tareasActivas)" else tituloBase
+                            val esCompra = rutaActual == Rutas.PantallaListaCompra.ruta
+                            val tituloBase = if (esCompra) obtenerTitulo(rutaActual)
+                                             else obtenerTitulo(rutaActual).uppercase()
+                            val tituloFinal = when {
+                                esCompra && itemsPendientesCompra > 0 -> "$tituloBase ($itemsPendientesCompra)"
+                                esCompra -> tituloBase
+                                tareasActivas > 0 -> "$tituloBase ($tareasActivas)"
+                                else -> tituloBase
+                            }
                             Text(text = tituloFinal, fontWeight = FontWeight.Bold)
                         },
                         navigationIcon = {

@@ -20,7 +20,9 @@ import java.time.LocalDate
 data class HabitoHistorial(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val habitoId: Long,
-    val fecha: LocalDate = LocalDate.now(), // <--- ESTE ES EL CAMPO QUE FALTA
+    val fecha: LocalDate = LocalDate.now(),
     val valorProgreso: Int = 0,
-    val completado: Boolean = false
+    val completado: Boolean = false,
+    // Para hábitos de Límite Máximo: valor registrado con decimales.
+    val valorProgresoDecimal: Double = 0.0
 )

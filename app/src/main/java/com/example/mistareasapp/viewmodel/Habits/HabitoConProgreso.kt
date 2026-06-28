@@ -19,7 +19,9 @@ data class HabitoConProgreso(
     /** Días activos desde el inicio del hábito hasta hoy, sin contar pausas. */
     val diasVidaEfectivos: Int = 1,
     /** Número real de tareas definidas para hábitos por tareas; 0 para el resto. */
-    val totalTareas: Int = 0
+    val totalTareas: Int = 0,
+    /** Para hábitos de Límite Máximo: valor acumulado decimal del periodo. */
+    val valorPeriodoDecimal: Double = 0.0
 ) {
     val estaCompletado: Boolean = progreso?.completado ?: false
     val valorActual: Int = progreso?.valorProgreso ?: 0
