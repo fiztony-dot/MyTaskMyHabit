@@ -161,7 +161,13 @@ class HabitosViewModel(private val habitoDao: HabitoDao) : ViewModel() {
                 else
                     historialMes.count { it.completado }
             } else 0
-            HabitoConHistorialSemanal(habito, mapaSemana, progresoHoy, pctHistorico, dva, versionActiva, progresoMes)
+            val progresoMesDecimal = if (habito.frecuencia == FrecuenciaHabito.MENSUAL &&
+                habito.tipoObjetivo == TipoObjetivoHabito.LIMITE_MAXIMO) {
+                val primerDiaMes = fecha.withDayOfMonth(1)
+                habitoDao.obtenerHistorialEntreFechas(habito.id, primerDiaMes, fecha)
+                    .sumOf { it.valorProgresoDecimal }
+            } else 0.0
+            HabitoConHistorialSemanal(habito, mapaSemana, progresoHoy, pctHistorico, dva, versionActiva, progresoMes, progresoMesDecimal)
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
@@ -272,6 +278,28 @@ class HabitosViewModel(private val habitoDao: HabitoDao) : ViewModel() {
 
     fun eliminarCategoriaHabito(categoria: CategoriaHabito) {
         viewModelScope.launch { habitoDao.eliminarCategoria(categoria) }
+    }
+
+    fun moverHabitoArriba(habito: Habito, habitosCategoria: List<Habito>) {
+        val idx = habitosCategoria.indexOfFirst { it.id == habito.id }
+        if (idx <= 0) return
+        viewModelScope.launch {
+            // Normalizar posiciones únicas antes de intercambiar
+            habitosCategoria.forEachIndexed { i, h -> habitoDao.actualizarOrdenHabito(h.id, i) }
+            habitoDao.actualizarOrdenHabito(habito.id, idx - 1)
+            habitoDao.actualizarOrdenHabito(habitosCategoria[idx - 1].id, idx)
+        }
+    }
+
+    fun moverHabitoAbajo(habito: Habito, habitosCategoria: List<Habito>) {
+        val idx = habitosCategoria.indexOfFirst { it.id == habito.id }
+        if (idx < 0 || idx >= habitosCategoria.lastIndex) return
+        viewModelScope.launch {
+            // Normalizar posiciones únicas antes de intercambiar
+            habitosCategoria.forEachIndexed { i, h -> habitoDao.actualizarOrdenHabito(h.id, i) }
+            habitoDao.actualizarOrdenHabito(habito.id, idx + 1)
+            habitoDao.actualizarOrdenHabito(habitosCategoria[idx + 1].id, idx)
+        }
     }
 
     fun moverCategoriaArriba(categoria: CategoriaHabito, todas: List<CategoriaHabito>) {
@@ -734,6 +762,33 @@ class HabitosViewModel(private val habitoDao: HabitoDao) : ViewModel() {
         val limiteHoy = if (esMesActual) hoy else mesSeleccionado.atEndOfMonth()
         val esCuant = habito.tipoObjetivo == TipoObjetivoHabito.CUANTITATIVO
 
+        // Rama especial para LIMITE_MAXIMO
+        if (habito.tipoObjetivo == TipoObjetivoHabito.LIMITE_MAXIMO) {
+            val limiteBase = habito.limiteMaximo ?: 0.0
+            val diasTotalesMes = mesSeleccionado.lengthOfMonth()
+            val primerDiaMes = mesSeleccionado.atDay(1)
+            val d1 = if (habito.fechaInicio.isAfter(primerDiaMes)) habito.fechaInicio else primerDiaMes
+            val diasActivosMes = (mesSeleccionado.lengthOfMonth() - d1.dayOfMonth + 1).coerceAtLeast(1)
+            val limiteProporcional = if (d1 > primerDiaMes) limiteBase * diasActivosMes / diasTotalesMes else limiteBase
+            val acum = historialMes.values.filterNotNull().sumOf { it.valorProgresoDecimal }
+            val pctTramo = calcularPorcentajeLimite(acum, limiteProporcional, habito.tramosLimite)
+            val unidad = habito.unidad ?: "uds"
+            val etiqueta = when (habito.frecuencia) {
+                FrecuenciaHabito.DIARIA -> "Acumulado día"
+                FrecuenciaHabito.SEMANAL -> "Acumulado semana"
+                FrecuenciaHabito.MENSUAL -> "Acumulado mes (límite proporcional)"
+            }
+            return PieMensualData(
+                progreso = acum.toInt(),
+                objetivo = limiteProporcional.toInt().coerceAtLeast(1),
+                unidad = unidad,
+                etiqueta = etiqueta,
+                progresoDecimal = acum,
+                objetivoDecimal = limiteProporcional,
+                pctTramo = pctTramo
+            )
+        }
+
         val pausas = habitoDao.obtenerPausas(habito.id)
         fun diaPausado(fecha: LocalDate): Boolean = esFechaPausada(pausas, fecha)
         fun diasActivosMes(): Int {
@@ -819,7 +874,15 @@ class HabitosViewModel(private val habitoDao: HabitoDao) : ViewModel() {
         return PieMensualData(progreso, objetivo, unidad, etiqueta)
     }
 
-    data class PieMensualData(val progreso: Int, val objetivo: Int, val unidad: String, val etiqueta: String)
+    data class PieMensualData(
+        val progreso: Int,
+        val objetivo: Int,
+        val unidad: String,
+        val etiqueta: String,
+        val progresoDecimal: Double? = null,
+        val objetivoDecimal: Double? = null,
+        val pctTramo: Int? = null
+    )
 
     /**
      * Desglose de cumplimiento por periodo.
@@ -1099,6 +1162,71 @@ class HabitosViewModel(private val habitoDao: HabitoDao) : ViewModel() {
                 }
             }
         }
+    }
+
+    /**
+     * Recopila datos del hábito y genera un PDF de informe. Devuelve el URI compartible.
+     */
+    suspend fun generarInformePdf(
+        context: android.content.Context,
+        habito: Habito,
+        categorias: List<com.example.mistareasapp.data.habits.CategoriaHabito>
+    ): android.net.Uri {
+        val categoriaNombre = categorias.firstOrNull { it.id == habito.categoriaId }?.nombre
+        val versiones = habitoDao.obtenerVersiones(habito.id)
+        // Eliminar versiones consecutivas con la misma definición efectiva
+        val versionesFiltradas = versiones.fold(mutableListOf<com.example.mistareasapp.data.habits.HabitoVersion>()) { acc, v ->
+            val prev = acc.lastOrNull()
+            if (prev == null || prev.tipoObjetivo != v.tipoObjetivo ||
+                prev.limiteMaximo != v.limiteMaximo || prev.vecesPorDia != v.vecesPorDia ||
+                prev.objetivoValor != v.objetivoValor || prev.objetivoPorcentajeDias != v.objetivoPorcentajeDias ||
+                prev.tramosLimite != v.tramosLimite
+            ) acc.also { it.add(v) }
+            else acc
+        }
+        val pausas = habitoDao.obtenerPausas(habito.id)
+        val historial = habitoDao.obtenerHistorialEntreFechas(habito.id, habito.fechaInicio, LocalDate.now())
+            .sortedBy { it.fecha }
+        val pctHistorico = calcularPorcentajeHistorico(habito)
+        val desglose = obtenerDesgloseHistorico(habito)
+        val fechasCompletadas = historial.filter { it.completado }.map { it.fecha }
+        val stats = calcularEstadisticas(fechasCompletadas, habito)
+
+        val labelPeriodo = periodLabel(habito)
+        val desgloseTexto = buildString {
+            append("Periodos activos evaluados: ${desglose.periodosTotal} $labelPeriodo.\n")
+            if (habito.tipoObjetivo == com.example.mistareasapp.data.habits.TipoObjetivoHabito.LIMITE_MAXIMO) {
+                append("Suma equivalente cumplida: ${"%.2f".format(desglose.periodosCompletados)} de ${desglose.periodosTotal} $labelPeriodo.\n")
+                append("(La suma equivalente refleja el % de cumplimiento por periodo sumado, no periodos enteros.)\n")
+                append("Media de cumplimiento por periodo: ${desglose.completados}%.\n")
+            } else {
+                val rawPct = if (desglose.periodosTotal > 0) (desglose.periodosCompletados.toInt() * 100 / desglose.periodosTotal) else 0
+                append("Completados: ${desglose.periodosCompletados.toInt()} de ${desglose.periodosTotal} $labelPeriodo ($rawPct%).\n")
+                if (habito.tipoMedicion == com.example.mistareasapp.data.habits.TipoMedicion.BINARIO)
+                    append("Tipo medición BINARIO: cada periodo puntúa 0% o 100%.\n")
+                if (habito.tipoMedicion == com.example.mistareasapp.data.habits.TipoMedicion.PROPORCIONAL_SIN_TOPE)
+                    append("Tipo medición SIN TOPE: el valor por periodo puede superar 100%.\n")
+            }
+            append("% histórico final: ${(pctHistorico * 100).toInt()}%.")
+        }
+
+        val data = com.example.mistareasapp.data.habits.PdfInformeData(
+            habito = habito,
+            categoriaNombre = categoriaNombre,
+            versiones = versionesFiltradas,
+            pausas = pausas,
+            historialCompleto = historial,
+            porcentajeHistorico = pctHistorico,
+            rachaActual = stats.rachaActual,
+            mejorRacha = stats.mejorRacha,
+            totalCompletados = stats.totalCompletados,
+            completadosMes = stats.completadosMes,
+            diasEnMes = stats.diasEnMes,
+            completadosAno = stats.completadosAno,
+            diasEnAno = stats.diasEnAno,
+            desgloseTexto = desgloseTexto
+        )
+        return com.example.mistareasapp.data.habits.generarPdfHabito(context, data)
     }
 
     private fun periodLabel(habito: Habito): String = when (habito.frecuencia) {

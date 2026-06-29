@@ -230,8 +230,10 @@ fun HabitoFlashItem(item: HabitoConProgreso, viewModel: HabitosViewModel, navCon
                     val unidad = habito.unidad?.let { " $it" } ?: ""
                     val freqText = when {
                         esLimiteMaximo -> {
-                            val limStr = limiteMaximoEfectivo.toBigDecimal().stripTrailingZeros().toPlainString()
-                            "Límite: $limStr$unidad/${when(habito.frecuencia){ FrecuenciaHabito.DIARIA->"día"; FrecuenciaHabito.SEMANAL->"sem"; FrecuenciaHabito.MENSUAL->"mes" }}"
+                            val baseVal = habito.limiteMaximo ?: 0.0
+                            val baseStr = if (baseVal == baseVal.toLong().toDouble()) baseVal.toLong().toString()
+                                else "%.1f".format(baseVal)
+                            "Límite: $baseStr$unidad/${when(habito.frecuencia){ FrecuenciaHabito.DIARIA->"día"; FrecuenciaHabito.SEMANAL->"sem"; FrecuenciaHabito.MENSUAL->"mes" }}"
                         }
                         else -> when (habito.frecuencia) {
                             FrecuenciaHabito.DIARIA -> if (esCuantitativo) "$objetivo$unidad/día" else if (esPorTareas) "${totalTareasReal} tareas" else "${habito.vecesPorDia}x/día"
@@ -244,7 +246,15 @@ fun HabitoFlashItem(item: HabitoConProgreso, viewModel: HabitosViewModel, navCon
                             val acum = item.valorPeriodoDecimal
                             val acumStr = if (acum == acum.toLong().toDouble()) acum.toLong().toString() else "%.1f".format(acum)
                             val limStr = if (limiteMaximoEfectivo == limiteMaximoEfectivo.toLong().toDouble()) limiteMaximoEfectivo.toLong().toString() else "%.1f".format(limiteMaximoEfectivo)
-                            "  •  $acumStr/$limStr$unidad"
+                            val baseVal = habito.limiteMaximo ?: 0.0
+                            val esProrateado = habito.frecuencia == FrecuenciaHabito.MENSUAL && limiteMaximoEfectivo < baseVal - 0.001
+                            if (esProrateado) {
+                                val meses = listOf("ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic")
+                                val mesNom = meses[fechaSeleccionada.monthValue - 1]
+                                "  •  $acumStr/$limStr$unidad ($mesNom)"
+                            } else {
+                                "  •  $acumStr/$limStr$unidad"
+                            }
                         }
                         esCuantitativo -> {
                             val pct = (porcentajePeriodo * 100).toInt()
@@ -274,12 +284,17 @@ fun HabitoFlashItem(item: HabitoConProgreso, viewModel: HabitosViewModel, navCon
 
                 // 3 estados según spec:
                 // tareasCompletadas==0 → blanco; >0 && <minimo → naranja; >=minimo → verde
+                // Para LIMITE_MAXIMO: verde/alerta solo si hay registro HOY (no acumulado del periodo)
+                val registroHoyLimite = esLimiteMaximo && (item.progreso?.valorProgresoDecimal ?: 0.0) > 0
                 val esVerde = when {
-                    esLimiteMaximo -> item.valorPeriodoDecimal > 0 && item.valorPeriodoDecimal <= limiteMaximoEfectivo
+                    esLimiteMaximo -> registroHoyLimite && item.valorPeriodoDecimal <= limiteMaximoEfectivo
                     esPorTareas -> valorActual >= minimoTareas && valorActual > 0
                     else -> completadoVisual
                 }
-                val esNaranja = esPorTareas && valorActual > 0 && valorActual < minimoTareas
+                val esNaranja = when {
+                    esLimiteMaximo -> registroHoyLimite && item.valorPeriodoDecimal > limiteMaximoEfectivo
+                    else -> esPorTareas && valorActual > 0 && valorActual < minimoTareas
+                }
                 val pastGreen  = Color(0xFFA8D5A2)
                 val pastOrange = Color(0xFFFFCB87)
                 val checkShape = RoundedCornerShape(8.dp)
@@ -304,7 +319,7 @@ fun HabitoFlashItem(item: HabitoConProgreso, viewModel: HabitosViewModel, navCon
                     contentAlignment = Alignment.Center
                 ) {
                     when {
-                        esLimiteMaximo -> if (item.valorPeriodoDecimal > 0) Icon(
+                        esLimiteMaximo -> if (registroHoyLimite) Icon(
                             Icons.Default.Check,
                             contentDescription = "Registrado",
                             tint = checkContent,
@@ -839,7 +854,7 @@ fun DialogoLimiteMaximo(
                     )
                 )
 
-                // Botones rápidos
+                // Botones rápidos suma
                 val quickValues = listOf(0.5, 1.0, 2.0, 5.0)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -855,6 +870,24 @@ fun DialogoLimiteMaximo(
                             modifier = Modifier.weight(1f),
                             contentPadding = PaddingValues(4.dp)
                         ) { Text("+${if (v == v.toLong().toDouble()) v.toLong() else v}", fontSize = 12.sp) }
+                    }
+                }
+
+                // Botones rápidos resta
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    quickValues.forEach { v ->
+                        OutlinedButton(
+                            onClick = {
+                                val nuevo = (valorDecimal - v).coerceAtLeast(0.0)
+                                textoValor = if (nuevo == nuevo.toLong().toDouble()) nuevo.toLong().toString()
+                                    else "%.1f".format(nuevo)
+                            },
+                            modifier = Modifier.weight(1f),
+                            contentPadding = PaddingValues(4.dp)
+                        ) { Text("-${if (v == v.toLong().toDouble()) v.toLong() else v}", fontSize = 12.sp) }
                     }
                 }
 

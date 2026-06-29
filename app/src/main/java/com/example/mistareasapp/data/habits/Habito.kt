@@ -48,7 +48,9 @@ data class Habito(
     // Límite Máximo: tramos JSON [{"desde":0,"hasta":10,"porcentaje":120}, ...].
     val tramosLimite: String? = null,
     // Límite Máximo: activa tabla de equivalencias UBE al registrar.
-    val ubeActivo: Boolean = false
+    val ubeActivo: Boolean = false,
+    // Orden visual dentro de la categoría (menor = antes).
+    val orden: Int = 0
 )
 
 /** Devuelve el conjunto de DayOfWeek en que aplica este hábito, o null si aplica todos los días. */

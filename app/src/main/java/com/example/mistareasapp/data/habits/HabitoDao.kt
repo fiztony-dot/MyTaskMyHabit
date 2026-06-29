@@ -9,7 +9,7 @@ import java.time.LocalDate
 interface HabitoDao {
 
     // --- GESTIÓN DE HÁBITOS ---
-    @Query("SELECT * FROM habitos ORDER BY id DESC")
+    @Query("SELECT * FROM habitos ORDER BY orden ASC, id ASC")
     fun obtenerTodosLosHabitos(): Flow<List<Habito>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -80,12 +80,11 @@ interface HabitoDao {
 
     // En HabitoDao.kt añade o actualiza:
 
-    @Query("""
-    SELECT * FROM habitos 
-    WHERE activo = 1 
-    ORDER BY categoriaId ASC
-""")
+    @Query("SELECT * FROM habitos WHERE activo = 1 ORDER BY orden ASC, id ASC")
     fun obtenerHabitosActivos(): Flow<List<Habito>>
+
+    @Query("UPDATE habitos SET orden = :orden WHERE id = :id")
+    suspend fun actualizarOrdenHabito(id: Long, orden: Int)
 
     // Para las estadísticas rápidas
     @Query("SELECT COUNT(*) FROM habitos_historial WHERE habitoId = :habitoId AND completado = 1")

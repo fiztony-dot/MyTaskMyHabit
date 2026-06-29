@@ -172,7 +172,11 @@ fun HabitoListadoCard(item: HabitoConHistorialSemanal, hoy: LocalDate, viewModel
     val acumuladoSemana = if (esCuantitativo && habito.frecuencia == FrecuenciaHabito.SEMANAL)
         item.historialSemana.values.sumOf { it?.valorProgreso ?: 0 } else 0
 
-    val freqText = when (habito.frecuencia) {
+    val freqText = if (esLimiteMaximo) {
+        val lim = habito.limiteMaximo?.toBigDecimal()?.stripTrailingZeros()?.toPlainString() ?: "?"
+        val per = when (habito.frecuencia) { FrecuenciaHabito.DIARIA -> "día"; FrecuenciaHabito.SEMANAL -> "sem"; FrecuenciaHabito.MENSUAL -> "mes" }
+        "Límite: $lim$unidad/$per"
+    } else when (habito.frecuencia) {
         FrecuenciaHabito.DIARIA -> if (esCuantitativo) "$objetivo$unidad/día" else "${vecesPorDiaVersionado}x/día"
         FrecuenciaHabito.SEMANAL -> if (esCuantitativo) "$objetivo$unidad/sem · $acumuladoSemana/$objetivo$unidad" else "${objetivoDias}x/sem"
         FrecuenciaHabito.MENSUAL -> if (esCuantitativo) "$objetivo$unidad/mes" else "${objetivoDias}x/mes"
@@ -383,7 +387,9 @@ fun HabitoListadoCard(item: HabitoConHistorialSemanal, hoy: LocalDate, viewModel
                     }
                 }
                 if (esMensual && !esLimiteMaximo) {
-                    val pctMes = if (objetivoVersionado > 0) item.progresoMesActual.toFloat() / objetivoVersionado else 0f
+                    // Para no-cuantitativo mensual usar objetivoDias (respeta objetivoPorcentajeDias)
+                    val denominadorMes = if (esCuantitativo) objetivoVersionado else objetivoDias
+                    val pctMes = if (denominadorMes > 0) item.progresoMesActual.toFloat() / denominadorMes else 0f
                     val badgeColorMes = when {
                         pctMes >= 0.8f -> Color(0xFF4CAF50)
                         pctMes >= 0.5f -> Color(0xFFFFB74D)
@@ -394,16 +400,30 @@ fun HabitoListadoCard(item: HabitoConHistorialSemanal, hoy: LocalDate, viewModel
                         if (unidadCorta.isNotEmpty()) "${item.progresoMesActual}/$objetivoVersionado $unidadCorta"
                         else "${item.progresoMesActual}/$objetivoVersionado"
                     } else {
-                        "${item.progresoMesActual}/$objetivoVersionado días"
+                        "${item.progresoMesActual}/$objetivoDias días"
                     }
                     Badge(containerColor = badgeColorMes) {
                         Text(badgeText, color = Color.White)
                     }
                 }
                 if (esLimiteMaximo) {
-                    val limiteMaximo = habito.limiteMaximo ?: 0.0
-                    val acumPeriodo = item.historialSemana.values.sumOf { it?.valorProgresoDecimal ?: 0.0 }
-                    val pctTramo = calcularPorcentajeLimite(acumPeriodo, limiteMaximo, habito.tramosLimite)
+                    val limiteBase = habito.limiteMaximo ?: 0.0
+                    // Para MENSUAL: usar acumulado del mes completo y límite proporcional
+                    val (acumPeriodo, limitePeriodo) = if (esMensual) {
+                        val hoy = LocalDate.now()
+                        val primerDiaMes = hoy.withDayOfMonth(1)
+                        val diasTotalesMes = hoy.lengthOfMonth().toDouble()
+                        val d1 = if (habito.fechaInicio.isAfter(primerDiaMes)) habito.fechaInicio else primerDiaMes
+                        val diasActivosMes = (hoy.lengthOfMonth() - d1.dayOfMonth + 1).toDouble().coerceAtLeast(1.0)
+                        val lim = if (d1 > primerDiaMes) limiteBase * diasActivosMes / diasTotalesMes else limiteBase
+                        Pair(item.progresoMesDecimal, lim)
+                    } else {
+                        Pair(item.historialSemana.values.sumOf { it?.valorProgresoDecimal ?: 0.0 }, limiteBase)
+                    }
+                    // Normalizar el valor al límite base para que los tramos (definidos sobre el límite completo) apliquen correctamente en meses parciales
+                    val valorParaTramos = if (limitePeriodo > 0.0 && limitePeriodo < limiteBase)
+                        acumPeriodo * limiteBase / limitePeriodo else acumPeriodo
+                    val pctTramo = calcularPorcentajeLimite(valorParaTramos, limiteBase, habito.tramosLimite)
                     val badgeColorLim = when {
                         pctTramo >= 100 -> Color(0xFF4CAF50)
                         pctTramo >= 50  -> Color(0xFFFFB74D)
@@ -411,7 +431,7 @@ fun HabitoListadoCard(item: HabitoConHistorialSemanal, hoy: LocalDate, viewModel
                     }
                     val unidadCorta = (version?.unidad ?: habito.unidad)?.take(3)?.trim() ?: ""
                     val acumStr = if (acumPeriodo == acumPeriodo.toLong().toDouble()) acumPeriodo.toLong().toString() else "%.1f".format(acumPeriodo)
-                    val limStr = if (limiteMaximo == limiteMaximo.toLong().toDouble()) limiteMaximo.toLong().toString() else "%.1f".format(limiteMaximo)
+                    val limStr = if (limitePeriodo == limitePeriodo.toLong().toDouble()) limitePeriodo.toLong().toString() else "%.1f".format(limitePeriodo)
                     val rawText = if (unidadCorta.isNotEmpty()) "$acumStr/$limStr $unidadCorta" else "$acumStr/$limStr"
                     Badge(containerColor = badgeColorLim) {
                         Text("$pctTramo%  $rawText", color = Color.White)
@@ -684,7 +704,7 @@ fun DialogoLimiteMaximoFecha(
                     modifier = Modifier.fillMaxWidth(),
                     textStyle = MaterialTheme.typography.bodyLarge.copy(textAlign = TextAlign.Center, fontWeight = FontWeight.Bold)
                 )
-                // Botones rápidos
+                // Botones rápidos suma
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     listOf(0.5, 1.0, 2.0, 5.0).forEach { v ->
                         OutlinedButton(
@@ -694,6 +714,18 @@ fun DialogoLimiteMaximoFecha(
                             },
                             modifier = Modifier.weight(1f), contentPadding = PaddingValues(4.dp)
                         ) { Text("+${if (v == v.toLong().toDouble()) v.toLong() else v}", fontSize = 12.sp) }
+                    }
+                }
+                // Botones rápidos resta
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf(0.5, 1.0, 2.0, 5.0).forEach { v ->
+                        OutlinedButton(
+                            onClick = {
+                                val nuevo = (valorDecimal - v).coerceAtLeast(0.0)
+                                textoValor = if (nuevo == nuevo.toLong().toDouble()) nuevo.toLong().toString() else "%.1f".format(nuevo)
+                            },
+                            modifier = Modifier.weight(1f), contentPadding = PaddingValues(4.dp)
+                        ) { Text("-${if (v == v.toLong().toDouble()) v.toLong() else v}", fontSize = 12.sp) }
                     }
                 }
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {

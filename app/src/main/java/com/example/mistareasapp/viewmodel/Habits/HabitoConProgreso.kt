@@ -38,7 +38,9 @@ data class HabitoConHistorialSemanal(
     /** Versión de definición vigente al inicio de la semana mostrada. */
     val versionActiva: HabitoVersion? = null,
     /** Para hábitos MENSUAL: acumulado del mes hasta la fecha seleccionada (valor o días completados). */
-    val progresoMesActual: Int = 0
+    val progresoMesActual: Int = 0,
+    /** Para hábitos MENSUAL LIMITE_MAXIMO: acumulado decimal del mes hasta la fecha seleccionada. */
+    val progresoMesDecimal: Double = 0.0
 ) {
     val estaCompletadoHoy: Boolean get() = progresoHoy?.completado ?: false
 
