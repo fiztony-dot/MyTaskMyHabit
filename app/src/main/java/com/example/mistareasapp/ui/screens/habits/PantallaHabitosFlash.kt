@@ -60,9 +60,11 @@ fun PantallaHabitosFlash(
     val habitosConProgreso by viewModel.habitosConProgreso.collectAsState()
 
     // Barra general: media ponderada por min(diasEfectivos,180)×dificultad
-    val pesoTotal = habitosConProgreso.sumOf { (minOf(it.diasVidaEfectivos, 180) * it.habito.dificultad).toLong() }
+    // Excluye hábitos sin ningún periodo histórico completado (su único periodo está en curso)
+    val habitosConHistorico = habitosConProgreso.filter { viewModel.habitoTienePeriodoCompletado(it.habito) }
+    val pesoTotal = habitosConHistorico.sumOf { (minOf(it.diasVidaEfectivos, 180) * it.habito.dificultad).toLong() }
     val progresoCalculado = if (pesoTotal > 0)
-        (habitosConProgreso.sumOf { it.porcentajeHistorico.coerceIn(0f, 1f).toDouble() * minOf(it.diasVidaEfectivos, 180) * it.habito.dificultad } / pesoTotal).toFloat()
+        (habitosConHistorico.sumOf { it.porcentajeHistorico.coerceIn(0f, 1f).toDouble() * minOf(it.diasVidaEfectivos, 180) * it.habito.dificultad } / pesoTotal).toFloat()
     else 0f
     val progreso = if (progresoGeneral > 0) progresoGeneral else progresoCalculado
     val categorias by viewModel.categoriasHabitos.collectAsState(initial = emptyList())

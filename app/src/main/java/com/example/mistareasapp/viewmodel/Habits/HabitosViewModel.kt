@@ -487,16 +487,30 @@ class HabitosViewModel(private val habitoDao: HabitoDao) : ViewModel() {
         val diasVidaEfectivos: Int
     )
 
+    // Incluye activos Y pausados: un hábito pausado congela su % histórico en el momento de la pausa
+    // y sigue contribuyendo al % general con ese valor y su peso hasta la fecha de inicio de la pausa.
     val datosCalculos: StateFlow<List<DatoCalculo>> = combine(
-        habitosActivos,
+        todosLosHabitos,
         habitoDao.observarCambiosHistorial()
     ) { habitos, _ ->
-        habitos.map { habito ->
-            val pct = calcularPorcentajeHistorico(habito)
-            val dva = diasVidaEfectivos(habito)
-            DatoCalculo(habito, pct, dva)
-        }
+        habitos
+            // Excluir hábitos sin ningún periodo histórico completado todavía (su único periodo está en curso)
+            .filter { habito -> !habito.fechaInicio.isAfter(periodoHistoricoFin(habito.frecuencia)) }
+            .map { habito ->
+                val pct = calcularPorcentajeHistorico(habito)
+                val dva = diasVidaEfectivos(habito)
+                DatoCalculo(habito, pct, dva)
+            }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    // % general ponderado incluyendo activos y pausados, para la barra de Vista Hoy.
+    val porcentajeGeneralConPausados: StateFlow<Float> = datosCalculos.map { datos ->
+        fun calcPeso(dve: Int, dif: Int) = minOf(dve, 180) * dif
+        val pesoTotal = datos.sumOf { calcPeso(it.diasVidaEfectivos, it.habito.dificultad).toLong() }
+        if (pesoTotal > 0)
+            (datos.sumOf { it.porcentaje.toDouble() * calcPeso(it.diasVidaEfectivos, it.habito.dificultad) } / pesoTotal).toFloat()
+        else 0f
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0f)
 
     // --- CÁLCULO DE ESTADÍSTICAS ---
 
@@ -506,12 +520,14 @@ class HabitosViewModel(private val habitoDao: HabitoDao) : ViewModel() {
         val primerDiaMes = hoy.withDayOfMonth(1)
         val primerDiaAno = hoy.withDayOfYear(1)
 
-        val pctHistorico = if (habito != null) calcularPorcentajeHistorico(habito) else 0f
+        // Racha y % histórico salen de la MISMA fuente (obtenerDesgloseHistorico): un periodo
+        // cuenta para la racha solo si está cerrado (no en curso) y llegó a >=100% del objetivo.
+        val desglose = if (habito != null) obtenerDesgloseHistorico(habito) else null
+        val pctHistorico = if (desglose != null) (desglose.completados / 100f).coerceIn(0f, 1f) else 0f
+        val (rachaActual, mejorRacha) = calcularRachaDesdeLista(desglose?.cumplidoPorPeriodo ?: emptyList())
 
         val frecuencia = habito?.frecuencia ?: FrecuenciaHabito.DIARIA
 
-        val rachaActual: Int
-        val mejorRacha: Int
         val completadosSemana: Int
         val diasEnSemana: Int
         val completadosMes: Int
@@ -521,8 +537,6 @@ class HabitosViewModel(private val habitoDao: HabitoDao) : ViewModel() {
 
         when (frecuencia) {
             FrecuenciaHabito.DIARIA -> {
-                rachaActual = calcularRachaActualDias(fechas)
-                mejorRacha = calcularMejorRachaDias(fechas)
                 completadosSemana = fechas.count { !it.isBefore(lunes) && !it.isAfter(hoy) }
                 diasEnSemana = (ChronoUnit.DAYS.between(lunes, hoy) + 1).toInt().coerceAtLeast(1)
                 completadosMes = fechas.count { !it.isBefore(primerDiaMes) && !it.isAfter(hoy) }
@@ -532,8 +546,6 @@ class HabitosViewModel(private val habitoDao: HabitoDao) : ViewModel() {
             }
             FrecuenciaHabito.SEMANAL -> {
                 val semanasConMarca = fechas.map { it.with(DayOfWeek.MONDAY) }.toSortedSet()
-                rachaActual = calcularRachaConsecutiva(semanasConMarca.toList()) { a, b -> a.plusWeeks(1) == b }
-                mejorRacha = calcularMejorRachaConsecutiva(semanasConMarca.toList()) { a, b -> a.plusWeeks(1) == b }
                 val semanaActual = lunes
                 completadosSemana = if (semanasConMarca.contains(semanaActual)) 1 else 0
                 diasEnSemana = 1
@@ -545,8 +557,6 @@ class HabitosViewModel(private val habitoDao: HabitoDao) : ViewModel() {
             }
             FrecuenciaHabito.MENSUAL -> {
                 val mesesConMarca = fechas.map { it.withDayOfMonth(1) }.toSortedSet()
-                rachaActual = calcularRachaConsecutiva(mesesConMarca.toList()) { a, b -> a.plusMonths(1) == b }
-                mejorRacha = calcularMejorRachaConsecutiva(mesesConMarca.toList()) { a, b -> a.plusMonths(1) == b }
                 val mesActual = hoy.withDayOfMonth(1)
                 completadosSemana = if (mesesConMarca.contains(mesActual)) 1 else 0
                 diasEnSemana = 1
@@ -571,61 +581,24 @@ class HabitosViewModel(private val habitoDao: HabitoDao) : ViewModel() {
         )
     }
 
-    private fun calcularRachaActualDias(fechas: List<LocalDate>): Int {
-        if (fechas.isEmpty()) return 0
-        val fechasSet = fechas.toSet()
-        val hoy = LocalDate.now()
-        var diaActual = if (hoy in fechasSet) hoy else hoy.minusDays(1)
-        if (diaActual !in fechasSet) return 0
+    /**
+     * Deriva racha actual y mejor racha de la lista cronológica de periodos cerrados
+     * ([DesgloseData.cumplidoPorPeriodo]). El periodo en curso NUNCA está en esta lista
+     * (obtenerDesgloseHistorico ya la acota a periodoHistoricoFin), y un periodo solo
+     * cuenta como "cumplido" si llegó a >=100% de su objetivo.
+     */
+    private fun calcularRachaDesdeLista(cumplidoPorPeriodo: List<Boolean>): Pair<Int, Int> {
+        if (cumplidoPorPeriodo.isEmpty()) return Pair(0, 0)
+        var actual = 0
+        for (i in cumplidoPorPeriodo.indices.reversed()) {
+            if (cumplidoPorPeriodo[i]) actual++ else break
+        }
+        var mejor = 0
         var racha = 0
-        while (diaActual in fechasSet) {
-            racha++
-            diaActual = diaActual.minusDays(1)
+        cumplidoPorPeriodo.forEach { cumplido ->
+            if (cumplido) { racha++; if (racha > mejor) mejor = racha } else racha = 0
         }
-        return racha
-    }
-
-    private fun calcularMejorRachaDias(fechas: List<LocalDate>): Int {
-        if (fechas.isEmpty()) return 0
-        val ordenadas = fechas.sorted()
-        var mejor = 1
-        var actual = 1
-        for (i in 1 until ordenadas.size) {
-            if (ordenadas[i] == ordenadas[i - 1].plusDays(1)) {
-                actual++
-                if (actual > mejor) mejor = actual
-            } else {
-                actual = 1
-            }
-        }
-        return mejor
-    }
-
-    private fun calcularRachaConsecutiva(periodos: List<LocalDate>, esConsecutivo: (LocalDate, LocalDate) -> Boolean): Int {
-        if (periodos.isEmpty()) return 0
-        val hoy = LocalDate.now()
-        val ultimo = periodos.last()
-        if (ultimo.isAfter(hoy)) return 0
-        var racha = 1
-        for (i in periodos.lastIndex downTo 1) {
-            if (esConsecutivo(periodos[i - 1], periodos[i])) racha++ else break
-        }
-        return racha
-    }
-
-    private fun calcularMejorRachaConsecutiva(periodos: List<LocalDate>, esConsecutivo: (LocalDate, LocalDate) -> Boolean): Int {
-        if (periodos.isEmpty()) return 0
-        var mejor = 1
-        var actual = 1
-        for (i in 1 until periodos.size) {
-            if (esConsecutivo(periodos[i - 1], periodos[i])) {
-                actual++
-                if (actual > mejor) mejor = actual
-            } else {
-                actual = 1
-            }
-        }
-        return mejor
+        return Pair(actual, mejor)
     }
 
     // --- HELPERS DE PAUSA Y DÍAS EFECTIVOS ---
@@ -641,6 +614,10 @@ class HabitosViewModel(private val habitoDao: HabitoDao) : ViewModel() {
      * Fin del horizonte histórico: el último día del periodo ANTERIOR al actual.
      * Garantiza que el periodo en curso no contamina el porcentaje histórico.
      */
+    /** true si el hábito ya tiene al menos un periodo histórico completado (su periodo en curso no cuenta). */
+    fun habitoTienePeriodoCompletado(habito: Habito): Boolean =
+        !habito.fechaInicio.isAfter(periodoHistoricoFin(habito.frecuencia))
+
     private fun periodoHistoricoFin(frecuencia: FrecuenciaHabito): LocalDate {
         val hoy = LocalDate.now()
         return when (frecuencia) {
@@ -897,7 +874,11 @@ class HabitosViewModel(private val habitoDao: HabitoDao) : ViewModel() {
         val unidadPeriodo: String,
         val esBinario: Boolean,
         val periodosCompletados: Float = 0f,  // Permite decimales para cálculos con promedio
-        val periodosTotal: Int = 0
+        val periodosTotal: Int = 0,
+        /** Conteo exacto de periodos con cumplimiento >=100% (mismo criterio que la racha). */
+        val periodosAl100: Int = 0,
+        /** Lista cronológica de periodos evaluados: true si ese periodo llegó a >=100% del objetivo. Única fuente para % histórico y racha. */
+        val cumplidoPorPeriodo: List<Boolean> = emptyList()
     )
 
     suspend fun obtenerDesgloseHistorico(habito: Habito): DesgloseData {
@@ -907,7 +888,7 @@ class HabitosViewModel(private val habitoDao: HabitoDao) : ViewModel() {
 
         // Rama especial para Límite Máximo
         if (habito.tipoObjetivo == TipoObjetivoHabito.LIMITE_MAXIMO) {
-            if (inicio.isAfter(fin)) return DesgloseData(0, 100, label, false, 0f, 0)
+            if (inicio.isAfter(fin)) return DesgloseData(0, 100, label, false, 0f, 0, 0, emptyList())
             val pausas   = habitoDao.obtenerPausas(habito.id)
             val historial = habitoDao.obtenerHistorialEntreFechas(habito.id, inicio, fin)
                 .groupBy { it.fecha }.values.map { it.maxByOrNull { e -> e.id }!! }
@@ -916,6 +897,7 @@ class HabitosViewModel(private val habitoDao: HabitoDao) : ViewModel() {
 
             val sumaPctFinal: Double
             val periodosTotales: Int
+            val cumplidos = mutableListOf<Boolean>()
 
             when (habito.frecuencia) {
                 FrecuenciaHabito.DIARIA -> {
@@ -929,7 +911,9 @@ class HabitosViewModel(private val habitoDao: HabitoDao) : ViewModel() {
                         val limite = v.limiteMaximo ?: habito.limiteMaximo ?: 0.0
                         val tramos = v.tramosLimite ?: habito.tramosLimite
                         val valor = historial.firstOrNull { it.fecha == d }?.valorProgresoDecimal ?: 0.0
-                        suma += calcularPorcentajeLimite(valor, limite, tramos) / 100.0
+                        val pct = calcularPorcentajeLimite(valor, limite, tramos)
+                        suma += pct / 100.0
+                        cumplidos.add(pct >= 100)
                     }
                     sumaPctFinal = suma
                 }
@@ -953,7 +937,9 @@ class HabitosViewModel(private val habitoDao: HabitoDao) : ViewModel() {
                         val valorAcum = historial.filter { !it.fecha.isBefore(s) && !it.fecha.isAfter(e) }.sumOf { it.valorProgresoDecimal }
                         val limite = v.limiteMaximo ?: habito.limiteMaximo ?: 0.0
                         val tramos = v.tramosLimite ?: habito.tramosLimite
-                        suma += calcularPorcentajeLimite(valorAcum, limite, tramos) / 100.0
+                        val pct = calcularPorcentajeLimite(valorAcum, limite, tramos)
+                        suma += pct / 100.0
+                        cumplidos.add(pct >= 100)
                     }
                     sumaPctFinal = suma
                 }
@@ -982,20 +968,22 @@ class HabitosViewModel(private val habitoDao: HabitoDao) : ViewModel() {
                         val diasTotalesMes = m.lengthOfMonth()
                         val limite = if (d1 > m.atDay(1)) limiteBase * diasActivosMes / diasTotalesMes else limiteBase
                         val tramos = v.tramosLimite ?: habito.tramosLimite
-                        suma += calcularPorcentajeLimite(valorAcum, limite, tramos) / 100.0
+                        val pct = calcularPorcentajeLimite(valorAcum, limite, tramos)
+                        suma += pct / 100.0
+                        cumplidos.add(pct >= 100)
                     }
                     sumaPctFinal = suma
                 }
             }
             val mediaBruta = if (periodosTotales > 0) sumaPctFinal / periodosTotales else 0.0
             val media = kotlin.math.round(mediaBruta * 100).toInt()
-            return DesgloseData(media, 100, label, false, sumaPctFinal.toFloat(), periodosTotales)
+            return DesgloseData(media, 100, label, false, sumaPctFinal.toFloat(), periodosTotales, cumplidos.count { it }, cumplidos)
         }
 
         val esBinario = habito.tipoMedicion == TipoMedicion.BINARIO
         val isCuant   = habito.tipoObjetivo == TipoObjetivoHabito.CUANTITATIVO
 
-        if (inicio.isAfter(fin)) return DesgloseData(0, 0, label, esBinario, 0f, 0)
+        if (inicio.isAfter(fin)) return DesgloseData(0, 0, label, esBinario, 0f, 0, 0, emptyList())
 
         val pausas   = habitoDao.obtenerPausas(habito.id)
         val historial = habitoDao.obtenerHistorialEntreFechas(habito.id, inicio, fin)
@@ -1016,7 +1004,7 @@ class HabitosViewModel(private val habitoDao: HabitoDao) : ViewModel() {
                     .filter { d -> !esFechaPausada(pausas, d) && (diasSet == null || d.dayOfWeek in diasSet) }
 
                 if (esBinario) {
-                    val completos = diasActivos.count { d ->
+                    val cumplidos = diasActivos.map { d ->
                         val v   = versionPara(d)
                         val h   = historial.firstOrNull { it.fecha == d }
                         if (isCuant) {
@@ -1024,13 +1012,14 @@ class HabitosViewModel(private val habitoDao: HabitoDao) : ViewModel() {
                             (h?.valorProgreso ?: 0) >= obj
                         } else h?.completado == true
                     }
+                    val completos = cumplidos.count { it }
                     val porcentaje = if (diasActivos.isNotEmpty())
                         kotlin.math.round(completos.toFloat() / diasActivos.size * 100).toInt() else 0
-                    DesgloseData(porcentaje, diasActivos.size, label, true, completos.toFloat(), diasActivos.size)
+                    DesgloseData(porcentaje, diasActivos.size, label, true, completos.toFloat(), diasActivos.size, completos, cumplidos)
                 } else {
                     val sinTope = habito.tipoMedicion == TipoMedicion.PROPORCIONAL_SIN_TOPE
                     var sumaPct = 0.0
-                    var diasSobreCinquenta = 0
+                    val cumplidos = mutableListOf<Boolean>()
                     diasActivos.forEach { d ->
                         val v   = versionPara(d)
                         val h   = historial.firstOrNull { it.fecha == d }
@@ -1039,12 +1028,12 @@ class HabitosViewModel(private val habitoDao: HabitoDao) : ViewModel() {
                                   else if (h?.completado == true) 1.0 else 0.0
                         val pctFinal = if (sinTope) pct.coerceAtLeast(0.0) else pct.coerceIn(0.0, 1.0)
                         sumaPct += pctFinal
-                        if (pctFinal > 0.5) diasSobreCinquenta++
+                        cumplidos.add(pct >= 1.0 - 1e-9)
                     }
                     val mediaBruta = if (diasActivos.isNotEmpty()) sumaPct / diasActivos.size else 0.0
                     val media = kotlin.math.round(mediaBruta * 100).toInt()
                     val periodosCompletadosConDecimal = (mediaBruta * diasActivos.size).toFloat()
-                    DesgloseData(media, 100, label, false, periodosCompletadosConDecimal, diasActivos.size)
+                    DesgloseData(media, 100, label, false, periodosCompletadosConDecimal, diasActivos.size, cumplidos.count { it }, cumplidos)
                 }
             }
 
@@ -1061,7 +1050,7 @@ class HabitosViewModel(private val habitoDao: HabitoDao) : ViewModel() {
                 }
 
                 if (esBinario) {
-                    val completas = semanas.count { lun ->
+                    val cumplidos = semanas.map { lun ->
                         val v   = versionPara(lun)
                         val s   = if (lun.isBefore(inicio)) inicio else lun
                         val e   = if (lun.plusDays(6).isAfter(fin)) fin else lun.plusDays(6)
@@ -1070,13 +1059,14 @@ class HabitosViewModel(private val habitoDao: HabitoDao) : ViewModel() {
                         val prog = if (isCuant) hs.sumOf { it.valorProgreso } else hs.count { it.completado }
                         prog >= obj
                     }
+                    val completas = cumplidos.count { it }
                     val porcentaje = if (semanas.isNotEmpty())
                         kotlin.math.round(completas.toFloat() / semanas.size * 100).toInt() else 0
-                    DesgloseData(porcentaje, semanas.size, label, true, completas.toFloat(), semanas.size)
+                    DesgloseData(porcentaje, semanas.size, label, true, completas.toFloat(), semanas.size, completas, cumplidos)
                 } else {
                     val sinTope = habito.tipoMedicion == TipoMedicion.PROPORCIONAL_SIN_TOPE
                     var sumaPct = 0.0
-                    var semanasSobreCinquenta = 0
+                    val cumplidos = mutableListOf<Boolean>()
                     semanas.forEach { lun ->
                         val v   = versionPara(lun)
                         val s   = if (lun.isBefore(inicio)) inicio else lun
@@ -1089,12 +1079,12 @@ class HabitosViewModel(private val habitoDao: HabitoDao) : ViewModel() {
                             if (sinTope) r.coerceAtLeast(0.0) else r.coerceIn(0.0, 1.0)
                         } else 0.0
                         sumaPct += pctFinal
-                        if (pctFinal > 0.5) semanasSobreCinquenta++
+                        cumplidos.add(pctFinal >= 1.0 - 1e-9)
                     }
                     val mediaBruta = if (semanas.isNotEmpty()) sumaPct / semanas.size else 0.0
                     val media = kotlin.math.round(mediaBruta * 100).toInt()
                     val periodosCompletadosConDecimal = (mediaBruta * semanas.size).toFloat()
-                    DesgloseData(media, 100, label, false, periodosCompletadosConDecimal, semanas.size)
+                    DesgloseData(media, 100, label, false, periodosCompletadosConDecimal, semanas.size, cumplidos.count { it }, cumplidos)
                 }
             }
 
@@ -1111,7 +1101,7 @@ class HabitosViewModel(private val habitoDao: HabitoDao) : ViewModel() {
                 }
 
                 if (esBinario) {
-                    val completos = meses.count { m ->
+                    val cumplidos = meses.map { m ->
                         val d1 = if (m.atDay(1).isBefore(inicio)) inicio else m.atDay(1)
                         val d2 = if (m.atEndOfMonth().isAfter(fin)) fin else m.atEndOfMonth()
                         val v  = versionPara(d1)
@@ -1127,13 +1117,14 @@ class HabitosViewModel(private val habitoDao: HabitoDao) : ViewModel() {
                         val prog = if (isCuant) hs.sumOf { it.valorProgreso } else hs.count { it.completado }
                         prog >= obj
                     }
+                    val completos = cumplidos.count { it }
                     val porcentaje = if (meses.isNotEmpty())
                         kotlin.math.round(completos.toFloat() / meses.size * 100).toInt() else 0
-                    DesgloseData(porcentaje, meses.size, label, true, completos.toFloat(), meses.size)
+                    DesgloseData(porcentaje, meses.size, label, true, completos.toFloat(), meses.size, completos, cumplidos)
                 } else {
                     val sinTope = habito.tipoMedicion == TipoMedicion.PROPORCIONAL_SIN_TOPE
                     var sumaPct = 0.0
-                    var mesesSobreCinquenta = 0
+                    val cumplidos = mutableListOf<Boolean>()
                     meses.forEach { m ->
                         val d1 = if (m.atDay(1).isBefore(inicio)) inicio else m.atDay(1)
                         val d2 = if (m.atEndOfMonth().isAfter(fin)) fin else m.atEndOfMonth()
@@ -1153,12 +1144,12 @@ class HabitosViewModel(private val habitoDao: HabitoDao) : ViewModel() {
                             if (sinTope) r.coerceAtLeast(0.0) else r.coerceIn(0.0, 1.0)
                         } else 0.0
                         sumaPct += pctFinal
-                        if (pctFinal > 0.5) mesesSobreCinquenta++
+                        cumplidos.add(pctFinal >= 1.0 - 1e-9)
                     }
                     val mediaBruta = if (meses.isNotEmpty()) sumaPct / meses.size else 0.0
                     val media = kotlin.math.round(mediaBruta * 100).toInt()
                     val periodosCompletadosConDecimal = (mediaBruta * meses.size).toFloat()
-                    DesgloseData(media, 100, label, false, periodosCompletadosConDecimal, meses.size)
+                    DesgloseData(media, 100, label, false, periodosCompletadosConDecimal, meses.size, cumplidos.count { it }, cumplidos)
                 }
             }
         }
@@ -1193,40 +1184,295 @@ class HabitosViewModel(private val habitoDao: HabitoDao) : ViewModel() {
         val stats = calcularEstadisticas(fechasCompletadas, habito)
 
         val labelPeriodo = periodLabel(habito)
+        val esBinarioHist = habito.tipoObjetivo != com.example.mistareasapp.data.habits.TipoObjetivoHabito.LIMITE_MAXIMO &&
+            habito.tipoMedicion == com.example.mistareasapp.data.habits.TipoMedicion.BINARIO
+
+        // Dos números distintos que responden preguntas distintas (ver CALCULOS_PORCENTAJE.md §9):
+        // - periodosAl100: conteo BINARIO, cuántos periodos llegaron exactamente a >=100% (mismo criterio que la racha).
+        // - periodosCompletados: SUMA de cumplimiento relativo por periodo (equivalente), solo informativa cuando no es binario.
         val desgloseTexto = buildString {
             append("Periodos activos evaluados: ${desglose.periodosTotal} $labelPeriodo.\n")
-            if (habito.tipoObjetivo == com.example.mistareasapp.data.habits.TipoObjetivoHabito.LIMITE_MAXIMO) {
-                append("Suma equivalente cumplida: ${"%.2f".format(desglose.periodosCompletados)} de ${desglose.periodosTotal} $labelPeriodo.\n")
-                append("(La suma equivalente refleja el % de cumplimiento por periodo sumado, no periodos enteros.)\n")
-                append("Media de cumplimiento por periodo: ${desglose.completados}%.\n")
-            } else {
-                val rawPct = if (desglose.periodosTotal > 0) (desglose.periodosCompletados.toInt() * 100 / desglose.periodosTotal) else 0
-                append("Completados: ${desglose.periodosCompletados.toInt()} de ${desglose.periodosTotal} $labelPeriodo ($rawPct%).\n")
-                if (habito.tipoMedicion == com.example.mistareasapp.data.habits.TipoMedicion.BINARIO)
-                    append("Tipo medición BINARIO: cada periodo puntúa 0% o 100%.\n")
-                if (habito.tipoMedicion == com.example.mistareasapp.data.habits.TipoMedicion.PROPORCIONAL_SIN_TOPE)
-                    append("Tipo medición SIN TOPE: el valor por periodo puede superar 100%.\n")
+            append("Completados (cumplieron el objetivo al 100% o más): ${desglose.periodosAl100} de ${desglose.periodosTotal} $labelPeriodo.\n")
+            append("(Este es un conteo binario: un periodo cuenta como 1 si llegó al 100%, 0 en caso contrario. Es el mismo criterio que se usa para calcular la racha.)\n")
+            if (!esBinarioHist) {
+                append("Suma de cumplimiento mensual (equivalente): ${"%.2f".format(desglose.periodosCompletados)} de ${desglose.periodosTotal} $labelPeriodo.\n")
+                append("(Esta suma no cuenta periodos enteros: es la suma de cuánto se cumplió cada periodo respecto a su objetivo, por eso puede tener decimales.)\n")
             }
+            append("Media de cumplimiento por periodo: ${desglose.completados}%.\n")
+            if (esBinarioHist)
+                append("Tipo medición BINARIO: cada periodo puntúa 0% o 100%.\n")
+            if (habito.tipoMedicion == com.example.mistareasapp.data.habits.TipoMedicion.PROPORCIONAL_SIN_TOPE)
+                append("Tipo medición SIN TOPE: el valor por periodo puede superar 100%.\n")
             append("% histórico final: ${(pctHistorico * 100).toInt()}%.")
         }
+
+        val (mesProg, mesObj, anioComp, anioTot) = when (habito.frecuencia) {
+            FrecuenciaHabito.MENSUAL -> {
+                val (p, o) = progresoMesEnCurso(habito, versiones)
+                val (ac, at) = mesesCompletadosEnAnio(habito, versiones)
+                listOf(p, o, ac, at)
+            }
+            else -> listOf(stats.completadosMes, stats.diasEnMes, stats.completadosAno, stats.diasEnAno)
+        }
+
+        val detallesPdf = calcularDesglosePeriodosParaPdf(habito)
+
+        val hoyPdf = LocalDate.now()
+        val locale = java.util.Locale("es")
+        val mesEnCursoNombre = hoyPdf.format(java.time.format.DateTimeFormatter.ofPattern("MMMM yyyy", locale))
+            .replaceFirstChar { it.uppercase() }
+        val anioRangoTexto: String = if (habito.frecuencia == FrecuenciaHabito.MENSUAL) {
+            val primerMesAno = maxOf(YearMonth.of(hoyPdf.year, 1), YearMonth.from(habito.fechaInicio))
+            val ultimoMesAno = YearMonth.from(periodoHistoricoFin(habito.frecuencia))
+            if (primerMesAno.isAfter(ultimoMesAno)) "" else {
+                val fmtAbr = java.time.format.DateTimeFormatter.ofPattern("MMM", locale)
+                val ini = primerMesAno.atDay(1).format(fmtAbr).replaceFirstChar { it.uppercase() }.trimEnd('.')
+                val fin2 = ultimoMesAno.atDay(1).format(fmtAbr).replaceFirstChar { it.uppercase() }.trimEnd('.')
+                "$ini–$fin2"
+            }
+        } else ""
 
         val data = com.example.mistareasapp.data.habits.PdfInformeData(
             habito = habito,
             categoriaNombre = categoriaNombre,
             versiones = versionesFiltradas,
+            versionesCalculo = versiones.ifEmpty { listOf(habito.toVersion(habito.fechaInicio)) },
             pausas = pausas,
             historialCompleto = historial,
             porcentajeHistorico = pctHistorico,
             rachaActual = stats.rachaActual,
             mejorRacha = stats.mejorRacha,
-            totalCompletados = stats.totalCompletados,
-            completadosMes = stats.completadosMes,
-            diasEnMes = stats.diasEnMes,
-            completadosAno = stats.completadosAno,
-            diasEnAno = stats.diasEnAno,
-            desgloseTexto = desgloseTexto
+            periodosCompletadosHist = desglose.periodosCompletados,
+            periodosTotalHist = desglose.periodosTotal,
+            periodosAl100Hist = desglose.periodosAl100,
+            esBinarioHist = esBinarioHist,
+            mesEnCursoProgreso = mesProg,
+            mesEnCursoObjetivo = mesObj,
+            anioCompletados = anioComp,
+            anioTotal = anioTot,
+            desgloseTexto = desgloseTexto,
+            detallesPorPeriodo = detallesPdf,
+            mesEnCursoNombre = mesEnCursoNombre,
+            anioRangoTexto = anioRangoTexto
         )
         return com.example.mistareasapp.data.habits.generarPdfHabito(context, data)
+    }
+
+    /** Progreso del mes en curso (parcial): completados vs objetivo del mes completo según la versión vigente. */
+    private suspend fun progresoMesEnCurso(
+        habito: Habito,
+        versiones: List<com.example.mistareasapp.data.habits.HabitoVersion>
+    ): Pair<Int, Int> {
+        val hoy = LocalDate.now()
+        val primerDiaMes = hoy.withDayOfMonth(1)
+        val ultimoDiaMes = hoy.withDayOfMonth(hoy.lengthOfMonth())
+        val d1 = if (habito.fechaInicio.isAfter(primerDiaMes)) habito.fechaInicio else primerDiaMes
+        if (d1.isAfter(hoy)) return Pair(0, 0)
+        val pausas = habitoDao.obtenerPausas(habito.id)
+        // Objetivo: días activos en el mes COMPLETO (no solo hasta hoy), para que objetivoPorcentajeDias
+        // muestre el objetivo real del mes (ej. ceil(31*60/100)=19) en vez del objetivo prorrateado al día de hoy.
+        val diasActMesCompleto = (0..ChronoUnit.DAYS.between(d1, ultimoDiaMes).toInt())
+            .count { i -> !esFechaPausada(pausas, d1.plusDays(i.toLong())) }
+        val versionesFinal = versiones.ifEmpty { listOf(habito.toVersion(d1)) }
+        val v = versionesFinal.lastOrNull { !it.fechaInicio.isAfter(d1) } ?: versionesFinal.first()
+        val isCuant = habito.tipoObjetivo == TipoObjetivoHabito.CUANTITATIVO
+        val obj = when {
+            v.objetivoPorcentajeDias != null -> kotlin.math.ceil(diasActMesCompleto * v.objetivoPorcentajeDias!! / 100.0).toInt()
+            isCuant -> v.objetivoValor ?: v.vecesPorDia
+            else -> v.vecesPorDia
+        }
+        val hist = habitoDao.obtenerHistorialEntreFechas(habito.id, d1, hoy)
+        val prog = if (isCuant) hist.sumOf { it.valorProgreso } else hist.count { it.completado }
+        return Pair(prog, obj)
+    }
+
+    /** Meses del año en curso (excluido el mes actual, en curso) que cumplieron su objetivo mensual. */
+    private suspend fun mesesCompletadosEnAnio(
+        habito: Habito,
+        versiones: List<com.example.mistareasapp.data.habits.HabitoVersion>
+    ): Pair<Int, Int> {
+        val hoy = LocalDate.now()
+        val finHist = periodoHistoricoFin(habito.frecuencia)
+        val primerDiaAnio = hoy.withDayOfYear(1)
+        val inicio = if (habito.fechaInicio.isAfter(primerDiaAnio)) habito.fechaInicio else primerDiaAnio
+        if (inicio.isAfter(finHist)) return Pair(0, 0)
+        val pausas = habitoDao.obtenerPausas(habito.id)
+        val historial = habitoDao.obtenerHistorialEntreFechas(habito.id, inicio, finHist)
+        val versionesFinal = versiones.ifEmpty { listOf(habito.toVersion(inicio)) }
+        fun versionPara(fecha: LocalDate) = versionesFinal.lastOrNull { !it.fechaInicio.isAfter(fecha) } ?: versionesFinal.first()
+        val isCuant = habito.tipoObjetivo == TipoObjetivoHabito.CUANTITATIVO
+
+        val meses = mutableListOf<YearMonth>()
+        var mes = YearMonth.from(inicio); val mesFin = YearMonth.from(finHist)
+        while (!mes.isAfter(mesFin)) {
+            val d1 = if (mes.atDay(1).isBefore(inicio)) inicio else mes.atDay(1)
+            val d2 = if (mes.atEndOfMonth().isAfter(finHist)) finHist else mes.atEndOfMonth()
+            val activos = (0..ChronoUnit.DAYS.between(d1, d2).toInt())
+                .count { i -> !esFechaPausada(pausas, d1.plusDays(i.toLong())) }
+            if (activos > 0) meses.add(mes)
+            mes = mes.plusMonths(1)
+        }
+        val completos = meses.count { m ->
+            val d1 = if (m.atDay(1).isBefore(inicio)) inicio else m.atDay(1)
+            val d2 = if (m.atEndOfMonth().isAfter(finHist)) finHist else m.atEndOfMonth()
+            val v = versionPara(d1)
+            val hs = historial.filter { !it.fecha.isBefore(d1) && !it.fecha.isAfter(d2) }
+            val diasAct = (0..ChronoUnit.DAYS.between(d1, d2).toInt())
+                .count { i -> !esFechaPausada(pausas, d1.plusDays(i.toLong())) }
+            val obj = when {
+                v.objetivoPorcentajeDias != null -> kotlin.math.ceil(diasAct * v.objetivoPorcentajeDias!! / 100.0).toInt()
+                isCuant -> v.objetivoValor ?: v.vecesPorDia
+                else -> v.vecesPorDia
+            }
+            val prog = if (isCuant) hs.sumOf { it.valorProgreso } else hs.count { it.completado }
+            prog >= obj
+        }
+        return Pair(completos, meses.size)
+    }
+
+    /**
+     * Construye la lista de periodos con progreso/objetivo/% exactos para la tabla del PDF (sección 5).
+     * Para DIARIA agrupa por mes para no generar cientos de filas.
+     * [pctEfectivo] es el valor exacto (0-100+, Double) usado en el cálculo de la media, sin truncar,
+     * para que la suma / n * 100 reproduzca exactamente el % histórico final mostrado en el PDF.
+     */
+    private suspend fun calcularDesglosePeriodosParaPdf(habito: Habito): List<PeriodoDetalleCalculo> {
+        val fin = periodoHistoricoFin(habito.frecuencia)
+        val inicio = habito.fechaInicio
+        if (inicio.isAfter(fin)) return emptyList()
+
+        val pausas = habitoDao.obtenerPausas(habito.id)
+        val historial = habitoDao.obtenerHistorialEntreFechas(habito.id, inicio, fin)
+            .groupBy { it.fecha }.values.map { it.maxByOrNull { e -> e.id }!! }
+        val versiones = habitoDao.obtenerVersiones(habito.id).ifEmpty { listOf(habito.toVersion(inicio)) }
+        fun versionPara(fecha: LocalDate) = versiones.lastOrNull { !it.fechaInicio.isAfter(fecha) } ?: versiones.first()
+
+        val isCuant = habito.tipoObjetivo == TipoObjetivoHabito.CUANTITATIVO
+        val esLimite = habito.tipoObjetivo == TipoObjetivoHabito.LIMITE_MAXIMO
+        val sinTope = habito.tipoMedicion == TipoMedicion.PROPORCIONAL_SIN_TOPE
+        val locale = java.util.Locale("es")
+        val fmtMes = java.time.format.DateTimeFormatter.ofPattern("MMM yyyy", locale)
+        val fmtDia = java.time.format.DateTimeFormatter.ofPattern("dd/MM/yy")
+        fun etiquetaMes(m: YearMonth) = m.atDay(1).format(fmtMes).replaceFirstChar { it.uppercase() }.trimEnd('.')
+        fun etiquetaSem(lun: LocalDate) = "Sem ${lun.format(fmtDia)}"
+
+        // Cálculo exacto del pctEfectivo (mismo coeficiente que usa obtenerDesgloseHistorico):
+        // Para no-límite: pctEfectivo = (prog/obj).coerceIn(0,1) * 100 — o sin tope si sinTope
+        // Para límite:    pctEfectivo = calcularPorcentajeLimite(...).toDouble() (ya es int 0-100)
+        fun pctExacto(prog: Int, obj: Int): Double =
+            if (obj <= 0) 0.0
+            else {
+                val r = prog.toDouble() / obj
+                if (sinTope) r.coerceAtLeast(0.0) * 100.0 else r.coerceIn(0.0, 1.0) * 100.0
+            }
+
+        val result = mutableListOf<PeriodoDetalleCalculo>()
+
+        when (habito.frecuencia) {
+            FrecuenciaHabito.DIARIA -> {
+                // Agrupar por mes para no generar cientos de filas.
+                // pctEfectivo del mes = suma(pctFinal_dia) / dias_activos * 100,
+                // que es exactamente lo que obtenerDesgloseHistorico acumula día a día.
+                val diasSet = habito.diasSemanaSet()
+                var mes = YearMonth.from(inicio); val mesFin = YearMonth.from(fin)
+                while (!mes.isAfter(mesFin)) {
+                    val d1 = if (mes.atDay(1).isBefore(inicio)) inicio else mes.atDay(1)
+                    val d2 = if (mes.atEndOfMonth().isAfter(fin)) fin else mes.atEndOfMonth()
+                    val diasActivosMes = (0..ChronoUnit.DAYS.between(d1, d2).toInt())
+                        .map { d1.plusDays(it.toLong()) }
+                        .filter { d -> !esFechaPausada(pausas, d) && (diasSet == null || d.dayOfWeek in diasSet) }
+                    if (diasActivosMes.isNotEmpty()) {
+                        if (esLimite) {
+                            val v = versionPara(d1)
+                            val limiteBase = v.limiteMaximo ?: habito.limiteMaximo ?: 0.0
+                            val limite = if (d1 > mes.atDay(1)) limiteBase * diasActivosMes.size / mes.lengthOfMonth() else limiteBase
+                            val tramos = v.tramosLimite ?: habito.tramosLimite
+                            val acum = diasActivosMes.sumOf { d -> historial.firstOrNull { it.fecha == d }?.valorProgresoDecimal ?: 0.0 }
+                            val pct = calcularPorcentajeLimite(acum, limite, tramos).toDouble()
+                            result.add(PeriodoDetalleCalculo(etiquetaMes(mes), "%.1f".format(acum), "%.1f".format(limite), pct))
+                        } else {
+                            // Para DIARIA, acumular pctFinal por día igual que en obtenerDesgloseHistorico
+                            var sumPctDia = 0.0
+                            var completados = 0
+                            diasActivosMes.forEach { d ->
+                                val v = versionPara(d)
+                                val h = historial.firstOrNull { it.fecha == d }
+                                val obj = if (isCuant) v.objetivoValor ?: v.vecesPorDia else 1
+                                val pct = if (isCuant && obj > 0) (h?.valorProgreso ?: 0).toDouble() / obj
+                                          else if (h?.completado == true) 1.0 else 0.0
+                                val pctF = if (sinTope) pct.coerceAtLeast(0.0) else pct.coerceIn(0.0, 1.0)
+                                sumPctDia += pctF
+                                if (pctF >= 1.0 - 1e-9) completados++
+                            }
+                            val n = diasActivosMes.size
+                            val pctEfectivo = if (n > 0) sumPctDia / n * 100.0 else 0.0
+                            val progStr = if (isCuant) {
+                                val totalVal = diasActivosMes.sumOf { d -> historial.firstOrNull { it.fecha == d }?.valorProgreso ?: 0 }
+                                "$totalVal"
+                            } else "$completados"
+                            result.add(PeriodoDetalleCalculo(etiquetaMes(mes), progStr, "$n", pctEfectivo))
+                        }
+                    }
+                    mes = mes.plusMonths(1)
+                }
+            }
+            FrecuenciaHabito.SEMANAL -> {
+                var lunes = inicio.with(DayOfWeek.MONDAY)
+                while (!lunes.isAfter(fin)) {
+                    val s = if (lunes.isBefore(inicio)) inicio else lunes
+                    val e = if (lunes.plusDays(6).isAfter(fin)) fin else lunes.plusDays(6)
+                    var d = s; var hayActivo = false
+                    while (!d.isAfter(e)) { if (!esFechaPausada(pausas, d)) { hayActivo = true; break }; d = d.plusDays(1) }
+                    if (hayActivo) {
+                        val v = versionPara(lunes)
+                        val hs = historial.filter { !it.fecha.isBefore(s) && !it.fecha.isAfter(e) }
+                        if (esLimite) {
+                            val limite = v.limiteMaximo ?: habito.limiteMaximo ?: 0.0
+                            val tramos = v.tramosLimite ?: habito.tramosLimite
+                            val acum = hs.sumOf { it.valorProgresoDecimal }
+                            val pct = calcularPorcentajeLimite(acum, limite, tramos).toDouble()
+                            result.add(PeriodoDetalleCalculo(etiquetaSem(lunes), "%.1f".format(acum), "%.1f".format(limite), pct))
+                        } else {
+                            val obj = if (isCuant) v.objetivoValor ?: v.vecesPorDia else v.vecesPorDia
+                            val prog = if (isCuant) hs.sumOf { it.valorProgreso } else hs.count { it.completado }
+                            result.add(PeriodoDetalleCalculo(etiquetaSem(lunes), "$prog", "$obj", pctExacto(prog, obj)))
+                        }
+                    }
+                    lunes = lunes.plusWeeks(1)
+                }
+            }
+            FrecuenciaHabito.MENSUAL -> {
+                var mes = YearMonth.from(inicio); val mesFin = YearMonth.from(fin)
+                while (!mes.isAfter(mesFin)) {
+                    val d1 = if (mes.atDay(1).isBefore(inicio)) inicio else mes.atDay(1)
+                    val d2 = if (mes.atEndOfMonth().isAfter(fin)) fin else mes.atEndOfMonth()
+                    val diasAct = (0..ChronoUnit.DAYS.between(d1, d2).toInt())
+                        .count { i -> !esFechaPausada(pausas, d1.plusDays(i.toLong())) }
+                    if (diasAct > 0) {
+                        val v = versionPara(d1)
+                        val hs = historial.filter { !it.fecha.isBefore(d1) && !it.fecha.isAfter(d2) }
+                        if (esLimite) {
+                            val limiteBase = v.limiteMaximo ?: habito.limiteMaximo ?: 0.0
+                            val limite = if (d1 > mes.atDay(1)) limiteBase * diasAct / mes.lengthOfMonth() else limiteBase
+                            val tramos = v.tramosLimite ?: habito.tramosLimite
+                            val acum = hs.sumOf { it.valorProgresoDecimal }
+                            val pct = calcularPorcentajeLimite(acum, limite, tramos).toDouble()
+                            result.add(PeriodoDetalleCalculo(etiquetaMes(mes), "%.1f".format(acum), "%.1f".format(limite), pct))
+                        } else {
+                            val obj = when {
+                                v.objetivoPorcentajeDias != null -> kotlin.math.ceil(diasAct * v.objetivoPorcentajeDias!! / 100.0).toInt()
+                                isCuant -> v.objetivoValor ?: v.vecesPorDia
+                                else -> v.vecesPorDia
+                            }
+                            val prog = if (isCuant) hs.sumOf { it.valorProgreso } else hs.count { it.completado }
+                            result.add(PeriodoDetalleCalculo(etiquetaMes(mes), "$prog", "$obj", pctExacto(prog, obj)))
+                        }
+                    }
+                    mes = mes.plusMonths(1)
+                }
+            }
+        }
+        return result
     }
 
     private fun periodLabel(habito: Habito): String = when (habito.frecuencia) {

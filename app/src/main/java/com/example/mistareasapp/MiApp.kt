@@ -88,6 +88,8 @@ import com.example.mistareasapp.ui.screens.habits.PantallaDetalleCalculoHabito
 import com.example.mistareasapp.ui.screens.habits.PantallaMantenimientoHabitos
 import com.example.mistareasapp.viewmodel.Habits.HabitosViewModel
 import com.example.mistareasapp.viewmodel.Habits.HabitosViewModelFactory
+import com.example.mistareasapp.data.shopping.TipoItemCompra
+import androidx.compose.runtime.Composable
 
 fun obtenerTitulo(ruta: String?): String {
     return when {
@@ -302,26 +304,40 @@ fun MisTareasApp() {
                                             onDismissRequest = { expandirCopias = false },
                                             offset = DpOffset(150.dp, 0.dp)
                                         ) {
-                                            val moduloLabel = if (rutaActual == Rutas.PantallaHabitos.ruta) "Hábitos" else "Tareas"
+                                            // Acceso a la pantalla de copias de seguridad (todos los módulos)
                                             DropdownMenuItem(
-                                                text = { Text("Guardar backup de $moduloLabel") },
+                                                text = { Text("Copias de Seguridad") },
                                                 onClick = {
                                                     mostrarMenuPrincipal = false
                                                     expandirCopias = false
-                                                    lanzarExportar()
+                                                    navController.navigate("ruta_gestion_copias")
                                                 },
                                                 leadingIcon = { Icon(Icons.Default.Backup, null) }
                                             )
-                                            DropdownMenuItem(
-                                                text = { Text("Restaurar backup de $moduloLabel") },
-                                                onClick = {
-                                                    mostrarMenuPrincipal = false
-                                                    expandirCopias = false
-                                                    restoreEsHabitos = (rutaActual == Rutas.PantallaHabitos.ruta)
-                                                    mostrarConfirmacionRestore = true
-                                                },
-                                                leadingIcon = { Icon(Icons.Default.Restore, null) }
-                                            )
+                                            // Backup JSON por módulo (solo Tareas y Hábitos)
+                                            if (rutaActual != Rutas.PantallaListaCompra.ruta) {
+                                                val moduloLabel = if (rutaActual == Rutas.PantallaHabitos.ruta) "Hábitos" else "Tareas"
+                                                HorizontalDivider()
+                                                DropdownMenuItem(
+                                                    text = { Text("Guardar backup de $moduloLabel") },
+                                                    onClick = {
+                                                        mostrarMenuPrincipal = false
+                                                        expandirCopias = false
+                                                        lanzarExportar()
+                                                    },
+                                                    leadingIcon = { Icon(Icons.Default.SaveAlt, null) }
+                                                )
+                                                DropdownMenuItem(
+                                                    text = { Text("Restaurar backup de $moduloLabel") },
+                                                    onClick = {
+                                                        mostrarMenuPrincipal = false
+                                                        expandirCopias = false
+                                                        restoreEsHabitos = (rutaActual == Rutas.PantallaHabitos.ruta)
+                                                        mostrarConfirmacionRestore = true
+                                                    },
+                                                    leadingIcon = { Icon(Icons.Default.Restore, null) }
+                                                )
+                                            }
                                         }
                                     }
                                     HorizontalDivider()
@@ -434,6 +450,9 @@ fun MisTareasApp() {
                                     textoBusqueda = textoBusquedaHabitos,
                                     filtroActual = categoriaFiltroHabitos
                                 )
+                            }
+                            if (rutaActual == Rutas.PantallaListaCompra.ruta) {
+                                FiltroCompraTopBar(vm = listaCompraViewModel)
                             }
                         }
                     )
@@ -733,8 +752,35 @@ fun MisTareasApp() {
     }
 }
 
+@Composable
+private fun FiltroCompraTopBar(vm: ListaCompraViewModel) {
+    val filtroTipo by vm.filtroTipo.collectAsStateWithLifecycle()
+    var expandido by remember { mutableStateOf(false) }
 
-
+    Box {
+        IconButton(onClick = { expandido = true }) {
+            Icon(
+                imageVector = if (filtroTipo == null) Icons.Default.FilterList else Icons.Default.FilterListOff,
+                contentDescription = "Filtrar",
+                tint = if (filtroTipo != null) MaterialTheme.colorScheme.primary else LocalContentColor.current
+            )
+        }
+        DropdownMenu(expanded = expandido, onDismissRequest = { expandido = false }) {
+            DropdownMenuItem(
+                text = { Text("Todo", fontWeight = if (filtroTipo == null) FontWeight.Bold else FontWeight.Normal) },
+                onClick = { vm.setFiltroTipo(null); expandido = false }
+            )
+            DropdownMenuItem(
+                text = { Text("Urgente", fontWeight = if (filtroTipo == TipoItemCompra.URGENTE) FontWeight.Bold else FontWeight.Normal) },
+                onClick = { vm.setFiltroTipo(TipoItemCompra.URGENTE); expandido = false }
+            )
+            DropdownMenuItem(
+                text = { Text("Planificado", fontWeight = if (filtroTipo == TipoItemCompra.PLANIFICADO) FontWeight.Bold else FontWeight.Normal) },
+                onClick = { vm.setFiltroTipo(TipoItemCompra.PLANIFICADO); expandido = false }
+            )
+        }
+    }
+}
 
 
 

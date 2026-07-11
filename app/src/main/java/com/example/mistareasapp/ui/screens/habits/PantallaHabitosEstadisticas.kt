@@ -166,8 +166,13 @@ private fun EstadisticasPorHabito(
         Spacer(Modifier.height(24.dp))
 
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            CardEstadistica("Racha Actual", "${estadisticas.rachaActual} días", Icons.Default.Whatshot, Color(0xFFFF9800), Modifier.weight(1f))
-            CardEstadistica("Mejor Racha",  "${estadisticas.mejorRacha} días",  Icons.Default.Star,     Color(0xFFFFC107), Modifier.weight(1f))
+            val labelPeriodoRacha = when (habitosConProgreso.getOrNull(indexSeleccionado)?.habito?.frecuencia) {
+                com.example.mistareasapp.data.habits.FrecuenciaHabito.SEMANAL -> "semanas"
+                com.example.mistareasapp.data.habits.FrecuenciaHabito.MENSUAL -> "meses"
+                else -> "días"
+            }
+            CardEstadistica("Racha Actual", "${estadisticas.rachaActual} $labelPeriodoRacha", Icons.Default.Whatshot, Color(0xFFFF9800), Modifier.weight(1f))
+            CardEstadistica("Mejor Racha",  "${estadisticas.mejorRacha} $labelPeriodoRacha",  Icons.Default.Star,     Color(0xFFFFC107), Modifier.weight(1f))
         }
         Spacer(Modifier.height(16.dp))
 

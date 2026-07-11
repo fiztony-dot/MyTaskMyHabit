@@ -62,11 +62,8 @@ fun PantallaHabitosListado(viewModel: HabitosViewModel, navController: NavHostCo
     val agrupar = viewModel.agruparPorCategoria
 
     val totalHabitos = habitosSemana.size
-    // Barra general: media ponderada por min(diasEfectivos,180)×dificultad
-    val pesoTotal = habitosSemana.sumOf { (minOf(it.diasVidaEfectivos, 180) * it.habito.dificultad).toLong() }
-    val progresoGeneral = if (pesoTotal > 0)
-        (habitosSemana.sumOf { it.porcentajeHistorico.coerceIn(0f, 1f).toDouble() * minOf(it.diasVidaEfectivos, 180) * it.habito.dificultad } / pesoTotal).toFloat()
-    else 0f
+    // Barra general: % ponderado incluyendo hábitos pausados (congelados en su valor histórico)
+    val progresoGeneral by viewModel.porcentajeGeneralConPausados.collectAsState()
 
     Column(modifier = modifier.fillMaxSize().padding(horizontal = 16.dp)) {
         Spacer(modifier = Modifier.height(8.dp))
