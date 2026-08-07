@@ -56,6 +56,8 @@ class HabitosViewModel(private val habitoDao: HabitoDao) : ViewModel() {
         .map { it.filter { h -> h.pausado } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     private val habitosActivos: Flow<List<Habito>> = todosLosHabitos.map { it.filter { h -> !h.pausado } }
+    val habitosArchivados: StateFlow<List<Habito>> = habitoDao.obtenerHabitosArchivados()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     val categoriasHabitos: Flow<List<CategoriaHabito>> = habitoDao.obtenerCategorias()
 
     private val _fechaSeleccionada = MutableStateFlow(LocalDate.now())
@@ -238,6 +240,19 @@ class HabitosViewModel(private val habitoDao: HabitoDao) : ViewModel() {
         viewModelScope.launch {
             habitoDao.actualizarHabito(habito.copy(pausado = true, fechaInicioPausa = fechaInicio, fechaFinPausa = null))
             habitoDao.insertarPausa(com.example.mistareasapp.data.habits.HabitoPausa(habitoId = habito.id, fechaInicio = fechaInicio, fechaFin = null))
+        }
+    }
+
+    fun archivarHabito(habito: Habito) {
+        viewModelScope.launch {
+            habitoDao.actualizarHabito(habito.copy(archivado = true))
+        }
+    }
+
+    fun desarchivarHabito(habito: Habito) {
+        viewModelScope.launch {
+            // Al desarchivar vuelve a estado pausado (no activo)
+            habitoDao.actualizarHabito(habito.copy(archivado = false))
         }
     }
 
@@ -461,6 +476,33 @@ class HabitosViewModel(private val habitoDao: HabitoDao) : ViewModel() {
         }
     }
 
+    fun establecerTotalLimiteMaximo(habito: Habito, progresoActual: HabitoHistorial?, totalDecimal: Double, fecha: LocalDate = _fechaSeleccionada.value) {
+        viewModelScope.launch {
+            val limiteMaximo = habito.limiteMaximo ?: 0.0
+            val estaCompletado = totalDecimal <= limiteMaximo
+            val nuevoProgreso = progresoActual?.copy(
+                valorProgresoDecimal = totalDecimal,
+                valorProgreso = totalDecimal.toInt(),
+                completado = estaCompletado
+            ) ?: HabitoHistorial(
+                habitoId = habito.id,
+                fecha = fecha,
+                valorProgresoDecimal = totalDecimal,
+                valorProgreso = totalDecimal.toInt(),
+                completado = estaCompletado
+            )
+            habitoDao.upsertProgreso(nuevoProgreso)
+            _refreshTrigger.value = System.currentTimeMillis()
+        }
+    }
+
+    fun eliminarRegistroDia(historial: HabitoHistorial) {
+        viewModelScope.launch {
+            habitoDao.eliminarProgreso(historial)
+            _refreshTrigger.value = System.currentTimeMillis()
+        }
+    }
+
     fun obtenerTareasDeHabito(habitoId: Long) = habitoDao.obtenerTareasDeHabito(habitoId)
 
     fun actualizarTareaHabito(tarea: TareaHabito) {
@@ -484,31 +526,44 @@ class HabitosViewModel(private val habitoDao: HabitoDao) : ViewModel() {
     data class DatoCalculo(
         val habito: Habito,
         val porcentaje: Float,
-        val diasVidaEfectivos: Int
+        val diasVidaEfectivos: Int,
+        // Peso efectivo ya con decaimiento aplicado para hábitos pausados.
+        // Para activos = min(dve,180)*dificultad. Para pausados decae linealmente a 0 en 180 días.
+        val pesoEfectivo: Long
     )
 
     // Incluye activos Y pausados: un hábito pausado congela su % histórico en el momento de la pausa
-    // y sigue contribuyendo al % general con ese valor y su peso hasta la fecha de inicio de la pausa.
+    // y sigue contribuyendo al % general con peso decreciente (llega a 0 a los 180 días de pausado).
     val datosCalculos: StateFlow<List<DatoCalculo>> = combine(
         todosLosHabitos,
         habitoDao.observarCambiosHistorial()
     ) { habitos, _ ->
+        val hoy = LocalDate.now()
         habitos
             // Excluir hábitos sin ningún periodo histórico completado todavía (su único periodo está en curso)
             .filter { habito -> !habito.fechaInicio.isAfter(periodoHistoricoFin(habito.frecuencia)) }
-            .map { habito ->
+            .mapNotNull { habito ->
                 val pct = calcularPorcentajeHistorico(habito)
                 val dva = diasVidaEfectivos(habito)
-                DatoCalculo(habito, pct, dva)
+                val pesoBase = (minOf(dva, 180) * habito.dificultad).toLong()
+                val pesoEfectivo: Long = if (habito.pausado && habito.fechaInicioPausa != null) {
+                    val diasPausado = ChronoUnit.DAYS.between(habito.fechaInicioPausa, hoy).toInt().coerceAtLeast(0)
+                    val factor = maxOf(0.0, (180 - diasPausado) / 180.0)
+                    (pesoBase * factor).toLong()
+                } else {
+                    pesoBase
+                }
+                // Excluir hábitos pausados cuyo peso ha llegado a 0 (más de 180 días pausados)
+                if (pesoEfectivo <= 0L && habito.pausado) null
+                else DatoCalculo(habito, pct, dva, pesoEfectivo)
             }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     // % general ponderado incluyendo activos y pausados, para la barra de Vista Hoy.
     val porcentajeGeneralConPausados: StateFlow<Float> = datosCalculos.map { datos ->
-        fun calcPeso(dve: Int, dif: Int) = minOf(dve, 180) * dif
-        val pesoTotal = datos.sumOf { calcPeso(it.diasVidaEfectivos, it.habito.dificultad).toLong() }
+        val pesoTotal = datos.sumOf { it.pesoEfectivo }
         if (pesoTotal > 0)
-            (datos.sumOf { it.porcentaje.toDouble() * calcPeso(it.diasVidaEfectivos, it.habito.dificultad) } / pesoTotal).toFloat()
+            (datos.sumOf { it.porcentaje.toDouble() * it.pesoEfectivo } / pesoTotal).toFloat()
         else 0f
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0f)
 

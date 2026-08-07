@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -30,6 +31,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -48,6 +50,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.example.mistareasapp.data.tasks.Categoria
@@ -58,7 +61,9 @@ import com.example.mistareasapp.ui.components.tasks.SelectorPrioridad
 import com.example.mistareasapp.ui.components.tasks.obtenerColorIcono
 import com.example.mistareasapp.ui.components.tasks.obtenerIcono
 import com.example.mistareasapp.viewmodel.Tasks.TareasViewModel
+import com.example.mistareasapp.ui.screens.tasks.ModoLimiteRepeticion
 import java.time.Instant
+import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -96,6 +101,13 @@ fun PantallaEditarTarea(navController: NavController, tareaId: Int, viewModel: T
     var mostrarDialogoAlerta by remember { mutableStateOf(false) }
     var mostrarCalendario by remember { mutableStateOf(false) }
     val contexto = LocalContext.current
+
+    // ESTADOS LÍMITE DE REPETICIÓN
+    var modoLimite by remember { mutableStateOf(ModoLimiteRepeticion.SIN_LIMITE) }
+    var repeticionFin by remember { mutableStateOf<LocalDate?>(null) }
+    var repeticionVecesTexto by remember { mutableStateOf("") }
+    var showDatePickerFin by remember { mutableStateOf(false) }
+    val datePickerFinState = rememberDatePickerState()
     // Busca esta línea y cámbiala:
 
     val datePickerState = rememberDatePickerState(
@@ -125,7 +137,19 @@ fun PantallaEditarTarea(navController: NavController, tareaId: Int, viewModel: T
                 categoriaSeleccionada =
                     listaCategorias.find { it.titulo == tareaEncontrada.categoria }
 
-                // LOG DE CONTROL: Esto confirmará en consola que los datos han llegado
+                // Inicializar límite de repetición
+                when {
+                    tareaEncontrada.repeticionFin != null -> {
+                        modoLimite = ModoLimiteRepeticion.HASTA_FECHA
+                        repeticionFin = tareaEncontrada.repeticionFin
+                    }
+                    tareaEncontrada.repeticionVeces != null -> {
+                        modoLimite = ModoLimiteRepeticion.N_VECES
+                        repeticionVecesTexto = tareaEncontrada.repeticionVeces.toString()
+                    }
+                    else -> modoLimite = ModoLimiteRepeticion.SIN_LIMITE
+                }
+
                 println("DEBUG: LaunchedEffect completado. Fecha encontrada: ${tareaEncontrada.fechaLimite}")
             }
         }
@@ -176,9 +200,7 @@ fun PantallaEditarTarea(navController: NavController, tareaId: Int, viewModel: T
             onDismissRequest = { mostrarCalendario = false },
             confirmButton = {
                 TextButton(onClick = {
-                    // 1. Obtenemos la selección del calendario
                     datePickerState.selectedDateMillis?.let { millis ->
-                        // 2. 🔥 ACTUALIZAMOS la variable que usa el botón para pintar el texto
                         fechaLimite = Instant.ofEpochMilli(millis)
                             .atZone(ZoneId.systemDefault())
                             .toLocalDate()
@@ -186,10 +208,24 @@ fun PantallaEditarTarea(navController: NavController, tareaId: Int, viewModel: T
                     mostrarCalendario = false
                 }) { Text("Aceptar") }
             },
-            // ... (resto del código del diálogo)
         ) {
             DatePicker(state = datePickerState)
         }
+    }
+
+    if (showDatePickerFin) {
+        DatePickerDialog(
+            onDismissRequest = { showDatePickerFin = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    datePickerFinState.selectedDateMillis?.let { millis ->
+                        repeticionFin = Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault()).toLocalDate()
+                    }
+                    showDatePickerFin = false
+                }) { Text("Aceptar") }
+            },
+            dismissButton = { TextButton(onClick = { showDatePickerFin = false }) { Text("Cancelar") } }
+        ) { DatePicker(state = datePickerFinState) }
     }
 
 
@@ -210,6 +246,7 @@ fun PantallaEditarTarea(navController: NavController, tareaId: Int, viewModel: T
                     // Cambiamos el icono circular por un TextButton para unificar con "Nueva Tarea"
                     TextButton(
                         onClick = {
+                            val repFinal = if (fechaLimite == null) "Sin repetición" else repeticionSeleccionada
                             val tareaEditada = Tarea(
                                 id = tareaId,
                                 titulo = nombre,
@@ -220,8 +257,11 @@ fun PantallaEditarTarea(navController: NavController, tareaId: Int, viewModel: T
                                 fechaLimite = fechaLimite,
                                 horaLimite = if (fechaLimite == null) null else horaLimite,
                                 categoria = categoriaSeleccionada?.titulo,
-                                // GUARDAMOS REPETICIÓN
-                                repeticion = if (fechaLimite == null) "Sin repetición" else repeticionSeleccionada
+                                repeticion = repFinal,
+                                pendienteClasificar = false,
+                                repeticionFin = if (repFinal == "Sin repetición") null else repeticionFin,
+                                repeticionVeces = if (repFinal == "Sin repetición") null else repeticionVecesTexto.trim().toIntOrNull(),
+                                repeticionContador = tareaDb?.repeticionContador ?: 0
                             )
                             viewModel.actualizar(tareaEditada, contexto)
                             navController.popBackStack()
@@ -445,10 +485,47 @@ fun PantallaEditarTarea(navController: NavController, tareaId: Int, viewModel: T
                                     text = { Text(opcion) },
                                     onClick = {
                                         repeticionSeleccionada = opcion
+                                        if (opcion == "Sin repetición") {
+                                            modoLimite = ModoLimiteRepeticion.SIN_LIMITE
+                                            repeticionFin = null
+                                            repeticionVecesTexto = ""
+                                        }
                                         menuRepeticionExpandido = false
                                     }
                                 )
                             }
+                        }
+                    }
+
+                    // Selector de límite de repetición
+                    if (repeticionSeleccionada != "Sin repetición") {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text("Límite de repetición", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            FilterChip(selected = modoLimite == ModoLimiteRepeticion.SIN_LIMITE, onClick = { modoLimite = ModoLimiteRepeticion.SIN_LIMITE; repeticionFin = null; repeticionVecesTexto = "" }, label = { Text("Sin límite") })
+                            FilterChip(selected = modoLimite == ModoLimiteRepeticion.HASTA_FECHA, onClick = { modoLimite = ModoLimiteRepeticion.HASTA_FECHA; repeticionVecesTexto = "" }, label = { Text("Hasta fecha") })
+                            FilterChip(selected = modoLimite == ModoLimiteRepeticion.N_VECES, onClick = { modoLimite = ModoLimiteRepeticion.N_VECES; repeticionFin = null }, label = { Text("N veces") })
+                        }
+                        when (modoLimite) {
+                            ModoLimiteRepeticion.HASTA_FECHA -> {
+                                BotonSelectorDato(
+                                    label = repeticionFin?.format(DateTimeFormatter.ofPattern("dd/MM/yy")) ?: "Fecha de fin",
+                                    icon = Icons.Default.DateRange,
+                                    onClick = { showDatePickerFin = true },
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
+                            ModoLimiteRepeticion.N_VECES -> {
+                                OutlinedTextField(
+                                    value = repeticionVecesTexto,
+                                    onValueChange = { if (it.all { c -> c.isDigit() }) repeticionVecesTexto = it },
+                                    label = { Text("Número de repeticiones") },
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                    singleLine = true,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
+                            else -> {}
                         }
                     }
                 }

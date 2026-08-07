@@ -58,11 +58,13 @@ import com.example.mistareasapp.ui.screens.habits.PantallaHabitos
 import com.example.mistareasapp.ui.screens.shopping.PantallaGestionCategoriasCompra
 import com.example.mistareasapp.ui.screens.shopping.PantallaGestionLugares
 import com.example.mistareasapp.ui.screens.shopping.PantallaGestionProductos
+import com.example.mistareasapp.ui.screens.shopping.AccionesCompartirCompra
 import com.example.mistareasapp.ui.screens.shopping.PantallaListaCompra
 import com.example.mistareasapp.viewmodel.Shopping.ListaCompraViewModelFactory
 import com.example.mistareasapp.viewmodel.Shopping.ListaCompraViewModel
 import com.example.mistareasapp.ui.screens.habits.PantallaGestionCategoriasHabitos
 import com.example.mistareasapp.ui.screens.habits.PantallaPausados
+import com.example.mistareasapp.ui.screens.habits.PantallaHabitosArchivados
 import com.example.mistareasapp.ui.screens.habits.PantallaVistaMensualHabito
 import com.example.mistareasapp.ui.screens.tasks.PantallaCrearTarea
 import com.example.mistareasapp.ui.screens.tasks.PantallaEditarTarea
@@ -88,6 +90,7 @@ import com.example.mistareasapp.ui.screens.habits.PantallaDetalleCalculoHabito
 import com.example.mistareasapp.ui.screens.habits.PantallaMantenimientoHabitos
 import com.example.mistareasapp.viewmodel.Habits.HabitosViewModel
 import com.example.mistareasapp.viewmodel.Habits.HabitosViewModelFactory
+import com.example.mistareasapp.data.shopping.TiendaItem
 import com.example.mistareasapp.data.shopping.TipoItemCompra
 import androidx.compose.runtime.Composable
 
@@ -129,12 +132,8 @@ fun MisTareasApp() {
     val tareasActivas = listaTareas.count { !it.estaCompletada }
     val itemsPendientesCompra by listaCompraViewModel.itemsPendientesCount.collectAsStateWithLifecycle()
 
-    // Para mostrar en Hábitos el % de cumplimiento (media ponderada por días de vida efectivos)
-    val habitosConProgreso by habitosViewModel.habitosConProgreso.collectAsState(initial = emptyList())
-    val pesoTotalHabitos = habitosConProgreso.sumOf { (minOf(it.diasVidaEfectivos, 180) * it.habito.dificultad).toLong() }
-    val progresoGeneral = if (pesoTotalHabitos > 0)
-        (habitosConProgreso.sumOf { it.porcentajeHistorico.coerceIn(0f, 1f).toDouble() * minOf(it.diasVidaEfectivos, 180) * it.habito.dificultad } / pesoTotalHabitos).toFloat()
-    else 0f
+    // % general ponderado incluyendo pausados — misma fuente que PantallaCalculosHabitos
+    val progresoGeneral by habitosViewModel.porcentajeGeneralConPausados.collectAsState()
 
 
     val navBackStackEntry by navController.currentBackStackEntryAsState()
@@ -370,6 +369,14 @@ fun MisTareasApp() {
                                             leadingIcon = { Icon(Icons.Default.Pause, null) }
                                         )
                                         DropdownMenuItem(
+                                            text = { Text("Hábitos archivados") },
+                                            onClick = {
+                                                mostrarMenuPrincipal = false
+                                                navController.navigate("habitos_archivados")
+                                            },
+                                            leadingIcon = { Icon(Icons.Default.Archive, null) }
+                                        )
+                                        DropdownMenuItem(
                                             text = { Text("Categorías de hábitos") },
                                             onClick = {
                                                 mostrarMenuPrincipal = false
@@ -452,6 +459,7 @@ fun MisTareasApp() {
                                 )
                             }
                             if (rutaActual == Rutas.PantallaListaCompra.ruta) {
+                                AccionesCompartirCompra(vm = listaCompraViewModel)
                                 FiltroCompraTopBar(vm = listaCompraViewModel)
                             }
                         }
@@ -564,6 +572,13 @@ fun MisTareasApp() {
 
                 composable("habitos_pausados") {
                     PantallaPausados(
+                        viewModel = habitosViewModel,
+                        navController = navController
+                    )
+                }
+
+                composable("habitos_archivados") {
+                    PantallaHabitosArchivados(
                         viewModel = habitosViewModel,
                         navController = navController
                     )
@@ -755,20 +770,22 @@ fun MisTareasApp() {
 @Composable
 private fun FiltroCompraTopBar(vm: ListaCompraViewModel) {
     val filtroTipo by vm.filtroTipo.collectAsStateWithLifecycle()
+    val filtroTienda by vm.filtroTienda.collectAsStateWithLifecycle()
+    val hayFiltroActivo = filtroTipo != null || filtroTienda != null
     var expandido by remember { mutableStateOf(false) }
 
     Box {
         IconButton(onClick = { expandido = true }) {
             Icon(
-                imageVector = if (filtroTipo == null) Icons.Default.FilterList else Icons.Default.FilterListOff,
+                imageVector = if (hayFiltroActivo) Icons.Default.FilterListOff else Icons.Default.FilterList,
                 contentDescription = "Filtrar",
-                tint = if (filtroTipo != null) MaterialTheme.colorScheme.primary else LocalContentColor.current
+                tint = if (hayFiltroActivo) MaterialTheme.colorScheme.primary else LocalContentColor.current
             )
         }
         DropdownMenu(expanded = expandido, onDismissRequest = { expandido = false }) {
             DropdownMenuItem(
-                text = { Text("Todo", fontWeight = if (filtroTipo == null) FontWeight.Bold else FontWeight.Normal) },
-                onClick = { vm.setFiltroTipo(null); expandido = false }
+                text = { Text("Todo", fontWeight = if (!hayFiltroActivo) FontWeight.Bold else FontWeight.Normal) },
+                onClick = { vm.limpiarFiltros(); expandido = false }
             )
             DropdownMenuItem(
                 text = { Text("Urgente", fontWeight = if (filtroTipo == TipoItemCompra.URGENTE) FontWeight.Bold else FontWeight.Normal) },
@@ -778,6 +795,24 @@ private fun FiltroCompraTopBar(vm: ListaCompraViewModel) {
                 text = { Text("Planificado", fontWeight = if (filtroTipo == TipoItemCompra.PLANIFICADO) FontWeight.Bold else FontWeight.Normal) },
                 onClick = { vm.setFiltroTipo(TipoItemCompra.PLANIFICADO); expandido = false }
             )
+            HorizontalDivider()
+            listOf(
+                TiendaItem.MERCADONA to "Mercadona",
+                TiendaItem.ASIATICA   to "Asiática",
+                TiendaItem.NINGUNA    to "Sin tienda"
+            ).forEach { (tienda, etiqueta) ->
+                val activo = filtroTienda == tienda
+                DropdownMenuItem(
+                    text = {
+                        Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                            Checkbox(checked = activo, onCheckedChange = null, modifier = Modifier.size(20.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text(etiqueta, fontWeight = if (activo) FontWeight.Bold else FontWeight.Normal)
+                        }
+                    },
+                    onClick = { vm.setFiltroTienda(if (activo) null else tienda) }
+                )
+            }
         }
     }
 }

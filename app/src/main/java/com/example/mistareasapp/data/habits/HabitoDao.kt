@@ -9,8 +9,11 @@ import java.time.LocalDate
 interface HabitoDao {
 
     // --- GESTIÓN DE HÁBITOS ---
-    @Query("SELECT * FROM habitos ORDER BY orden ASC, id ASC")
+    @Query("SELECT * FROM habitos WHERE archivado = 0 ORDER BY orden ASC, id ASC")
     fun obtenerTodosLosHabitos(): Flow<List<Habito>>
+
+    @Query("SELECT * FROM habitos WHERE archivado = 1 ORDER BY nombre ASC")
+    fun obtenerHabitosArchivados(): Flow<List<Habito>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertarHabito(habito: Habito): Long
@@ -28,6 +31,9 @@ interface HabitoDao {
     // Inserta o actualiza el progreso de un día (ej: sumar un vaso de agua)
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertProgreso(historial: HabitoHistorial)
+
+    @Delete
+    suspend fun eliminarProgreso(historial: HabitoHistorial)
 
     // Obtiene todos los registros de un hábito para estadísticas/gráficas
     @Query("SELECT * FROM habitos_historial WHERE habitoId = :habitoId ORDER BY fecha ASC")

@@ -18,7 +18,11 @@ data class Tarea(
     val fechaLimite: LocalDate? = null,
     val horaLimite: LocalTime? = null,
     val categoria: String? = null,
-    val repeticion: String = "Sin repetición"
+    val repeticion: String = "Sin repetición",
+    val pendienteClasificar: Boolean = false,
+    val repeticionFin: LocalDate? = null,
+    val repeticionVeces: Int? = null,
+    val repeticionContador: Int = 0
 ) {
     // AÑADE ESTO AQUÍ:
     fun toComparableDateTime(): LocalDateTime {

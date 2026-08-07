@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccessTime
@@ -20,10 +21,13 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.LabelOff
 import androidx.compose.material.icons.filled.Repeat
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -44,6 +48,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
@@ -58,14 +63,18 @@ import com.example.mistareasapp.ui.components.tasks.obtenerIcono
 import com.example.mistareasapp.viewmodel.Tasks.TareasViewModel
 import com.example.mistareasapp.viewmodel.Tasks.TareasViewModelFactory
 import kotlinx.coroutines.launch
+import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import com.example.mistareasapp.ui.components.tasks.DateTimePickers
 
+
+enum class ModoLimiteRepeticion { SIN_LIMITE, HASTA_FECHA, N_VECES }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -93,13 +102,20 @@ fun PantallaCrearTarea(navController: NavController) {
     var repeticionSeleccionada by remember { mutableStateOf(opcionesRepeticion[0]) }
     var menuRepeticionExpandido by remember { mutableStateOf(false) }
 
+    // ESTADOS LÍMITE DE REPETICIÓN
+    var modoLimite by remember { mutableStateOf(ModoLimiteRepeticion.SIN_LIMITE) }
+    var repeticionFin by remember { mutableStateOf<LocalDate?>(null) }
+    var repeticionVecesTexto by remember { mutableStateOf("") }
+    var showDatePickerFin by remember { mutableStateOf(false) }
+    val datePickerFinState = rememberDatePickerState()
+
     // DIÁLOGOS FECHA/HORA
     var showDatePicker by remember { mutableStateOf(false) }
     var showTimePicker by remember { mutableStateOf(false) }
     val datePickerState = rememberDatePickerState()
     val timePickerState = rememberTimePickerState(is24Hour = true)
 
-    // Gestionamos los selectores de Fecha y Hora de
+    // Gestionamos los selectores de Fecha y Hora de vencimiento
     DateTimePickers(
         showDatePicker = showDatePicker,
         showTimePicker = showTimePicker,
@@ -111,6 +127,22 @@ fun PantallaCrearTarea(navController: NavController) {
         onDismissTime = { showTimePicker = false }
     )
 
+    // DatePicker para fecha de fin de repetición
+    if (showDatePickerFin) {
+        DatePickerDialog(
+            onDismissRequest = { showDatePickerFin = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    datePickerFinState.selectedDateMillis?.let { millis ->
+                        repeticionFin = Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault()).toLocalDate()
+                    }
+                    showDatePickerFin = false
+                }) { Text("Aceptar") }
+            },
+            dismissButton = { TextButton(onClick = { showDatePickerFin = false }) { Text("Cancelar") } }
+        ) { DatePicker(state = datePickerFinState) }
+    }
+
     Scaffold(
         topBar = {
             CrearTareaTopBar(
@@ -121,6 +153,8 @@ fun PantallaCrearTarea(navController: NavController) {
                 horaLimite = horaLimite,
                 categoria = categoriaSeleccionada,
                 repeticion = repeticionSeleccionada,
+                repeticionFin = repeticionFin,
+                repeticionVeces = repeticionVecesTexto.trim().toIntOrNull(),
                 onBack = { navController.popBackStack() },
                 onSave = { nuevaTarea ->
                     scope.launch {
@@ -228,11 +262,46 @@ fun PantallaCrearTarea(navController: NavController) {
                         }
                     }
 
+                    // Selector de límite de repetición
+                    if (repeticionSeleccionada != opcionesRepeticion[0]) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text("Límite de repetición", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            FilterChip(selected = modoLimite == ModoLimiteRepeticion.SIN_LIMITE, onClick = { modoLimite = ModoLimiteRepeticion.SIN_LIMITE; repeticionFin = null; repeticionVecesTexto = "" }, label = { Text("Sin límite") })
+                            FilterChip(selected = modoLimite == ModoLimiteRepeticion.HASTA_FECHA, onClick = { modoLimite = ModoLimiteRepeticion.HASTA_FECHA; repeticionVecesTexto = "" }, label = { Text("Hasta fecha") })
+                            FilterChip(selected = modoLimite == ModoLimiteRepeticion.N_VECES, onClick = { modoLimite = ModoLimiteRepeticion.N_VECES; repeticionFin = null }, label = { Text("N veces") })
+                        }
+                        when (modoLimite) {
+                            ModoLimiteRepeticion.HASTA_FECHA -> {
+                                BotonSelectorDato(
+                                    label = repeticionFin?.format(DateTimeFormatter.ofPattern("dd/MM/yy")) ?: "Fecha de fin",
+                                    icon = Icons.Default.DateRange,
+                                    onClick = { showDatePickerFin = true },
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
+                            ModoLimiteRepeticion.N_VECES -> {
+                                OutlinedTextField(
+                                    value = repeticionVecesTexto,
+                                    onValueChange = { if (it.all { c -> c.isDigit() }) repeticionVecesTexto = it },
+                                    label = { Text("Número de repeticiones") },
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                    singleLine = true,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
+                            else -> {}
+                        }
+                    }
+
                     TextButton(
                         onClick = {
                             fechaLimite = null
                             horaLimite = null
                             repeticionSeleccionada = opcionesRepeticion[0]
+                            modoLimite = ModoLimiteRepeticion.SIN_LIMITE
+                            repeticionFin = null
+                            repeticionVecesTexto = ""
                         },
                         modifier = Modifier.Companion.align(Alignment.Companion.End)
                     ) {
@@ -255,6 +324,8 @@ private fun CrearTareaTopBar(
     horaLimite: LocalTime?,
     categoria: Categoria?,
     repeticion: String,
+    repeticionFin: LocalDate?,
+    repeticionVeces: Int?,
     onBack: () -> Unit,
     onSave: (Tarea) -> Unit
 ) {
@@ -272,6 +343,7 @@ private fun CrearTareaTopBar(
                     val tituloFormateado = titulo.trim().replaceFirstChar {
                         if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString()
                     }
+                    val repFinal = if (fechaLimite == null) "Sin repetición" else repeticion
                     val nuevaTarea = Tarea(
                         titulo = tituloFormateado,
                         descripcion = descripcion.ifBlank { null },
@@ -279,7 +351,9 @@ private fun CrearTareaTopBar(
                         fechaLimite = fechaLimite,
                         horaLimite = if (fechaLimite == null) null else horaLimite,
                         categoria = categoria?.titulo,
-                        repeticion = if (fechaLimite == null) "Sin repetición" else repeticion
+                        repeticion = repFinal,
+                        repeticionFin = if (repFinal == "Sin repetición") null else repeticionFin,
+                        repeticionVeces = if (repFinal == "Sin repetición") null else repeticionVeces
                     )
                     onSave(nuevaTarea)
                 }

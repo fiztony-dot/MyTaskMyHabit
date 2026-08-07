@@ -50,7 +50,10 @@ data class Habito(
     // Límite Máximo: activa tabla de equivalencias UBE al registrar.
     val ubeActivo: Boolean = false,
     // Orden visual dentro de la categoría (menor = antes).
-    val orden: Int = 0
+    val orden: Int = 0,
+    // Hábito archivado: desaparece de todas las vistas pero sus datos se conservan.
+    // Solo puede archivarse un hábito pausado.
+    val archivado: Boolean = false
 )
 
 /** Devuelve el conjunto de DayOfWeek en que aplica este hábito, o null si aplica todos los días. */

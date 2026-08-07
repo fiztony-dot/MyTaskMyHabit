@@ -38,6 +38,7 @@ import kotlinx.coroutines.flow.catch
 
 // --- DATA CLASS PARA LA ESTRUCTURA DE LA UI ---
 data class MapasDeTareas(
+    val pendientesClasificar: List<Tarea> = emptyList(),
     val vencidas: List<Tarea> = emptyList(),
     val hoy: List<Tarea> = emptyList(),
     val estaSemana: List<Tarea> = emptyList(),
@@ -133,6 +134,8 @@ class TareasViewModel(
         tareasFiltradas,
         _reloj
     ) { lista, ahora ->
+        val pendientesClasificar = lista.filter { it.pendienteClasificar && !it.estaCompletada }
+        val listaFiltrada = lista.filter { !it.pendienteClasificar }
         val hoyFecha = ahora.toLocalDate()
         val limiteSemana = hoyFecha.plusDays(7)
         val diasHastaDomingo = 7 - hoyFecha.dayOfWeek.value.toLong()
@@ -140,7 +143,7 @@ class TareasViewModel(
         val finDeMesActual = hoyFecha.withDayOfMonth(hoyFecha.lengthOfMonth())
 
         // 1. Tareas Vencidas
-        val vencidas = lista.filter {
+        val vencidas = listaFiltrada.filter {
             if (it.estaCompletada) return@filter false
             val momentoActual = LocalDateTime.now()
 
@@ -161,19 +164,19 @@ class TareasViewModel(
         }.sortedBy { it.toComparableDateTime() }
 
         // 2. Tareas para Hoy
-        val esHoy = lista.filter {
+        val esHoy = listaFiltrada.filter {
             if (it.estaCompletada || it.fechaLimite != hoyFecha) return@filter false
             it.horaLimite == null || it.toComparableDateTime().isAfter(ahora)
         }.sortedBy { it.horaLimite }
 
         // 3. Tareas para esta Semana
-        val estaSemana = lista.filter {
+        val estaSemana = listaFiltrada.filter {
             if (it.estaCompletada || it.fechaLimite == null) return@filter false
             it.fechaLimite!!.isAfter(hoyFecha) && !it.fechaLimite!!.isAfter(finDeSemanaActual)
         }.sortedBy { it.fechaLimite }
 
         // 4. Tareas para este Mes
-        val esteMes = lista.filter {
+        val esteMes = listaFiltrada.filter {
             !it.estaCompletada && it.fechaLimite != null &&
                     it.fechaLimite!!.isAfter(finDeSemanaActual) && !it.fechaLimite!!.isAfter(
                 finDeMesActual
@@ -181,16 +184,16 @@ class TareasViewModel(
         }.sortedBy { it.fechaLimite }
 
         // 5. Tareas Completadas
-        val completadas = lista.filter { it.estaCompletada }.sortedByDescending { it.fechaCreacion }
+        val completadas = listaFiltrada.filter { it.estaCompletada }.sortedByDescending { it.fechaCreacion }
 
         // 6. Resto de Tareas
-        val resto = lista.filter {
+        val resto = listaFiltrada.filter {
             !it.estaCompletada && it !in vencidas && it !in esHoy && it !in estaSemana && it !in esteMes
         }.sortedWith(
             compareBy<Tarea> { it.fechaLimite == null }.thenBy { it.toComparableDateTime() }
         )
 
-        MapasDeTareas(vencidas, esHoy, estaSemana, esteMes, resto, completadas)
+        MapasDeTareas(pendientesClasificar, vencidas, esHoy, estaSemana, esteMes, resto, completadas)
     }.stateIn(viewModelScope, SharingStarted.Companion.WhileSubscribed(5000), MapasDeTareas())
 
     // --- 5. CLASIFICACIÓN POR CATEGORÍAS (VISTA POR CATEGORÍAS) ---
@@ -245,13 +248,19 @@ class TareasViewModel(
             // Lógica de repetición
             if (tarea.repeticion != "Sin repetición" && tarea.fechaLimite != null) {
                 val nuevaFecha = cuandoSeraLaSiguiente(tarea.fechaLimite, tarea.repeticion)
-                val nuevaTarea = tarea.copy(
-                    id = 0,
-                    estaCompletada = false,
-                    fechaLimite = nuevaFecha,
-                    fechaCreacion = System.currentTimeMillis()
-                )
-                insertar(nuevaTarea, context)
+                val nuevoContador = tarea.repeticionContador + 1
+                val limiteVecesAlcanzado = tarea.repeticionVeces != null && nuevoContador >= tarea.repeticionVeces
+                val limiteFinAlcanzado = tarea.repeticionFin != null && !nuevaFecha.isBefore(tarea.repeticionFin)
+                if (!limiteVecesAlcanzado && !limiteFinAlcanzado) {
+                    val nuevaTarea = tarea.copy(
+                        id = 0,
+                        estaCompletada = false,
+                        fechaLimite = nuevaFecha,
+                        fechaCreacion = System.currentTimeMillis(),
+                        repeticionContador = nuevoContador
+                    )
+                    insertar(nuevaTarea, context)
+                }
             }
         }
     }
@@ -337,13 +346,20 @@ class TareasViewModel(
                     titulo = texto,
                     descripcion = "",
                     estaCompletada = false,
-                    fechaCreacion = System.currentTimeMillis()
+                    fechaCreacion = System.currentTimeMillis(),
+                    pendienteClasificar = true
                 )
                 tareaDao.insertar(nuevaTarea)
                 _mensajeConfirmacion.emit("Tarea creada: $texto")
             } catch (e: Exception) {
                 _mensajeConfirmacion.emit("Error al guardar: ${e.message}")
             }
+        }
+    }
+
+    fun marcarClasificada(tarea: Tarea) {
+        viewModelScope.launch {
+            tareaDao.actualizar(tarea.copy(pendienteClasificar = false))
         }
     }
 

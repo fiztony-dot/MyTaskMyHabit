@@ -5,6 +5,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.HelpOutline
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -42,7 +43,8 @@ fun TareaCard(
     onTaskToggle: (Tarea, Boolean) -> Unit,
     onDelete: (Tarea) -> Unit,
     onArchive: (Tarea) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onMarcarClasificada: ((Tarea) -> Unit)? = null
 ) {
     // 1. GESTIÓN DE GESTOS (SWIPE)
     // Define qué ocurre cuando el usuario desliza la tarjeta a izquierda o derecha.
@@ -111,7 +113,7 @@ fun TareaCard(
                     // Fila 1: Título y estado de repetición
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            text = tarea.titulo.lowercase().replaceFirstChar { it.uppercase() },
+                            text = tarea.titulo.replaceFirstChar { it.uppercase() },
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.SemiBold,
                             color = if (tarea.estaCompletada) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.onSurface,
@@ -147,7 +149,21 @@ fun TareaCard(
                     )
                 }
 
-                // --- BLOQUE C: ICONO DE CATEGORÍA (DERECHA) ---
+                // --- BLOQUE C: ICONO DE PENDIENTE DE CLASIFICAR + CATEGORÍA (DERECHA) ---
+                if (tarea.pendienteClasificar && onMarcarClasificada != null) {
+                    IconButton(
+                        onClick = { onMarcarClasificada(tarea) },
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.HelpOutline,
+                            contentDescription = "Pendiente de clasificar — toca para marcar como clasificada",
+                            tint = Color(0xFFF59E0B),
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                }
+
                 val categoriaAsociada = categorias.find { it.titulo == tarea.categoria }
                 val nombreIcono = categoriaAsociada?.icono ?: "list"
 
@@ -155,7 +171,6 @@ fun TareaCard(
                     modifier = Modifier.padding(end = 16.dp)
                 ) {
                     Icon(
-                        // Estas funciones 'obtenerIcono' deben estar accesibles en este scope
                         imageVector = obtenerIcono(nombreIcono),
                         contentDescription = "Categoría: ${tarea.categoria}",
                         tint = if (tarea.estaCompletada) Color.Gray.copy(0.4f) else obtenerColorIcono(nombreIcono),

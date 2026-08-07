@@ -16,6 +16,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Remove
@@ -321,20 +322,20 @@ fun HabitoFlashItem(item: HabitoConProgreso, viewModel: HabitosViewModel, navCon
                     contentAlignment = Alignment.Center
                 ) {
                     when {
-                        esLimiteMaximo -> if (registroHoyLimite) Icon(
-                            Icons.Default.Check,
-                            contentDescription = "Registrado",
-                            tint = checkContent,
-                            modifier = Modifier.size(18.dp)
-                        ) else Unit
-                        esCuantitativo && !esDiaria -> if (valorActual > 0) Icon(
-                            Icons.Default.Check,
-                            contentDescription = "Registrado hoy",
-                            tint = checkContent,
-                            modifier = Modifier.size(18.dp)
-                        ) else Unit
+                        esLimiteMaximo -> {
+                            val valorHoy = item.progreso?.valorProgresoDecimal ?: 0.0
+                            val valorStr = if (valorHoy == kotlin.math.floor(valorHoy) && valorHoy < 1_000.0)
+                                valorHoy.toLong().toString()
+                            else "%.1f".format(valorHoy)
+                            Text(
+                                text = valorStr,
+                                color = checkContent,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 10.sp
+                            )
+                        }
                         esCuantitativo -> Text(
-                            text = "${(porcentajeDiario * 100).toInt()}%",
+                            text = valorActual.toString(),
                             color = checkContent,
                             fontWeight = FontWeight.Bold,
                             fontSize = 10.sp
@@ -548,6 +549,7 @@ fun DialogoCuantitativo(
         val initText = if (valor == 0) "" else valor.toString()
         mutableStateOf(TextFieldValue(text = initText, selection = TextRange(0, initText.length)))
     }
+    var mostrarConfirmEliminar by remember { mutableStateOf(false) }
     val focusRequester = remember { FocusRequester() }
     LaunchedEffect(Unit) { focusRequester.requestFocus() }
     val porcentaje = if (objetivo > 0) (valor.toFloat() / objetivo).coerceIn(0f, 1f) else 0f
@@ -629,7 +631,7 @@ fun DialogoCuantitativo(
                 ) {
                     FilledTonalIconButton(
                         onClick = {
-                            val newVal = (valor - 1).coerceAtLeast(0)
+                            val newVal = valor - 1
                             valor = newVal
                             val t = if (newVal == 0) "" else newVal.toString()
                             textoValor = TextFieldValue(t, TextRange(t.length))
@@ -642,7 +644,8 @@ fun DialogoCuantitativo(
                         value = textoValor,
                         onValueChange = { tv ->
                             textoValor = tv
-                            valor = tv.text.toIntOrNull()?.coerceAtLeast(0) ?: 0
+                            val parsed = tv.text.toIntOrNull()
+                            if (parsed != null) valor = parsed
                         },
                         modifier = Modifier.weight(1f).focusRequester(focusRequester),
                         textStyle = LocalTextStyle.current.copy(
@@ -680,7 +683,7 @@ fun DialogoCuantitativo(
                     quickValues.forEach { v ->
                         OutlinedButton(
                             onClick = {
-                                val newVal = (valor - v).coerceAtLeast(0)
+                                val newVal = valor - v
                                 valor = newVal
                                 val t = if (newVal == 0) "" else newVal.toString()
                                 textoValor = TextFieldValue(t, TextRange(t.length))
@@ -726,8 +729,41 @@ fun DialogoCuantitativo(
                         modifier = Modifier.weight(1f)
                     ) { Text("Guardar") }
                 }
+
+                if (progreso != null) {
+                    TextButton(
+                        onClick = { mostrarConfirmEliminar = true },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                    ) {
+                        Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("Eliminar registro del día", fontSize = 12.sp)
+                    }
+                }
             }
         }
+    }
+
+    if (mostrarConfirmEliminar && progreso != null) {
+        AlertDialog(
+            onDismissRequest = { mostrarConfirmEliminar = false },
+            title = { Text("Eliminar registro") },
+            text = { Text("¿Eliminar el registro de hoy para '${habito.nombre}'?") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.eliminarRegistroDia(progreso)
+                        mostrarConfirmEliminar = false
+                        onDismiss()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) { Text("Eliminar") }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { mostrarConfirmEliminar = false }) { Text("Cancelar") }
+            }
+        )
     }
 }
 
@@ -745,11 +781,13 @@ fun DialogoLimiteMaximo(
     val acumulado = progreso.valorPeriodoDecimal
     val unidad = habito.unidad ?: ""
 
+    var modoEdicion by remember { mutableStateOf(false) }
     var textoValor by remember { mutableStateOf("") }
     var mostrarUbe by remember { mutableStateOf(false) }
     var tipoBebida by remember { mutableStateOf(TipoBebidaUBE.CERVEZA_SIDRA) }
     var textoMl by remember { mutableStateOf("") }
     var expandidoBebida by remember { mutableStateOf(false) }
+    var mostrarConfirmEliminar by remember { mutableStateOf(false) }
 
     val valorDecimal = textoValor.replace(",", ".").toDoubleOrNull() ?: 0.0
     val mlDecimal = textoMl.replace(",", ".").toDoubleOrNull() ?: 0.0
@@ -768,6 +806,31 @@ fun DialogoLimiteMaximo(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Text(habito.nombre, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+
+                // Selector modo: Añadir / Editar total
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    FilterChip(
+                        selected = !modoEdicion,
+                        onClick = { modoEdicion = false; textoValor = "" },
+                        label = { Text("Añadir", fontSize = 12.sp) },
+                        modifier = Modifier.weight(1f)
+                    )
+                    FilterChip(
+                        selected = modoEdicion,
+                        onClick = {
+                            modoEdicion = true
+                            val totalActual = progreso.progreso?.valorProgresoDecimal ?: acumulado
+                            textoValor = if (totalActual == totalActual.toLong().toDouble())
+                                totalActual.toLong().toString()
+                            else "%.1f".format(totalActual)
+                        },
+                        label = { Text("Editar total", fontSize = 12.sp) },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
 
                 // Acumulado vs límite
                 val pctActual = if (limiteMaximo > 0) (acumulado / limiteMaximo).toFloat().coerceIn(0f, 1f) else 0f
@@ -842,7 +905,10 @@ fun DialogoLimiteMaximo(
                 }
 
                 // Campo valor a registrar
-                Text("Cantidad a registrar ($unidad)".trim(), style = MaterialTheme.typography.labelMedium)
+                Text(
+                    if (modoEdicion) "Total acumulado ($unidad)".trim() else "Cantidad a registrar ($unidad)".trim(),
+                    style = MaterialTheme.typography.labelMedium
+                )
                 OutlinedTextField(
                     value = textoValor,
                     onValueChange = { textoValor = it },
@@ -875,21 +941,23 @@ fun DialogoLimiteMaximo(
                     }
                 }
 
-                // Botones rápidos resta
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    quickValues.forEach { v ->
-                        OutlinedButton(
-                            onClick = {
-                                val nuevo = (valorDecimal - v).coerceAtLeast(0.0)
-                                textoValor = if (nuevo == nuevo.toLong().toDouble()) nuevo.toLong().toString()
-                                    else "%.1f".format(nuevo)
-                            },
-                            modifier = Modifier.weight(1f),
-                            contentPadding = PaddingValues(4.dp)
-                        ) { Text("-${if (v == v.toLong().toDouble()) v.toLong() else v}", fontSize = 12.sp) }
+                // Botones rápidos resta (solo en modo Añadir)
+                if (!modoEdicion) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        quickValues.forEach { v ->
+                            OutlinedButton(
+                                onClick = {
+                                    val nuevo = valorDecimal - v
+                                    textoValor = if (nuevo == nuevo.toLong().toDouble()) nuevo.toLong().toString()
+                                        else "%.1f".format(nuevo)
+                                },
+                                modifier = Modifier.weight(1f),
+                                contentPadding = PaddingValues(4.dp)
+                            ) { Text("-${if (v == v.toLong().toDouble()) v.toLong() else v}", fontSize = 12.sp) }
+                        }
                     }
                 }
 
@@ -901,16 +969,50 @@ fun DialogoLimiteMaximo(
                     OutlinedButton(onClick = onDismiss, modifier = Modifier.weight(1f)) { Text("Cancelar") }
                     Button(
                         onClick = {
-                            if (valorDecimal > 0) {
+                            if (modoEdicion) {
+                                viewModel.establecerTotalLimiteMaximo(habito, progreso.progreso, valorDecimal, fecha)
+                            } else if (valorDecimal != 0.0) {
                                 viewModel.registrarLimiteMaximo(habito, progreso.progreso, valorDecimal, fecha)
                             }
                             onDismiss()
                         },
-                        modifier = Modifier.weight(1f),
-                        enabled = valorDecimal > 0
+                        modifier = Modifier.weight(1f)
                     ) { Text("Guardar") }
+                }
+
+                if (progreso.progreso != null) {
+                    TextButton(
+                        onClick = { mostrarConfirmEliminar = true },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                    ) {
+                        Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("Eliminar registro del día", fontSize = 12.sp)
+                    }
                 }
             }
         }
+    }
+
+    if (mostrarConfirmEliminar && progreso.progreso != null) {
+        AlertDialog(
+            onDismissRequest = { mostrarConfirmEliminar = false },
+            title = { Text("Eliminar registro") },
+            text = { Text("¿Eliminar el registro de hoy para '${habito.nombre}'?") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.eliminarRegistroDia(progreso.progreso)
+                        mostrarConfirmEliminar = false
+                        onDismiss()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) { Text("Eliminar") }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { mostrarConfirmEliminar = false }) { Text("Cancelar") }
+            }
+        )
     }
 }

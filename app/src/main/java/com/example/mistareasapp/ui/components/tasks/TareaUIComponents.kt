@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.HelpOutline
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -184,6 +185,48 @@ fun CuerpoListaTareas(
                         )
                     }
                 }
+            }
+        }
+
+        // --- SECCIÓN ESPECIAL: PENDIENTES DE CLASIFICAR ---
+        if (mapas.pendientesClasificar.isNotEmpty()) {
+            val colorPendiente = Color(0xFFF59E0B)
+            val tituloPend = "Pendientes de clasificar"
+            val abiertoPend = estadosSecciones.getOrDefault(tituloPend, true)
+            item(key = "header_$tituloPend") {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { estadosSecciones[tituloPend] = !abiertoPend }
+                        .padding(vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(imageVector = if (abiertoPend) Icons.Default.ExpandLess else Icons.Default.ExpandMore, contentDescription = null, tint = colorPendiente)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Icon(imageVector = Icons.Default.HelpOutline, contentDescription = null, tint = colorPendiente, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "$tituloPend (${mapas.pendientesClasificar.size})",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                        color = colorPendiente
+                    )
+                }
+            }
+            if (abiertoPend) {
+                items(mapas.pendientesClasificar, key = { "${it.id}_pend" }) { tarea ->
+                    TareaCard(
+                        tarea = tarea,
+                        categorias = listaCategorias,
+                        onTaskToggle = onTaskToggle,
+                        onDelete = { t -> tareaAEliminar = t; mostrarDialogo = true },
+                        onArchive = { t -> tareaACompletar = t; mostrarDialogoCompletar = true },
+                        onMarcarClasificada = { t -> viewModel.marcarClasificada(t) },
+                        modifier = Modifier.clickable { onEditTask(tarea.id) }
+                    )
+                }
+            }
+            item(key = "divider_pend") {
+                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
             }
         }
 

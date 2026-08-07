@@ -61,7 +61,8 @@ suspend fun guardarTareaDesdeParser(
             descripcion = "Creada por voz",
             prioridad = resultado.prioridad,
             fechaLimite = resultado.fechaLimite,
-            horaLimite = resultado.horaLimite
+            horaLimite = resultado.horaLimite,
+            pendienteClasificar = true
         )
 
         viewModel.insertar(tarea, context)

@@ -579,6 +579,69 @@ val MIGRATION_24_25 = object : Migration(24, 25) {
     }
 }
 
+val MIGRATION_30_31 = object : Migration(30, 31) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        database.execSQL("ALTER TABLE tareas_table ADD COLUMN repeticionFin INTEGER")
+        database.execSQL("ALTER TABLE tareas_table ADD COLUMN repeticionVeces INTEGER")
+        database.execSQL("ALTER TABLE tareas_table ADD COLUMN repeticionContador INTEGER NOT NULL DEFAULT 0")
+    }
+}
+
+val MIGRATION_29_30 = object : Migration(29, 30) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        // La migración 28→29 dejó esMercadona + tienda; recreamos la tabla con el esquema correcto
+        database.execSQL("""
+            CREATE TABLE lista_items_new (
+                id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                productoId INTEGER NOT NULL,
+                lugarId INTEGER NOT NULL,
+                cantidad TEXT NOT NULL DEFAULT '1',
+                unidad TEXT NOT NULL DEFAULT '',
+                marcadoComprado INTEGER NOT NULL DEFAULT 0,
+                fechaCreacion INTEGER NOT NULL,
+                tipo TEXT NOT NULL DEFAULT 'URGENTE',
+                tienda TEXT NOT NULL DEFAULT 'NINGUNA',
+                FOREIGN KEY(productoId) REFERENCES lista_productos(id) ON DELETE CASCADE,
+                FOREIGN KEY(lugarId) REFERENCES lista_lugares(id) ON DELETE CASCADE
+            )
+        """.trimIndent())
+        database.execSQL("""
+            INSERT INTO lista_items_new (id, productoId, lugarId, cantidad, unidad, marcadoComprado, fechaCreacion, tipo, tienda)
+            SELECT id, productoId, lugarId, cantidad, unidad, marcadoComprado, fechaCreacion, tipo, tienda
+            FROM lista_items
+        """.trimIndent())
+        database.execSQL("DROP TABLE lista_items")
+        database.execSQL("ALTER TABLE lista_items_new RENAME TO lista_items")
+        database.execSQL("CREATE INDEX index_lista_items_productoId ON lista_items(productoId)")
+        database.execSQL("CREATE INDEX index_lista_items_lugarId ON lista_items(lugarId)")
+    }
+}
+
+val MIGRATION_28_29 = object : Migration(28, 29) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        database.execSQL("ALTER TABLE lista_items ADD COLUMN tienda TEXT NOT NULL DEFAULT 'NINGUNA'")
+        database.execSQL("UPDATE lista_items SET tienda = 'MERCADONA' WHERE esMercadona = 1")
+    }
+}
+
+val MIGRATION_27_28 = object : Migration(27, 28) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        database.execSQL("ALTER TABLE lista_items ADD COLUMN esMercadona INTEGER NOT NULL DEFAULT 0")
+    }
+}
+
+val MIGRATION_26_27 = object : Migration(26, 27) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        database.execSQL("ALTER TABLE tareas_table ADD COLUMN pendienteClasificar INTEGER NOT NULL DEFAULT 0")
+    }
+}
+
+val MIGRATION_25_26 = object : Migration(25, 26) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        database.execSQL("ALTER TABLE habitos ADD COLUMN archivado INTEGER NOT NULL DEFAULT 0")
+    }
+}
+
 val MIGRATION_20_21 = object : Migration(20, 21) {
     override fun migrate(database: SupportSQLiteDatabase) {
         database.execSQL("ALTER TABLE habitos_categorias ADD COLUMN orden INTEGER NOT NULL DEFAULT 0")
@@ -598,7 +661,7 @@ val MIGRATION_20_21 = object : Migration(20, 21) {
         TareaHabitoHistorial::class, HabitoVersion::class, HabitoPausa::class,
         ListaLugar::class, ListaCategoriaProducto::class, ListaProducto::class, ListaItem::class
     ],
-    version = 25,
+    version = 31,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -620,7 +683,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "tareas_db"
                 )
-                    .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21, MIGRATION_21_22, MIGRATION_22_23, MIGRATION_23_24, MIGRATION_24_25)
+                    .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21, MIGRATION_21_22, MIGRATION_22_23, MIGRATION_23_24, MIGRATION_24_25, MIGRATION_25_26, MIGRATION_26_27, MIGRATION_27_28, MIGRATION_28_29, MIGRATION_29_30, MIGRATION_30_31)
                     .addCallback(DatabaseCallback(context))
                     .setJournalMode(JournalMode.TRUNCATE)
                     .build()

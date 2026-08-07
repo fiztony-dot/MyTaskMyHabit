@@ -4,6 +4,7 @@ import androidx.room.TypeConverter
 import com.example.mistareasapp.data.habits.CriterioCumplimientoTareas
 import com.example.mistareasapp.data.habits.FrecuenciaHabito
 import com.example.mistareasapp.data.habits.TipoObjetivoHabito
+import com.example.mistareasapp.data.shopping.TiendaItem
 import com.example.mistareasapp.data.shopping.TipoItemCompra
 import com.example.mistareasapp.data.tasks.Prioridad
 import java.time.LocalDate
@@ -79,6 +80,13 @@ class Converters {
 
     @TypeConverter
     fun toTipoItemCompra(valor: String): TipoItemCompra {
-        return TipoItemCompra.valueOf(valor)
+        return runCatching { TipoItemCompra.valueOf(valor) }.getOrDefault(TipoItemCompra.URGENTE)
     }
+
+    @TypeConverter
+    fun fromTiendaItem(tienda: TiendaItem): String = tienda.name
+
+    @TypeConverter
+    fun toTiendaItem(valor: String): TiendaItem =
+        runCatching { TiendaItem.valueOf(valor) }.getOrDefault(TiendaItem.NINGUNA)
 }
