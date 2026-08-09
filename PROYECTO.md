@@ -2,12 +2,12 @@
 
 ## Resumen del proyecto
 
-Migración progresiva de la app Android "MyTaskMyHabit" (actualmente 100% local con Room/SQLite) a una arquitectura cliente-servidor: backend Node.js/Express + PostgreSQL en Render, autenticación JWT propia, y una PWA futura en Cloudflare Pages. Un solo usuario real. La migración se hace vertical, módulo a módulo: Tareas → Hábitos → Shopping.
+Migración progresiva de la app Android "MyTaskMyHabit" (actualmente 100% local con Room/SQLite) a una arquitectura cliente-servidor: backend Node.js/Express en Render + PostgreSQL en Supabase, autenticación JWT propia, y una PWA futura en Cloudflare Pages. Un solo usuario real. La migración se hace vertical, módulo a módulo: Tareas → Hábitos → Shopping.
 
 ## Stack
 
 - **Backend:** Node.js/Express en Render
-- **Base de datos:** PostgreSQL en Render
+- **Base de datos:** PostgreSQL en Supabase
 - **Auth:** JWT propio, usuarios válidos en variable de entorno AUTH_USERS (bcrypt hashes)
 - **App Android:** Kotlin/Jetpack Compose (Room/SQLite, en proceso de retirada módulo a módulo)
 - **PWA (futura):** React + Vite, Cloudflare Pages
@@ -17,16 +17,16 @@ Migración progresiva de la app Android "MyTaskMyHabit" (actualmente 100% local 
 
 | Servicio | Uso en el proyecto | Plan | Dashboard / acceso | Notas |
 |----------|-------------------|------|-------------------|-------|
-| Render (Web Service) | Hosting del backend Node/Express | [pendiente de confirmar] | https://dashboard.render.com/ | Nombre del servicio: [pendiente de confirmar — sugerido: `mytaskmyhabit-api`] |
-| Render (PostgreSQL) | Base de datos de producción | [pendiente de confirmar] | https://dashboard.render.com/ | Nombre sugerido: `mytaskmyhabit-db`. Región y versión: [pendiente de confirmar] |
-| GitHub | Repositorio monorepo | Free | [pendiente de confirmar — URL del repo] | Contiene proyecto Android + server/ (+ web/ en el futuro) |
+| Render (Web Service) | Hosting del backend Node/Express | Free | https://dashboard.render.com/ | Nombre del servicio: `mytaskmyhabit-api` |
+| Supabase (PostgreSQL) | Base de datos de producción | Free | https://supabase.com/dashboard | Sustituye a Render PostgreSQL (descartado por expiración a 90 días). Sin expiración en el tier free. |
+| GitHub | Repositorio monorepo | Free | https://github.com/fiztony-dot/MyTaskMyHabit | Contiene proyecto Android + server/ (+ web/ en el futuro). Rama: `master` |
 | Cloudflare Pages | Hosting de la PWA (futuro) | Free | — | Pendiente hasta Fase PWA |
 
 ## Variables de entorno por servicio
 
 | Variable | Dónde vive | Propósito |
 |----------|-----------|-----------|
-| `DATABASE_URL` | Render (Web Service) — sección Environment | Conexión a PostgreSQL (connection string completo) |
+| `DATABASE_URL` | Render (Web Service) — sección Environment | Conexión a PostgreSQL en Supabase (connection string completo) |
 | `JWT_SECRET` | Render (Web Service) — sección Environment | Firma de tokens JWT |
 | `AUTH_USERS` | Render (Web Service) — sección Environment | Usuarios válidos (formato `usuario:bcryptHash`) |
 | `PORT` | Render (Web Service) — inyectado automáticamente | Puerto del servidor (no configurar manualmente) |
@@ -36,7 +36,7 @@ Migración progresiva de la app Android "MyTaskMyHabit" (actualmente 100% local 
 | Módulo | Schema | Migración datos | API | Android | Estado |
 |--------|--------|-----------------|-----|---------|--------|
 | Base común (auth + usuarios) | ✅ | N/A | ✅ | N/A | Completado (Iteración 1-2) |
-| Tareas | ✅ | ⬜ | ✅ | ✅ | Schema + API + Android listos (Iteración 3-6). Pendiente corte (Iter 7) |
+| Tareas | ✅ | ✅ | ✅ | ✅ | Completado (Iteraciones 3-7) |
 | Hábitos | ⬜ | ⬜ | ⬜ | ⬜ | Pendiente |
 | Shopping | ⬜ | ⬜ | ⬜ | ⬜ | Pendiente |
 | PWA | ⬜ | — | — | — | Pendiente |
@@ -197,4 +197,4 @@ MyTaskMyHabit/
 | 4 | Script migración datos Tareas | Agosto 2026 | Script `scripts/migrate_tareas.js` creado y verificado contra la BD real del dispositivo (11 categorías, 401 tareas, 67 huérfanas de 4 categorías eliminadas, 0 errores de conversión). Migración `004_tareas_unique_constraint.sql` para idempotencia. Comando adb de extracción documentado. NO ejecutado contra producción — pendiente Iteración 7 (corte coordinado). |
 | 5 | API REST módulo Tareas | Agosto 2026 | Endpoints CRUD para categorías (`/api/categorias`) y tareas (`/api/tareas`) con auth JWT, resolución de usuario_id desde JWT, validaciones, ordenación por prioridad DESC + fecha_creacion ASC, filtro de pendientes. Middleware `resolveUser` creado. Todos los módulos cargan correctamente. Pendiente desplegar en Render y verificar manualmente. |
 | 6 | Adaptar Android: Tareas → API | Agosto 2026 | Capa de red completa con Ktor: `ApiClient` (JWT automático), `AuthManager` (DataStore), `TareasApiService`, `TareasApiRepository` (mapea DTOs ↔ modelos locales). `TareasApiViewModel` como drop-in replacement del ViewModel original. Login screen + AuthGate. Room de Tareas permanece intacto pero desconectado del nuevo flujo. BUILD SUCCESSFUL. Pendiente: swap a TareasApiViewModel en Iteración 7. |
-| 7 | Corte coordinado Tareas (EN CURSO) | Agosto 2026 | Swap realizado: `TareasViewModelRoom` (original con Room) archivado, `TareasViewModel` (API) activo en `TareasApiViewModel.kt`. MiApp.kt usa `viewModel()` sin factory. PantallaCrearTarea actualizada. **Pendiente:** conectar dispositivo para: (1) extraer .db fresco, (2) ejecutar migración contra Render, (3) verificar datos en API, (4) compilar y confirmar BUILD SUCCESSFUL, (5) installDebug, (6) verificación funcional. |
+| 7 | Corte coordinado Tareas | Agosto 2026 | Migración de datos ejecutada contra Supabase: 11 categorías insertadas, 401 tareas insertadas, 67 con categoría huérfana (→ NULL), 0 errores. Swap de ViewModel completado (`TareasViewModelRoom` archivado, `TareasViewModel` API activo). App instalada y verificada. Módulo Tareas completamente migrado a servidor. |
