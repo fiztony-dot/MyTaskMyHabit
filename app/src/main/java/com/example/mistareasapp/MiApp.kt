@@ -4,23 +4,20 @@ package com.example.mistareasapp
 import android.content.Intent
 import android.os.Build
 import android.speech.RecognizerIntent
-import android.util.Log
 import android.widget.Toast
 import java.util.Locale
 
 // --- 2. Kotlin Core: Corrutinas y Serialización ---
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.*
 
 // --- 3. Networking (Ktor Client) ---
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
-import io.ktor.client.request.*
-import io.ktor.client.statement.*
-import io.ktor.http.*
 
 // --- 4. AndroidX & Lifecycle (Integración con el SO) ---
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -30,99 +27,80 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 
 // --- 5. Jetpack Compose: Navegación ---
 import androidx.navigation.*
-import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.*
 
-// --- 6. Jetpack Compose: Animaciones ---
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
-
-// --- 7. Jetpack Compose: UI, Material Design y Gráficos ---
+// --- 6. Jetpack Compose: UI, Material Design y Gráficos ---
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.DpOffset
 
-// --- 8. Jetpack Compose: Runtime y Estado ---
+// --- 7. Jetpack Compose: Runtime y Estado ---
 import androidx.compose.runtime.*
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
+import com.example.mistareasapp.core.ai.crearSpeechLauncher
 
-// --- 9. Clases del Proyecto (Local) ---
-import com.example.mistareasapp.data.*
-import com.example.mistareasapp.data.TareasDatabase
-import com.example.mistareasapp.ui.components.BarraFiltros
-import com.example.mistareasapp.ui.screens.*
+// --- 8. Clases del Proyecto (Local) ---
+import com.example.mistareasapp.data.AppDatabase
+import com.example.mistareasapp.data.DatabaseBackup
+import com.example.mistareasapp.data.habits.HabitosBackup
+import com.example.mistareasapp.data.habits.HabitosImportacion
+import com.example.mistareasapp.data.tasks.TareasBackupJson
+import com.example.mistareasapp.data.tasks.Prioridad
+import com.example.mistareasapp.data.tasks.Tarea
+import com.example.mistareasapp.ui.screens.habits.PantallaHabitos
+import com.example.mistareasapp.ui.screens.shopping.PantallaGestionCategoriasCompra
+import com.example.mistareasapp.ui.screens.shopping.PantallaGestionLugares
+import com.example.mistareasapp.ui.screens.shopping.PantallaGestionProductos
+import com.example.mistareasapp.ui.screens.shopping.AccionesCompartirCompra
+import com.example.mistareasapp.ui.screens.shopping.PantallaListaCompra
+import com.example.mistareasapp.viewmodel.Shopping.ListaCompraViewModelFactory
+import com.example.mistareasapp.viewmodel.Shopping.ListaCompraViewModel
+import com.example.mistareasapp.ui.screens.habits.PantallaGestionCategoriasHabitos
+import com.example.mistareasapp.ui.screens.habits.PantallaPausados
+import com.example.mistareasapp.ui.screens.habits.PantallaHabitosArchivados
+import com.example.mistareasapp.ui.screens.habits.PantallaVistaMensualHabito
+import com.example.mistareasapp.ui.screens.tasks.PantallaCrearTarea
+import com.example.mistareasapp.ui.screens.tasks.PantallaEditarTarea
+import com.example.mistareasapp.ui.screens.tasks.PantallaGestionCategorias
+import com.example.mistareasapp.ui.screens.tasks.PantallaListaTareas
 import com.example.mistareasapp.ui.theme.MisTareasAppTheme
-import com.example.mistareasapp.viewmodel.*
-
-
-
-//Estructura de la Respuesta de la IA
-@Serializable
-data class TareaIA(
-    val tarea: String,
-    val fecha: String?=null,
-    val hora: String? = null,
-    val prioridad: String? = null
-)
-//Constantes de Configuración y Credenciales
-object DatosIA {
-    const val MI_LLAVE = "AIzaSyCcZTsOCkF6dpM-eTZ-DstBsCdGRq_YWcg"
-}
-
-@Composable
-fun MiBottomBar(navController: NavController) {
-    val navBackStackEntry by navController.currentBackStackEntryAsState()
-    val currentRoute = navBackStackEntry?.destination?.route
-
-    NavigationBar(tonalElevation = 0.dp) {
-        NavigationBarItem(
-            label = { Text("Tareas") },
-            icon = { Icon(Icons.Filled.List, contentDescription = null) },
-            selected = currentRoute == Rutas.PantallaTareas.ruta,
-            onClick = {
-                navController.navigate(Rutas.PantallaTareas.ruta) {
-                    popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                    launchSingleTop = true
-                    restoreState = true
-                }
-            }
-        )
-        NavigationBarItem(
-            label = { Text("Hábitos") },
-            icon = { Icon(Icons.Filled.CheckCircle, contentDescription = null) },
-            selected = currentRoute == Rutas.PantallaHabitos.ruta,
-            onClick = {
-                navController.navigate(Rutas.PantallaHabitos.ruta) {
-                    popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                    launchSingleTop = true
-                    restoreState = true
-                }
-            }
-        )
-    }
-}
+import com.example.mistareasapp.viewmodel.Tasks.TareasViewModel
+import com.example.mistareasapp.viewmodel.Tasks.TareasViewModelFactory
+import com.example.mistareasapp.core.notifications.tasks.NotificationHelper
+import com.example.mistareasapp.ui.components.tasks.AccionesTopBarTareas
+import com.example.mistareasapp.ui.navigation.BarraNavegacion
+import com.example.mistareasapp.ui.navigation.BarraNavegacionHabitos
+import com.example.mistareasapp.ui.navigation.Rutas
+import com.example.mistareasapp.ui.screens.GestionDatosScreen
+import com.example.mistareasapp.ui.screens.tasks.PantallaConfiguracion
+import com.example.mistareasapp.ui.components.habits.AccionesTopBarHabitos
+import com.example.mistareasapp.ui.screens.habits.CrearHabitoScreen
+import com.example.mistareasapp.ui.screens.habits.EditarHabitoScreen
+import com.example.mistareasapp.ui.screens.habits.PantallaAuditoriaHabitos
+import com.example.mistareasapp.ui.screens.habits.PantallaDetalleCalculoGeneral
+import com.example.mistareasapp.ui.screens.habits.PantallaCalculosHabitos
+import com.example.mistareasapp.ui.screens.habits.PantallaDetalleCalculoHabito
+import com.example.mistareasapp.ui.screens.habits.PantallaMantenimientoHabitos
+import com.example.mistareasapp.viewmodel.Habits.HabitosViewModel
+import com.example.mistareasapp.viewmodel.Habits.HabitosViewModelFactory
+import com.example.mistareasapp.data.shopping.TiendaItem
+import com.example.mistareasapp.data.shopping.TipoItemCompra
+import androidx.compose.runtime.Composable
 
 fun obtenerTitulo(ruta: String?): String {
-    return when (ruta) {
-        Rutas.PantallaTareas.ruta -> "Mis Tareas"
-        Rutas.PantallaHabitos.ruta -> "Mis Hábitos"
-        Rutas.PantallaCrearTarea.ruta -> "Nueva Tarea"
-        else -> "Gestión de Tareas"
+    return when {
+        ruta == Rutas.PantallaTareas.ruta -> "Mis Tareas"
+        ruta?.startsWith("habitos") == true -> "Mis Habitos"
+        ruta == Rutas.PantallaCrearTarea.ruta -> "Nueva Tarea"
+        ruta == Rutas.PantallaListaCompra.ruta -> "Lista de la Compra"
+        else -> "Gestión"
     }
 }
 
@@ -132,528 +110,411 @@ fun MisTareasApp() {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
-    // --- 1. PRIMERO CREAMOS LA BASE DE DATOS Y EL VIEWMODEL ---
-    // (Esto tiene que ir arriba para que 'listaTareas' lo pueda usar)
-    val db = TareasDatabase.getDatabase(context)
-    val factory = TareasViewModelFactory(
-        tareaDao = db.tareaDao(),
-        categoriaDao = db.categoriaDao()
-    )
-    val viewModel: TareasViewModel = viewModel(factory = factory)
+    // --- 1. BASE DE DATOS Y VIEWMODELS ---
+    val db = AppDatabase.getDatabase(context)
 
-    // --- 2. AHORA DEFINIMOS LA LISTA Y EL VIGILANTE ---
-    // (Ya no darán rojo porque el viewModel ya existe arriba)
+    // Tareas: usa la API REST (migrado en Iteración 7)
+    val viewModel: TareasViewModel = viewModel()
+
+    val habitosFactory = HabitosViewModelFactory(db.habitoDao())
+    val habitosViewModel: HabitosViewModel = viewModel(factory = habitosFactory)
+
+    val listaCompraFactory = ListaCompraViewModelFactory(context.applicationContext as android.app.Application, db.listaCompraDao())
+    val listaCompraViewModel: ListaCompraViewModel = viewModel(factory = listaCompraFactory)
+
+    // --- 2. NAVEGACIÓN ---
     val navController = rememberNavController()
     val listaTareas by viewModel.listaTareas.collectAsState(initial = emptyList())
+    val filtroActual by viewModel.categoriaSeleccionada.collectAsState()
+    val textoBusqueda by viewModel.textoBusqueda.collectAsStateWithLifecycle()
+    val tareasActivas = listaTareas.count { !it.estaCompletada }
+    val itemsPendientesCompra by listaCompraViewModel.itemsPendientesCount.collectAsStateWithLifecycle()
 
-    LaunchedEffect(listaTareas) {
-        Log.d("LOG-NOTIFICACION", "🔔 La lista ha cambiado. Tareas totales: ${listaTareas.size}")
-
-        listaTareas.forEach { tarea ->
-            if (!tarea.estaCompletada && tarea.fechaLimite != null) {
-                Log.d("LOG-NOTIFICACION", "🔎 Analizando tarea: ${tarea.titulo} (Fecha: ${tarea.fechaLimite})")
-                programarNotificacion(context, tarea)
-            }
-        }
-    }
+    // % general ponderado incluyendo pausados — misma fuente que PantallaCalculosHabitos
+    val progresoGeneral by habitosViewModel.porcentajeGeneralConPausados.collectAsState()
 
 
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val rutaActual = navBackStackEntry?.destination?.route
 
-    // --- 1. AQUÍ PEDIMOS EL PERMISO PARA ANDROID 13+ ---
+    // Estado de búsqueda y filtro del módulo de hábitos
+    val textoBusquedaHabitos by habitosViewModel.textoBusqueda.collectAsState()
+    val categoriaFiltroHabitos by habitosViewModel.categoriaFiltro.collectAsState()
+
+    // --- 3. PERMISOS ---
     val permisoLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { isGranted ->
-        if (isGranted) {
-            Log.d("LOG", "Permiso de notificaciones concedido")
-        } else {
+        if (!isGranted) {
             Toast.makeText(context, "Debes activar las notificaciones en Ajustes", Toast.LENGTH_LONG).show()
         }
     }
+
     LaunchedEffect(Unit) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             permisoLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
         }
     }
-    // Este es tu nuevo motor de IA, mucho más fiable
-    val client = remember { HttpClient(OkHttp) }
-    val apiKey = DatosIA.MI_LLAVE
 
-
-    // Este lanzador abre el selector de archivos para guardar
-    val exportarLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.CreateDocument("application/octet-stream")
-    ) { uri ->
-        uri?.let {
-            // 1. Exportamos y reseteamos la instancia global (INSTANCE = null)
-            DatabaseBackup.exportDatabase(context, it)
-
-            // 2. OBTENEMOS LA NUEVA DB (Esto crea una conexión fresca)
-            val nuevaDb = TareasDatabase.getDatabase(context)
-
-            // 3. ACTUALIZAMOS LOS DAOS DEL VIEWMODEL
-            // Necesitamos una función en el ViewModel que acepte los nuevos DAOs
-            viewModel.actualizarDaos(nuevaDb.tareaDao(), nuevaDb.categoriaDao())
-
-            Toast.makeText(context, "Copia guardada y base de datos reconectada", Toast.LENGTH_SHORT).show()
-        }
-    }
-    // Este lanzador abre el explorador para elegir un archivo existente
+    // --- 3B. BACKUP Y RESTORE (módulo específico) ---
+    var mostrarConfirmacionRestore by remember { mutableStateOf(false) }
     var mostrarInstruccionesPostRestore by remember { mutableStateOf(false) }
+    // Indica qué módulo está pendiente de restaurar al confirmar el diálogo
+    var restoreEsHabitos by remember { mutableStateOf(false) }
 
-    // Modificamos el lanzador de importar para que al terminar active este diálogo
-    val importarLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocument()
-    ) { uri ->
-        uri?.let {
-            DatabaseBackup.importDatabase(context, it)
-            mostrarInstruccionesPostRestore = true // Activamos el aviso de "ahora reinicia"
+    // Launchers de TAREAS
+    val exportarTareasLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/json")
+    ) { uri -> uri?.let { TareasBackupJson.exportar(context, it) } }
+
+    val importarTareasLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri -> uri?.let { TareasBackupJson.importar(context, it); mostrarInstruccionesPostRestore = true } }
+
+    // Launchers de HÁBITOS
+    val exportarHabitosLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/json")
+    ) { uri -> uri?.let { HabitosBackup.exportar(context, it) } }
+
+    val importarHabitosLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri -> uri?.let { HabitosBackup.importar(context, it); mostrarInstruccionesPostRestore = true } }
+
+    // Helpers para lanzar según el módulo activo
+    fun lanzarExportar() {
+        if (rutaActual == Rutas.PantallaHabitos.ruta)
+            exportarHabitosLauncher.launch("backup_habitos_${System.currentTimeMillis()}.json")
+        else
+            exportarTareasLauncher.launch("backup_tareas_${System.currentTimeMillis()}.json")
+    }
+    fun lanzarImportar() {
+        if (restoreEsHabitos) importarHabitosLauncher.launch(arrayOf("application/json", "application/octet-stream"))
+        else importarTareasLauncher.launch(arrayOf("application/json", "application/octet-stream"))
+    }
+
+     // --- 4. RECONOCIMIENTO DE VOZ ---
+    // Recibe los valores de vuelta de la IA
+
+    val speechLauncher = crearSpeechLauncher(
+        navController = navController,
+        viewModel = viewModel,
+        context = context,
+        scope = scope
+    )
+
+    // Prepara el Intent que abre el reconocimiento de voz de Android.
+    // Le indica: que use lenguaje natural (FREE_FORM) y que escuche en español (es-ES)
+
+
+    val lanzarEscucha = {
+        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 1000)
+        }
+        try {
+            speechLauncher.launch(intent)
+        } catch (e: Exception) {
+            Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
         }
     }
 
-    val speechLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.StartActivityForResult()
-    ) { result ->
-        val data = result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
-        data?.get(0)?.let { textoEscuchado ->
-            scope.launch {
-                try {
-                    // 1. Obtenemos la fecha de hoy para darle contexto a la IA
-                    val sdfHoy = java.text.SimpleDateFormat("EEEE dd/MM/yyyy", java.util.Locale("es", "ES"))
-                    val urlCorrecta = "https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash-lite:generateContent?key=$apiKey"
+    var mostrarMenuPrincipal by remember { mutableStateOf(false) }
+    var mostrarDialogoImportacion by remember { mutableStateOf(false) }
+    var resultadoImportacion by remember { mutableStateOf<String?>(null) }
 
+    // Importación: guardamos la URI del primer fichero mientras el usuario elige el segundo
+    var uriDefinicionPendiente by remember { mutableStateOf<android.net.Uri?>(null) }
 
-                    // 1. Obtenemos fecha y hora LOCAL del dispositivo
-                    val ahora = java.time.LocalDateTime.now()
-                    val fechaHoy = java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy").format(ahora)
-                    val horaHoy = java.time.format.DateTimeFormatter.ofPattern("HH:mm").format(ahora)
-                    val anyoHoy = java.time.format.DateTimeFormatter.ofPattern("yyyy").format(ahora)
-
-                    // 3. LOGS PARA VER QUÉ ESTÁ PASANDO (Copia esto justo después de donde obtienes la respuesta de la IA)
-                    android.util.Log.d("LOG", "=== DATOS ENVIADOS ===")
-                    android.util.Log.d("LOG", "Texto escuchado: $textoEscuchado")
-                    android.util.Log.d("LOG", "Fecha Hoy: $fechaHoy | Hora Hoy: $horaHoy")
-
-                    val response = client.post(urlCorrecta) {
-                        contentType(ContentType.Application.Json)
-                        setBody(buildJsonObject {
-                            putJsonArray("contents") {
-                                addJsonObject {
-                                    putJsonArray("parts") {
-                                        addJsonObject {
-                                            put("text", """
-                                                Eres un experto en extracción de datos.
-                                                CONTEXTO: Hoy es $fechaHoy, la hora actual es $horaHoy y el año es $anyoHoy.
-                                            
-                                                TAREA: Extraer la información de: "$textoEscuchado"
-                                            
-                                                INSTRUCCIONES CRÍTICAS:
-                                                1. "fecha": 
-                                                   - Si dice "mañana", usa exactamente: ${java.time.LocalDate.now().plusDays(1)}.
-                                                   - Si menciona día/mes, usa el año $anyoHoy y devuélvelo como YYYY-MM-DD.
-                                                   - Si dice "en X minutos/horas" o solo indica una hora, la fecha es $fechaHoy.
-                                                   - Solo si es una tarea sin ninguna referencia de tiempo, pon null.
-                                                2. "hora":
-                                                   - Si dice "en X minutos", calcula la hora sumando a $horaHoy.
-                                                   - Si no especifica hora, pon null.
-                                                   - Formato HH:mm (24h).
-                                                3. JSON (estrictamente numérico):
-                                                {
-                                                  "tarea": "acción sin palabras temporales",
-                                                  "fecha": "YYYY-MM-DD o null",
-                                                  "hora": "HH:mm o null",
-                                                  "prioridad": "ALTA|MEDIA|BAJA"
-                                                }
-                                            
-                                                EJEMPLOS:
-                                                - "Mañana a las 5": {"fecha": "${java.time.LocalDate.now().plusDays(1)}", "hora": "17:00"}
-                                                - "En 2 min": {"fecha": "$fechaHoy", "hora": "Calcula según $horaHoy"}
-                                            """.trimIndent())
-
-                                        }
-                                    }
-                                }
-                            }
-                        }.toString())
-                    }
-
-                    if (response.status.isSuccess()) {
-                        val responseBody = response.bodyAsText()
-
-                        val jsonElement = Json.parseToJsonElement(responseBody)
-                        val textoIA = jsonElement.jsonObject["candidates"]
-                            ?.jsonArray?.get(0)
-                            ?.jsonObject?.get("content")
-                            ?.jsonObject?.get("parts")
-                            ?.jsonArray?.get(0)
-                            ?.jsonObject?.get("text")
-                            ?.jsonPrimitive?.content ?: ""
-
-                        val jsonLimpio = textoIA.replace("```json", "").replace("```", "").trim()
-
-                        // Asegúrate de que tu data class TareaIA tenga: val hora: String?
-                        val objetoTarea = Json.decodeFromString<TareaIA>(jsonLimpio)
-
-                        // --- AÑADE ESTOS LOGS AQUÍ ---
-                        android.util.Log.d("LOG_IA", "1. JSON RECIBIDO DE GEMINI: $jsonLimpio")
-                        android.util.Log.d("LOG_IA", "2. OBJETO DESERIALIZADO: Tarea=${objetoTarea.tarea}, Fecha=${objetoTarea.fecha}, Hora=${objetoTarea.hora}")
-                        // -----------------------------
-                        withContext(Dispatchers.Main) {
-                            try {
-                                // 1. Formateo del título
-                                val tituloFormateado = objetoTarea.tarea.trim().replaceFirstChar {
-                                    if (it.isLowerCase()) it.titlecase(java.util.Locale.getDefault()) else it.toString()
-                                }
-
-                                // 2. Procesamos la fecha (acepta null, "null" o dd/mm/yyyy)
-                                val fechaConvertida = try {
-                                    val fechaTexto = objetoTarea.fecha?.trim()
-
-                                    if (fechaTexto.isNullOrBlank() || fechaTexto == "null") {
-                                        null
-                                    } else {
-                                        // 1. Detectamos el formato (Gemini usa '-' y nosotros '/')
-                                        val fechaParseada = if (fechaTexto.contains("-")) {
-                                            // Formato YYYY-MM-DD (El que viene de Gemini)
-                                            java.time.LocalDate.parse(fechaTexto)
-                                        } else {
-                                            // Formato DD/MM/YYYY (El que tenías antes por si acaso)
-                                            val p = fechaTexto.split("/")
-                                            if (p.size == 3) {
-                                                val dia = p[0].toInt()
-                                                val mes = p[1].toInt()
-                                                val anioRaw = p[2].toInt()
-                                                val anio = if (anioRaw < 100) anioRaw + 2000 else anioRaw
-                                                java.time.LocalDate.of(anio, mes, dia)
-                                            } else {
-                                                null
-                                            }
-                                        }
-
-                                        // 2. Validación final contra "Alucinaciones"
-                                        val hoy = java.time.LocalDate.now()
-                                        if (fechaParseada != null && fechaParseada.isBefore(hoy)) {
-                                            android.util.Log.w("LOG", "⚠️ IA envió fecha pasada: $fechaParseada. Ajustando a hoy.")
-                                            hoy
-                                        } else {
-                                            fechaParseada
-                                        }
-                                    }
-                                } catch (e: Exception) {
-                                    android.util.Log.e("LOG", "❌ Error fatal parseando fecha: ${objetoTarea.fecha}")
-                                    java.time.LocalDate.now()
-                                }
-
-                                // 3. Procesamos la hora (acepta null, "null" o HH:mm)
-                                val horaConvertida = try {
-                                    val horaTexto = objetoTarea.hora?.trim()
-                                    if (!horaTexto.isNullOrBlank() && horaTexto != "null") {
-                                        // Soporta formatos como "8:05" convirtiéndolos a "08:05" si fuera necesario
-                                        val horaLimpia = if (horaTexto.contains(":") && horaTexto.indexOf(":") == 1) "0$horaTexto" else horaTexto
-                                        java.time.LocalTime.parse(horaLimpia)
-                                    } else null
-                                } catch (e: Exception) {
-                                    android.util.Log.e("LOG", "Error en hora: ${objetoTarea.hora}")
-                                    null
-                                }
-
-                                // ... después de calcular horaConvertida ...
-
-                                var horaFinal = horaConvertida
-
-                                // PARCHE: Si el usuario dijo "en X minutos" y la IA ha devuelto algo muy lejano (más de 3 horas)
-                                // es que la IA ha alucinado. Vamos a intentar corregirlo localmente.
-                                val texto = textoEscuchado.lowercase()
-                                if (texto.contains("en ") && (texto.contains("minuto") || texto.contains("min"))) {
-                                    val minutos = texto.filter { it.isDigit() }.toIntOrNull() ?: 2 // por defecto 2 si no lee el número
-                                    if (minutos < 60) {
-                                        // Si la IA dio una hora que está a más de 1 hora de diferencia de "ahora + minutos"
-                                        val calculoLocal = java.time.LocalTime.now().plusMinutes(minutos.toLong())
-                                        horaFinal = calculoLocal
-                                        android.util.Log.d("LOG", "🕒 Corrección local: Sumados $minutos min. Hora: $horaFinal")
-                                    }
-                                }
-
-                                val prioridadConvertida = when (objetoTarea.prioridad?.uppercase()) {
-                                    "ALTA" -> Prioridad.ALTA
-                                    "BAJA" -> Prioridad.BAJA
-                                    else -> Prioridad.MEDIA
-                                }
-
-                                val nuevaTarea = Tarea(
-                                    id = 0,
-                                    titulo = tituloFormateado,
-                                    descripcion = textoEscuchado,
-                                    estaCompletada = false,
-                                    prioridad = prioridadConvertida,
-                                    fechaCreacion = System.currentTimeMillis(),
-                                    fechaLimite = fechaConvertida,
-                                    horaLimite = horaFinal
-                                )
-
-                                // --- ESTO ES LO QUE QUEREMOS VER EN EL LOGCAT ---
-                                android.util.Log.d("LOG", "Ejecutando guardado para: ${nuevaTarea.titulo}")
-
-                                viewModel.insertar(nuevaTarea)
-                                programarNotificacion(context, nuevaTarea)
-
-                                Toast.makeText(context, "Tarea guardada: $tituloFormateado", Toast.LENGTH_SHORT).show()
-
-                            } catch (e: Exception) {
-                                // Si algo falla catastróficamente, lo veremos aquí
-                                android.util.Log.e("LOG", "Error crítico en el bloque Main: ${e.message}")
-                                e.printStackTrace()
-                            }
-                        }
-                    }
-                } catch (e: Exception) {
-                    Log.e("LOG", "Error: ${e.message}")
-                    // --- ESTO ES LO QUE TIENES QUE AÑADIR PARA QUE NO FALLE ---
-                    withContext(Dispatchers.Main) {
-                        val tareaSimple = Tarea(
-                            titulo = textoEscuchado.replaceFirstChar { it.uppercase() },
-                            descripcion = "Voz (Sin IA por error de red)",
-                            prioridad = Prioridad.MEDIA
-                        )
-                        viewModel.insertar(tareaSimple)
-                        Toast.makeText(context, "Guardado simple (Error de conexión)", Toast.LENGTH_SHORT).show()
+    // Launcher fichero 2: historial → lanza la importación
+    val importarHistorialLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uriHist ->
+        val uriDef = uriDefinicionPendiente
+        uriDefinicionPendiente = null
+        if (uriHist != null && uriDef != null) {
+            scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                val resultado = HabitosImportacion.importar(context, uriDef, uriHist)
+                withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    resultadoImportacion = when (resultado) {
+                        is HabitosImportacion.Resultado.Exito ->
+                            "✅ Importación completada:\n" +
+                            "• ${resultado.habitos} hábitos importados\n" +
+                            "• ${resultado.registrosHistorial} registros de historial\n\n" +
+                            "Cierra y reabre la app para que los cambios surtan efecto."
+                        is HabitosImportacion.Resultado.Error ->
+                            "❌ Error durante la importación:\n${resultado.mensaje}"
                     }
                 }
             }
         }
     }
 
-    val lanzarEscucha = {
-        // 1. Preparamos el Intent
-        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
-            // Añade esto para que la ventana de voz no tarde tanto en cerrarse al terminar
-            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 1000)
-        }
-
-        try {
-            // 2. IMPORTANTE: Intentar limpiar el foco antes de lanzar
-            // A veces ayuda a que el sistema no crea que el micro sigue en uso
-            speechLauncher.launch(intent)
-        } catch (e: Exception) {
-            Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+    // Launcher fichero 1: definición → abre el picker del historial
+    val importarDefinicionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uriDef ->
+        if (uriDef != null) {
+            uriDefinicionPendiente = uriDef
+            importarHistorialLauncher.launch(arrayOf("application/json", "application/octet-stream", "*/*"))
         }
     }
-    var mostrarMenuPrincipal by remember { mutableStateOf(false) }
-    var mostrarConfirmacionRestore by remember { mutableStateOf(false) }
 
-    val tareasActivas = listaTareas.count { !it.estaCompletada }
-
-    MisTareasAppTheme { // Si sigue en rojo, asegúrate de que el import de arriba sea correcto
+    // --- 5. INTERFAZ ---
+    MisTareasAppTheme {
         Scaffold(
             topBar = {
-                if (rutaActual == Rutas.PantallaTareas.ruta || rutaActual == Rutas.PantallaHabitos.ruta) {
-                    val filtroActual by viewModel.categoriaSeleccionada.collectAsState()
-                    val listaCategoriasUI by viewModel.todasLasCategorias.collectAsState(initial = emptyList())
-
-                    // Usamos Column para que la TopBar y el Filtro convivan verticalmente
-                    Column(modifier = Modifier.background(MaterialTheme.colorScheme.surface)) {
-                        TopAppBar(
-                            title = {
-                                val tituloBase = obtenerTitulo(rutaActual).uppercase()
-                                val tituloFinal = if (tareasActivas > 0) "$tituloBase ($tareasActivas)" else tituloBase
-                                Text(text = tituloFinal, fontWeight = FontWeight.Bold)
-                            },
-                            navigationIcon = {
-                                Box {
-                                    IconButton(onClick = { mostrarMenuPrincipal = true }) {
-                                        Icon(Icons.Default.Menu, contentDescription = "Menú")
+                if (rutaActual == Rutas.PantallaTareas.ruta || rutaActual == Rutas.PantallaHabitos.ruta || rutaActual == Rutas.PantallaListaCompra.ruta) {
+                    TopAppBar(
+                        title = {
+                            val esCompra = rutaActual == Rutas.PantallaListaCompra.ruta
+                            val tituloBase = if (esCompra) obtenerTitulo(rutaActual)
+                                             else obtenerTitulo(rutaActual).uppercase()
+                            val tituloFinal = when {
+                                esCompra && itemsPendientesCompra > 0 -> "$tituloBase ($itemsPendientesCompra)"
+                                esCompra -> tituloBase
+                                tareasActivas > 0 -> "$tituloBase ($tareasActivas)"
+                                else -> tituloBase
+                            }
+                            Text(text = tituloFinal, fontWeight = FontWeight.Bold)
+                        },
+                        navigationIcon = {
+                            Box {
+                                IconButton(onClick = { mostrarMenuPrincipal = true }) {
+                                    Icon(Icons.Default.Menu, contentDescription = "Menú")
+                                }
+                                DropdownMenu(
+                                    expanded = mostrarMenuPrincipal,
+                                    onDismissRequest = { mostrarMenuPrincipal = false }
+                                ) {
+                                    // Submenu de Copias de Seguridad
+                                    var expandirCopias by remember { mutableStateOf(false) }
+                                    Box {
+                                        DropdownMenuItem(
+                                            text = { Text("Copias de Seguridad") },
+                                            onClick = { expandirCopias = !expandirCopias },
+                                            leadingIcon = { Icon(Icons.Default.SaveAlt, null) },
+                                            trailingIcon = { Icon(Icons.Default.KeyboardArrowRight, null) }
+                                        )
+                                        DropdownMenu(
+                                            expanded = expandirCopias,
+                                            onDismissRequest = { expandirCopias = false },
+                                            offset = DpOffset(150.dp, 0.dp)
+                                        ) {
+                                            // Acceso a la pantalla de copias de seguridad (todos los módulos)
+                                            DropdownMenuItem(
+                                                text = { Text("Copias de Seguridad") },
+                                                onClick = {
+                                                    mostrarMenuPrincipal = false
+                                                    expandirCopias = false
+                                                    navController.navigate("ruta_gestion_copias")
+                                                },
+                                                leadingIcon = { Icon(Icons.Default.Backup, null) }
+                                            )
+                                            // Backup JSON por módulo (solo Tareas y Hábitos)
+                                            if (rutaActual != Rutas.PantallaListaCompra.ruta) {
+                                                val moduloLabel = if (rutaActual == Rutas.PantallaHabitos.ruta) "Hábitos" else "Tareas"
+                                                HorizontalDivider()
+                                                DropdownMenuItem(
+                                                    text = { Text("Guardar backup de $moduloLabel") },
+                                                    onClick = {
+                                                        mostrarMenuPrincipal = false
+                                                        expandirCopias = false
+                                                        lanzarExportar()
+                                                    },
+                                                    leadingIcon = { Icon(Icons.Default.SaveAlt, null) }
+                                                )
+                                                DropdownMenuItem(
+                                                    text = { Text("Restaurar backup de $moduloLabel") },
+                                                    onClick = {
+                                                        mostrarMenuPrincipal = false
+                                                        expandirCopias = false
+                                                        restoreEsHabitos = (rutaActual == Rutas.PantallaHabitos.ruta)
+                                                        mostrarConfirmacionRestore = true
+                                                    },
+                                                    leadingIcon = { Icon(Icons.Default.Restore, null) }
+                                                )
+                                            }
+                                        }
                                     }
-                                    DropdownMenu(
-                                        expanded = mostrarMenuPrincipal,
-                                        onDismissRequest = { mostrarMenuPrincipal = false }
-                                    ) {
+                                    HorizontalDivider()
+                                    // Items específicos por pestaña
+                                    if (rutaActual == Rutas.PantallaTareas.ruta) {
                                         DropdownMenuItem(
-                                            text = { Text("Backup") },
-                                            onClick = {
-                                                mostrarMenuPrincipal = false
-                                                exportarLauncher.launch("backup_tareas_${System.currentTimeMillis()}.db")
-                                            },
-                                            leadingIcon = { Icon(Icons.Default.Backup, null) }
-                                        )
-                                        DropdownMenuItem(
-                                            text = { Text("Restore") },
-                                            onClick = {
-                                                mostrarMenuPrincipal = false
-                                                mostrarConfirmacionRestore = true
-                                            },
-                                            leadingIcon = { Icon(Icons.Default.Restore, null) }
-                                        )
-                                        HorizontalDivider()
-                                        DropdownMenuItem(
-                                            text = { Text("Tablas de Referencia") },
+                                            text = { Text("Categorías de tareas") },
                                             onClick = {
                                                 mostrarMenuPrincipal = false
                                                 navController.navigate("categorias")
                                             },
                                             leadingIcon = { Icon(Icons.Default.TableChart, null) }
                                         )
-                                        HorizontalDivider()
+                                    }
+                                    if (rutaActual == Rutas.PantallaHabitos.ruta) {
                                         DropdownMenuItem(
-                                            text = { Text("Mostrar completadas") },
+                                            text = { Text("Gestión de hábitos") },
                                             onClick = {
-                                                viewModel.cambiarVisibilidadCompletadas(!viewModel.mostrarCompletadas)
+                                                mostrarMenuPrincipal = false
+                                                navController.navigate("mantenimiento_habitos")
                                             },
-                                            leadingIcon = {
-                                                Icon(
-                                                    Icons.Default.CheckCircle, null,
-                                                    tint = if (viewModel.mostrarCompletadas) MaterialTheme.colorScheme.primary else Color.Transparent
-                                                )
-                                            }
+                                            leadingIcon = { Icon(Icons.Default.EditNote, null) }
+                                        )
+                                        DropdownMenuItem(
+                                            text = { Text("Hábitos pausados") },
+                                            onClick = {
+                                                mostrarMenuPrincipal = false
+                                                navController.navigate("habitos_pausados")
+                                            },
+                                            leadingIcon = { Icon(Icons.Default.Pause, null) }
+                                        )
+                                        DropdownMenuItem(
+                                            text = { Text("Hábitos archivados") },
+                                            onClick = {
+                                                mostrarMenuPrincipal = false
+                                                navController.navigate("habitos_archivados")
+                                            },
+                                            leadingIcon = { Icon(Icons.Default.Archive, null) }
+                                        )
+                                        DropdownMenuItem(
+                                            text = { Text("Categorías de hábitos") },
+                                            onClick = {
+                                                mostrarMenuPrincipal = false
+                                                navController.navigate("categorias_habitos")
+                                            },
+                                            leadingIcon = { Icon(Icons.Default.TableChart, null) }
+                                        )
+                                        DropdownMenuItem(
+                                            text = { Text("% de cumplimiento") },
+                                            onClick = {
+                                                mostrarMenuPrincipal = false
+                                                navController.navigate("calculos_habitos")
+                                            },
+                                            leadingIcon = { Icon(Icons.Default.Calculate, null) }
+                                        )
+                                        DropdownMenuItem(
+                                            text = { Text("Importar datos") },
+                                            onClick = {
+                                                mostrarMenuPrincipal = false
+                                                mostrarDialogoImportacion = true
+                                            },
+                                            leadingIcon = { Icon(Icons.Default.FileDownload, null) }
                                         )
                                     }
-                                }
-                            },
-                            actions = {
-                                if (rutaActual == Rutas.PantallaTareas.ruta) {
-                                    // --- 1. NUEVO BOTÓN DE FILTRO ---
-                                    IconButton(onClick = { viewModel.mostrarBarraFiltro = !viewModel.mostrarBarraFiltro }) {
-                                        Icon(
-                                            imageVector = if (filtroActual == null) Icons.Default.FilterList else Icons.Default.FilterListOff,
-                                            contentDescription = "Filtrar",
-                                            tint = if (filtroActual != null) MaterialTheme.colorScheme.primary else LocalContentColor.current
+                                    if (rutaActual == Rutas.PantallaListaCompra.ruta) {
+                                        DropdownMenuItem(
+                                            text = { Text("Gestionar lugares") },
+                                            onClick = {
+                                                mostrarMenuPrincipal = false
+                                                navController.navigate(Rutas.PantallaGestionLugares.ruta)
+                                            },
+                                            leadingIcon = { Icon(Icons.Default.LocationOn, null) }
+                                        )
+                                        DropdownMenuItem(
+                                            text = { Text("Gestionar categorías") },
+                                            onClick = {
+                                                mostrarMenuPrincipal = false
+                                                navController.navigate(Rutas.PantallaGestionCategoriasCompra.ruta)
+                                            },
+                                            leadingIcon = { Icon(Icons.Default.Category, null) }
+                                        )
+                                        DropdownMenuItem(
+                                            text = { Text("Gestionar productos") },
+                                            onClick = {
+                                                mostrarMenuPrincipal = false
+                                                navController.navigate(Rutas.PantallaGestionProductos.ruta)
+                                            },
+                                            leadingIcon = { Icon(Icons.Default.ShoppingBasket, null) }
                                         )
                                     }
-
-                                    // --- 2. BOTÓN MAESTRO EXPANDIR/COLAPSAR ---
-                                    IconButton(onClick = {
-                                        val nuevoEstado = !viewModel.todasSeccionesAbiertas
-                                        viewModel.cambiarEstadoGlobalSecciones(nuevoEstado)
-                                    }) {
-                                        Icon(
-                                            imageVector = if (viewModel.todasSeccionesAbiertas) Icons.Default.UnfoldLess else Icons.Default.UnfoldMore,
-                                            contentDescription = "Contraer/Expandir todo"
-                                        )
-                                    }
-
-                                    // --- 3. BOTÓN AÑADIR (Con tu lógica original) ---
-                                    var expandedAdd by remember { mutableStateOf(false) }
-                                    val rotation by animateFloatAsState(
-                                        targetValue = if (expandedAdd) 45f else 0f,
-                                        animationSpec = tween(durationMillis = 200),
-                                        label = "rotation"
+                                    HorizontalDivider()
+                                    DropdownMenuItem(
+                                        text = { Text("Configuración") },
+                                        onClick = {
+                                            mostrarMenuPrincipal = false
+                                            navController.navigate("configuracion")
+                                        },
+                                        leadingIcon = { Icon(Icons.Default.Settings, null) }
                                     )
-                                    Box {
-                                        IconButton(onClick = { expandedAdd = true }) {
-                                            Surface(
-                                                shape = CircleShape,
-                                                color = MaterialTheme.colorScheme.secondary,
-                                                modifier = Modifier.size(40.dp)
-                                            ) {
-                                                Icon(
-                                                    Icons.Default.Add,
-                                                    contentDescription = "Nueva tarea",
-                                                    tint = Color.Black,
-                                                    modifier = Modifier
-                                                        .padding(8.dp)
-                                                        .graphicsLayer { rotationZ = rotation }
-                                                )
-                                            }
-                                        }
-                                        DropdownMenu(
-                                            expanded = expandedAdd,
-                                            onDismissRequest = { expandedAdd = false }
-                                        ) {
-                                            DropdownMenuItem(
-                                                text = { Text("🗣️ Por voz") },
-                                                onClick = { expandedAdd = false; lanzarEscucha() }
-                                            )
-                                            DropdownMenuItem(
-                                                text = { Text("📝 Escribir") },
-                                                onClick = { expandedAdd = false; navController.navigate(Rutas.PantallaCrearTarea.ruta) }
-                                            )
-                                        }
-                                    }
                                 }
                             }
-                        )
-
-                        // --- BARRA DE FILTROS ANIMADA ---
-                        AnimatedVisibility(
-                            visible = viewModel.mostrarBarraFiltro && rutaActual == Rutas.PantallaTareas.ruta,
-                            enter = expandVertically() + fadeIn(),
-                            exit = shrinkVertically() + fadeOut()
-                        ) {
-                            BarraFiltros(
-                                categorias = listaCategoriasUI,
-                                seleccionada = filtroActual,
-                                onSeleccionar = { viewModel.filtrarPor(it) }
-                            )
+                        },
+                        actions = {
+                            if (rutaActual == Rutas.PantallaTareas.ruta) {
+                                AccionesTopBarTareas(
+                                    viewModel = viewModel,
+                                    navController = navController,
+                                    onLanzarVoz = { lanzarEscucha() },
+                                    textoBusqueda = textoBusqueda,
+                                    filtroActual = filtroActual
+                                )
+                            }
+                            if (rutaActual == Rutas.PantallaHabitos.ruta) {
+                                AccionesTopBarHabitos(
+                                    viewModel = habitosViewModel,
+                                    navController = navController,
+                                    onLanzarVoz = { lanzarEscucha() },
+                                    textoBusqueda = textoBusquedaHabitos,
+                                    filtroActual = categoriaFiltroHabitos
+                                )
+                            }
+                            if (rutaActual == Rutas.PantallaListaCompra.ruta) {
+                                AccionesCompartirCompra(vm = listaCompraViewModel)
+                                FiltroCompraTopBar(vm = listaCompraViewModel)
+                            }
                         }
+                    )
+                }
+            },
+            bottomBar = {
+                val rutasHabitos = listOf(
+                    Rutas.HabitosFlash.ruta,
+                    Rutas.HabitosListado.ruta,
+                    Rutas.HabitosEstadisticas.ruta
+                )
+
+                when {
+                    rutaActual == Rutas.PantallaTareas.ruta || rutaActual == Rutas.PantallaHabitos.ruta || rutaActual == Rutas.PantallaListaCompra.ruta -> {
+                        BarraNavegacion(navController, rutaActual)
+                    }
+                    rutaActual in rutasHabitos -> {
+                        BarraNavegacionHabitos(navController, rutaActual)
                     }
                 }
             }
-            ,
-            bottomBar = { if (rutaActual != Rutas.PantallaCrearTarea.ruta) MiBottomBar(navController) }
         ) { innerPadding ->
-            // (Mantén aquí tus diálogos de seguridad: mostrarConfirmacionRestore, etc.)
-            if (mostrarConfirmacionRestore) {
-                AlertDialog(
-                    onDismissRequest = { mostrarConfirmacionRestore = false },
-                    title = { Text("¿Restaurar copia de seguridad?") },
-                    text = { Text("Esto borrará las tareas actuales y las reemplazará por las de la copia. ¿Deseas continuar?") },
-                    confirmButton = {
-                        TextButton(onClick = {
-                            mostrarConfirmacionRestore = false
-                            // Esto es lo que realmente abre el buscador de archivos
-                            importarLauncher.launch(arrayOf("application/octet-stream", "application/x-sqlite3"))
-                        }) {
-                            Text("RESTAURAR", color = Color.Red)
-                        }
-                    },
-                    dismissButton = {
-                        TextButton(onClick = { mostrarConfirmacionRestore = false }) {
-                            Text("CANCELAR")
-                        }
-                    }
-                )
-            }
-
-            if (mostrarInstruccionesPostRestore) {
-                AlertDialog(
-                    onDismissRequest = { mostrarInstruccionesPostRestore = false },
-                    title = { Text("Restauración completada") },
-                    text = { Text("Para que los datos se carguen correctamente, por favor cierra la aplicación por completo y vuelve a abrirla.") },
-                    confirmButton = {
-                        Button(onClick = { mostrarInstruccionesPostRestore = false }) {
-                            Text("ENTENDIDO")
-                        }
-                    }
-                )
-            }
-
             NavHost(
                 navController = navController,
+                //startDestination = Rutas.PantallaHabitos.ruta,
                 startDestination = Rutas.PantallaTareas.ruta,
-                // CLAVE: El NavHost ocupa TODO. No le pongas padding(innerPadding) aquí.
                 modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)
             ) {
                 composable(Rutas.PantallaTareas.ruta) {
-                    // Recolectamos los datos (esto lo tienes bien)
                     val mapasDeTareas by viewModel.tareasClasificadas.collectAsStateWithLifecycle()
-
                     PantallaListaTareas(
                         navController = navController,
                         viewModel = viewModel,
-                        mapas = mapasDeTareas, // <--- ¡ESTA ES LA LÍNEA QUE FALTA!
+                        mapas = mapasDeTareas,
                         modifier = Modifier.padding(innerPadding).fillMaxSize()
                     )
                 }
 
                 composable(Rutas.PantallaHabitos.ruta) {
-                    PantallaHabitos(navController, viewModel, modifier = Modifier.padding(innerPadding).fillMaxSize())
+                    PantallaHabitos(
+                        navController = navController,
+                        viewModel = habitosViewModel,
+                        modifier = Modifier.padding(innerPadding).fillMaxSize(),
+                        progresoGeneral = progresoGeneral
+                    )
                 }
 
                 composable(Rutas.PantallaCrearTarea.ruta) {
-                    // Esta pantalla tiene su propio Scaffold, no necesita que le pases el padding del padre
                     PantallaCrearTarea(navController)
+                }
+
+                composable(Rutas.PantallaCrearHabito.ruta) {
+                    CrearHabitoScreen(
+                        viewModel = habitosViewModel,
+                        onGuardar = { navController.popBackStack() }
+                    )
                 }
 
                 composable(
@@ -665,84 +526,294 @@ fun MisTareasApp() {
                 }
 
                 composable("categorias") {
-                    PantallaGestionCategorias(navController, viewModel, modifier = Modifier.padding(innerPadding).fillMaxSize())
+                    PantallaGestionCategorias(
+                        navController,
+                        viewModel,
+                        modifier = Modifier.padding(innerPadding).fillMaxSize()
+                    )
+                }
+
+                composable("categorias_habitos") {
+                    PantallaGestionCategoriasHabitos(
+                        navController,
+                        habitosViewModel,
+                        modifier = Modifier.padding(innerPadding).fillMaxSize()
+                    )
+                }
+
+                composable("crear_habito") {
+                    CrearHabitoScreen(
+                        viewModel = habitosViewModel,
+                        onGuardar = { navController.popBackStack() }
+                    )
+                }
+
+                composable(
+                    route = "editar_habito/{habitoId}",
+                    arguments = listOf(navArgument("habitoId") { type = NavType.LongType })
+                ) { backStackEntry ->
+                    val id = backStackEntry.arguments?.getLong("habitoId") ?: return@composable
+                    EditarHabitoScreen(
+                        habitoId = id,
+                        viewModel = habitosViewModel,
+                        onGuardar = { navController.popBackStack() }
+                    )
+                }
+
+                composable("mantenimiento_habitos") {
+                    PantallaMantenimientoHabitos(
+                        viewModel = habitosViewModel,
+                        navController = navController,
+                        modifier = Modifier.padding(innerPadding).fillMaxSize()
+                    )
+                }
+
+                composable("habitos_pausados") {
+                    PantallaPausados(
+                        viewModel = habitosViewModel,
+                        navController = navController
+                    )
+                }
+
+                composable("habitos_archivados") {
+                    PantallaHabitosArchivados(
+                        viewModel = habitosViewModel,
+                        navController = navController
+                    )
+                }
+
+                composable(
+                    route = "vista_mensual/{habitoId}",
+                    arguments = listOf(navArgument("habitoId") { type = NavType.LongType })
+                ) { backStackEntry ->
+                    val id = backStackEntry.arguments?.getLong("habitoId") ?: return@composable
+                    PantallaVistaMensualHabito(
+                        habitoId = id,
+                        viewModel = habitosViewModel,
+                        navController = navController
+                    )
+                }
+
+                composable("ruta_gestion_copias") {
+                    GestionDatosScreen(viewModel = viewModel)
+                }
+
+                composable("calculos_habitos") {
+                    PantallaCalculosHabitos(
+                        viewModel = habitosViewModel,
+                        navController = navController
+                    )
+                }
+
+                composable("detalle_calculo_general") {
+                    PantallaDetalleCalculoGeneral(
+                        viewModel = habitosViewModel,
+                        navController = navController
+                    )
+                }
+
+                composable(
+                    route = "auditoria_habitos?habitoId={habitoId}",
+                    arguments = listOf(navArgument("habitoId") { type = NavType.LongType; defaultValue = -1L })
+                ) { backStackEntry ->
+                    val idArg = backStackEntry.arguments?.getLong("habitoId") ?: -1L
+                    PantallaAuditoriaHabitos(
+                        viewModel = habitosViewModel,
+                        navController = navController,
+                        habitoIdInicial = if (idArg >= 0) idArg else null
+                    )
+                }
+
+                composable(
+                    route = "detalle_calculo/{habitoId}",
+                    arguments = listOf(navArgument("habitoId") { type = NavType.LongType })
+                ) { backStackEntry ->
+                    val id = backStackEntry.arguments?.getLong("habitoId") ?: return@composable
+                    PantallaDetalleCalculoHabito(
+                        habitoId = id,
+                        viewModel = habitosViewModel,
+                        navController = navController
+                    )
+                }
+
+                composable("configuracion") {
+                    PantallaConfiguracion(
+                        navController,
+                        viewModel,
+                        modifier = Modifier.padding(innerPadding).fillMaxSize()
+                    )
+                }
+
+                composable(Rutas.PantallaListaCompra.ruta) {
+                    PantallaListaCompra(
+                        navController = navController,
+                        vm = listaCompraViewModel,
+                        modifier = Modifier.padding(innerPadding).fillMaxSize()
+                    )
+                }
+
+                composable(Rutas.PantallaGestionLugares.ruta) {
+                    PantallaGestionLugares(
+                        navController = navController,
+                        vm = listaCompraViewModel
+                    )
+                }
+
+                composable(Rutas.PantallaGestionCategoriasCompra.ruta) {
+                    PantallaGestionCategoriasCompra(
+                        navController = navController,
+                        vm = listaCompraViewModel
+                    )
+                }
+
+                composable(Rutas.PantallaGestionProductos.ruta) {
+                    PantallaGestionProductos(
+                        navController = navController,
+                        vm = listaCompraViewModel
+                    )
                 }
             }
         }
-    }
-}
-fun programarNotificacion(context: android.content.Context, tarea: Tarea) {
-    val fecha = tarea.fechaLimite ?: return
-    val hora = tarea.horaLimite ?: java.time.LocalTime.of(9, 0)
-    val fechaHoraLimite = java.time.LocalDateTime.of(fecha, hora)
-    val ahora = java.time.LocalDateTime.now()
 
-    val delayBase = java.time.Duration.between(ahora, fechaHoraLimite).toMillis()
+        val actividad = LocalContext.current as? MainActivity
+        val necesitaVozWidget = actividad?.intent?.getBooleanExtra("abrirVoz", false) ?: false
 
-    // 1. DETERMINAMOS EL INTERVALO DE REPETICIÓN SEGÚN TU SOLICITUD
-    val tiempoRepeticion = when (tarea.prioridad) {
-        Prioridad.ALTA -> 60 * 60 * 1000L           // 60 minutos
-        /*Prioridad.ALTA -> 5 * 60 * 1000L           // 60 minutos*/
-        Prioridad.MEDIA -> 24 * 60 * 60 * 1000L      // 24 horas
-        Prioridad.BAJA -> 3 * 24 * 60 * 60 * 1000L  // 3 días
-        else -> 0L
-    }
-
-    if (delayBase > 0) {
-        // A. AVISO PRINCIPAL (A la hora de la tarea)
-        programarTareaEnWorkManager(context, tarea, delayBase, "principal")
-        android.util.Log.d("LOG-NOTIFICACION", "✅ ALARMA PRINCIPAL: '${tarea.titulo}' a las $hora")
-
-        // B. AVISO DE REPETICIÓN (Según prioridad)
-        if (tiempoRepeticion > 0) {
-            programarTareaEnWorkManager(context, tarea, delayBase + tiempoRepeticion, "repeticion")
-            val info = when(tarea.prioridad) {
-                Prioridad.ALTA -> "60 min"
-                Prioridad.MEDIA -> "24 horas"
-                Prioridad.BAJA -> "3 días"
-                else -> ""
+        if (necesitaVozWidget) {
+            LaunchedEffect(Unit) {
+                lanzarEscucha()
+                actividad?.intent?.removeExtra("abrirVoz")
             }
-            android.util.Log.d("LOG-NOTIFICACION", "➕ REPETICIÓN PROGRAMADA (cada $info) para: '${tarea.titulo}'")
         }
 
-    } else {
-        android.util.Log.d("LOG-NOTIFICACION", "❌ NO PROGRAMADA: '${tarea.titulo}' ya pasó.")
+        // Diálogo de confirmación para restaurar
+        if (mostrarConfirmacionRestore) {
+            val moduloNombre = if (restoreEsHabitos) "hábitos" else "tareas"
+            AlertDialog(
+                onDismissRequest = { mostrarConfirmacionRestore = false },
+                title = { Text("Restaurar backup de $moduloNombre") },
+                text = { Text("Esto reemplazará todos los datos de $moduloNombre con los del archivo de backup. ¿Deseas continuar?") },
+                confirmButton = {
+                    TextButton(onClick = {
+                        mostrarConfirmacionRestore = false
+                        lanzarImportar()
+                    }) {
+                        Text("RESTAURAR", color = Color.Red)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { mostrarConfirmacionRestore = false }) {
+                        Text("CANCELAR")
+                    }
+                }
+            )
+        }
+
+        // Diálogo de instrucciones post-restore
+        if (mostrarInstruccionesPostRestore) {
+            AlertDialog(
+                onDismissRequest = { mostrarInstruccionesPostRestore = false },
+                title = { Text("Restauración completada") },
+                text = { Text("Para que los datos se carguen correctamente, por favor cierra la aplicación completamente y vuelve a abrirla.") },
+                confirmButton = {
+                    TextButton(onClick = { mostrarInstruccionesPostRestore = false }) {
+                        Text("ACEPTAR")
+                    }
+                }
+            )
+        }
+
+        // Diálogo de confirmación de importación
+        if (mostrarDialogoImportacion) {
+            AlertDialog(
+                onDismissRequest = { mostrarDialogoImportacion = false },
+                title = { Text("Importar datos de hábitos") },
+                text = {
+                    Text(
+                        "Se pedirán dos ficheros mediante el selector del sistema:\n\n" +
+                        "1️⃣ habitos_definicion.json\n" +
+                        "2️⃣ habitos_historial.json\n\n" +
+                        "⚠️ ATENCIÓN: Se eliminarán todos los hábitos e historial actuales " +
+                        "antes de importar. Si falla, los datos anteriores quedan intactos.\n\n" +
+                        "¿Deseas continuar?"
+                    )
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        mostrarDialogoImportacion = false
+                        importarDefinicionLauncher.launch(
+                            arrayOf("application/json", "application/octet-stream", "*/*")
+                        )
+                    }) { Text("SELECCIONAR FICHEROS", color = Color.Red) }
+                },
+                dismissButton = {
+                    TextButton(onClick = { mostrarDialogoImportacion = false }) { Text("CANCELAR") }
+                }
+            )
+        }
+
+        // Diálogo de resultado de importación
+        resultadoImportacion?.let { mensaje ->
+            AlertDialog(
+                onDismissRequest = { resultadoImportacion = null },
+                title = { Text("Resultado de la importación") },
+                text = { Text(mensaje) },
+                confirmButton = {
+                    TextButton(onClick = { resultadoImportacion = null }) { Text("ACEPTAR") }
+                }
+            )
+        }
     }
 }
 
-// Esta es la función que "empaqueta" el código que preguntaste antes
-private fun programarTareaEnWorkManager(
-    context: android.content.Context,
-    tarea: Tarea,
-    delayMs: Long,
-    tipo: String
-) {
-    val data = androidx.work.workDataOf(
-        "titulo" to tarea.titulo,
-        "id_tarea" to tarea.id
-    )
+@Composable
+private fun FiltroCompraTopBar(vm: ListaCompraViewModel) {
+    val filtroTipo by vm.filtroTipo.collectAsStateWithLifecycle()
+    val filtroTienda by vm.filtroTienda.collectAsStateWithLifecycle()
+    val hayFiltroActivo = filtroTipo != null || filtroTienda != null
+    var expandido by remember { mutableStateOf(false) }
 
-    val request = androidx.work.OneTimeWorkRequestBuilder<NotificacionWorker>()
-        .setInitialDelay(delayMs, java.util.concurrent.TimeUnit.MILLISECONDS)
-        .setInputData(data)
-        .addTag("notif_${tarea.id}_$tipo") // Tag: notif_ID_principal o notif_ID_repeticion
-        .build()
-
-    androidx.work.WorkManager.getInstance(context).enqueueUniqueWork(
-        "notif_${tarea.id}_$tipo",
-        androidx.work.ExistingWorkPolicy.REPLACE,
-        request
-    )
-}
-
-private suspend fun guardarTareaSimple(texto: String, viewModel: TareasViewModel, context: android.content.Context) {
-    withContext(Dispatchers.Main) {
-        val tareaBasica = Tarea(
-            titulo = texto.replaceFirstChar { it.uppercase() },
-            descripcion = "Voz (IA no disponible)",
-            prioridad = Prioridad.MEDIA
-        )
-        viewModel.insertar(tareaBasica)
-        Toast.makeText(context, "Guardado simple (IA falló)", Toast.LENGTH_SHORT).show()
+    Box {
+        IconButton(onClick = { expandido = true }) {
+            Icon(
+                imageVector = if (hayFiltroActivo) Icons.Default.FilterListOff else Icons.Default.FilterList,
+                contentDescription = "Filtrar",
+                tint = if (hayFiltroActivo) MaterialTheme.colorScheme.primary else LocalContentColor.current
+            )
+        }
+        DropdownMenu(expanded = expandido, onDismissRequest = { expandido = false }) {
+            DropdownMenuItem(
+                text = { Text("Todo", fontWeight = if (!hayFiltroActivo) FontWeight.Bold else FontWeight.Normal) },
+                onClick = { vm.limpiarFiltros(); expandido = false }
+            )
+            DropdownMenuItem(
+                text = { Text("Urgente", fontWeight = if (filtroTipo == TipoItemCompra.URGENTE) FontWeight.Bold else FontWeight.Normal) },
+                onClick = { vm.setFiltroTipo(TipoItemCompra.URGENTE); expandido = false }
+            )
+            DropdownMenuItem(
+                text = { Text("Planificado", fontWeight = if (filtroTipo == TipoItemCompra.PLANIFICADO) FontWeight.Bold else FontWeight.Normal) },
+                onClick = { vm.setFiltroTipo(TipoItemCompra.PLANIFICADO); expandido = false }
+            )
+            HorizontalDivider()
+            listOf(
+                TiendaItem.MERCADONA to "Mercadona",
+                TiendaItem.ASIATICA   to "Asiática",
+                TiendaItem.NINGUNA    to "Sin tienda"
+            ).forEach { (tienda, etiqueta) ->
+                val activo = filtroTienda == tienda
+                DropdownMenuItem(
+                    text = {
+                        Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                            Checkbox(checked = activo, onCheckedChange = null, modifier = Modifier.size(20.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text(etiqueta, fontWeight = if (activo) FontWeight.Bold else FontWeight.Normal)
+                        }
+                    },
+                    onClick = { vm.setFiltroTienda(if (activo) null else tienda) }
+                )
+            }
+        }
     }
 }
+
+
+

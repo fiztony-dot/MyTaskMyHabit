@@ -1,3 +1,11 @@
 <resources>
-    <string name="app_name">MisTareasApp</string>
+    <string name="app_name">TaskHabit</string>
+    <string name="appwidget_text">EXAMPLE</string>
+    <string name="configure">Configure</string>
+    <string name="add_widget">Add widget</string>
+    <string name="app_widget_description">Crea tareas rapidamente con tu voz</string>
+    <string name="widget_tareas_label">Tareas por voz</string>
+    <string name="widget_tareas_description">Crea tareas rapidamente con tu voz</string>
+    <string name="widget_compra_label">Compra por voz</string>
+    <string name="widget_compra_description">Anade productos a tu lista de la compra</string>
 </resources>

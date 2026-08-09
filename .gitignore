@@ -13,3 +13,8 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# Server (Node.js backend)
+server/node_modules/
+server/.env
+server/scripts/*.sqlite

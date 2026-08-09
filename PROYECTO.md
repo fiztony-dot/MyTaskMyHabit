@@ -1,0 +1,200 @@
+# MyTaskMyHabit — Migración a arquitectura cliente-servidor
+
+## Resumen del proyecto
+
+Migración progresiva de la app Android "MyTaskMyHabit" (actualmente 100% local con Room/SQLite) a una arquitectura cliente-servidor: backend Node.js/Express + PostgreSQL en Render, autenticación JWT propia, y una PWA futura en Cloudflare Pages. Un solo usuario real. La migración se hace vertical, módulo a módulo: Tareas → Hábitos → Shopping.
+
+## Stack
+
+- **Backend:** Node.js/Express en Render
+- **Base de datos:** PostgreSQL en Render
+- **Auth:** JWT propio, usuarios válidos en variable de entorno AUTH_USERS (bcrypt hashes)
+- **App Android:** Kotlin/Jetpack Compose (Room/SQLite, en proceso de retirada módulo a módulo)
+- **PWA (futura):** React + Vite, Cloudflare Pages
+- **Repositorio:** monorepo en GitHub (proyecto Android + `server/` + `web/` en el futuro)
+
+## Servicios de terceros
+
+| Servicio | Uso en el proyecto | Plan | Dashboard / acceso | Notas |
+|----------|-------------------|------|-------------------|-------|
+| Render (Web Service) | Hosting del backend Node/Express | [pendiente de confirmar] | https://dashboard.render.com/ | Nombre del servicio: [pendiente de confirmar — sugerido: `mytaskmyhabit-api`] |
+| Render (PostgreSQL) | Base de datos de producción | [pendiente de confirmar] | https://dashboard.render.com/ | Nombre sugerido: `mytaskmyhabit-db`. Región y versión: [pendiente de confirmar] |
+| GitHub | Repositorio monorepo | Free | [pendiente de confirmar — URL del repo] | Contiene proyecto Android + server/ (+ web/ en el futuro) |
+| Cloudflare Pages | Hosting de la PWA (futuro) | Free | — | Pendiente hasta Fase PWA |
+
+## Variables de entorno por servicio
+
+| Variable | Dónde vive | Propósito |
+|----------|-----------|-----------|
+| `DATABASE_URL` | Render (Web Service) — sección Environment | Conexión a PostgreSQL (connection string completo) |
+| `JWT_SECRET` | Render (Web Service) — sección Environment | Firma de tokens JWT |
+| `AUTH_USERS` | Render (Web Service) — sección Environment | Usuarios válidos (formato `usuario:bcryptHash`) |
+| `PORT` | Render (Web Service) — inyectado automáticamente | Puerto del servidor (no configurar manualmente) |
+
+## Estado de la migración por módulo
+
+| Módulo | Schema | Migración datos | API | Android | Estado |
+|--------|--------|-----------------|-----|---------|--------|
+| Base común (auth + usuarios) | ✅ | N/A | ✅ | N/A | Completado (Iteración 1-2) |
+| Tareas | ✅ | ⬜ | ✅ | ✅ | Schema + API + Android listos (Iteración 3-6). Pendiente corte (Iter 7) |
+| Hábitos | ⬜ | ⬜ | ⬜ | ⬜ | Pendiente |
+| Shopping | ⬜ | ⬜ | ⬜ | ⬜ | Pendiente |
+| PWA | ⬜ | — | — | — | Pendiente |
+
+## Decisiones de diseño
+
+### Autenticación (Iteración 1)
+
+- **Formato de AUTH_USERS:** `usuario:bcryptHash,usuario2:bcryptHash2`. El separador entre username y hash es el primer `:` (se usa `indexOf(':')` para no romper hashes que contengan `:`). El separador entre usuarios es `,`.
+- **JWT payload:** `{ sub: "username" }`, expiración 30 días, sin refresh token (app personal con un solo usuario real).
+- **Librería bcrypt:** `bcryptjs` (implementación pure-JS, sin compilación nativa — evita problemas con node-gyp en Windows y CI).
+- **CORS:** Abierto (`*`) temporalmente. Pendiente restringir al dominio de la PWA en Cloudflare Pages cuando exista.
+- **Sin tabla de usuarios en BD (Iteración 1):** Los usuarios se definen exclusivamente en la variable de entorno AUTH_USERS. No hay registro público ni tabla de contraseñas.
+
+### Tabla usuarios (Iteración 2)
+
+- Tabla `usuarios` creada como referencia de integridad para FKs de todas las tablas de negocio.
+- **NO gestiona contraseñas** — eso lo resuelve AUTH_USERS + JWT. Es solo tabla de referencia.
+- Schema: `id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY, username TEXT NOT NULL UNIQUE, nombre_visible TEXT, creado_en TIMESTAMPTZ DEFAULT now()`
+- Usuario único dado de alta: `tony` (id = 1). El username coincide con el configurado en AUTH_USERS.
+- `GET /auth/me` devuelve el id numérico de esta tabla (para usar como `usuario_id` en FKs).
+
+### Migraciones SQL (Iteración 2)
+
+- **Carpeta:** `server/migrations/`
+- **Formato de nombres:** `NNN_descripcion.sql` (ej: `001_create_usuarios.sql`, `002_seed_usuario.sql`)
+- **Tabla de control:** `migration_log` (campos: `id`, `filename UNIQUE`, `applied_at`)
+- **Mecanismo:** Al arrancar el servidor, `initSchema()` llama a `runMigrations()` que:
+  1. Crea `migration_log` si no existe (`CREATE TABLE IF NOT EXISTS`)
+  2. Lee todos los `.sql` de `migrations/` ordenados por nombre
+  3. Compara con los ya registrados en `migration_log`
+  4. Aplica los pendientes en orden, cada uno en una transacción (`BEGIN`/`COMMIT`/`ROLLBACK`)
+  5. Registra cada migración aplicada con `INSERT INTO migration_log`
+- **Idempotencia:** Cada SQL individual usa `IF NOT EXISTS` / `ON CONFLICT DO NOTHING`. Además, el runner nunca reaplica una migración ya registrada.
+- **Fichero:** `src/migrator.js`
+
+### Esquema Tareas (Iteración 3)
+
+- **Tipo ENUM:** `prioridad_tarea` con valores `'ALTA'`, `'MEDIA'`, `'BAJA'` (idempotente con `DO $$ ... EXCEPTION WHEN duplicate_object`)
+- **categorias_table:** id, usuario_id (FK CASCADE), titulo, icono, fecha_creacion, activa. Índice en usuario_id.
+- **tareas_table:** id, usuario_id (FK CASCADE), titulo, descripcion, esta_completada, prioridad (ENUM), fecha_creacion, fecha_limite, hora_limite, categoria_id (FK SET NULL a categorias_table), repeticion, pendiente_clasificar, repeticion_fin, repeticion_veces, repeticion_contador.
+- **Corrección respecto a Room:** `categoria_id` es FK formal con `ON DELETE SET NULL` (en Room era un string libre sin integridad referencial). Al borrar una categoría las tareas quedan sin clasificar en vez de huérfanas.
+- **Índices:** usuario_id, categoria_id, compuesto (usuario_id, prioridad, fecha_creacion) para la ordenación habitual, parcial (usuario_id, esta_completada WHERE false) para la consulta de pendientes.
+- **Nombres de tabla:** Se mantienen `tareas_table` y `categorias_table` (idénticos a Room) para simplificar el mapeo en la migración de datos.
+
+### Migración de datos Tareas (Iteración 4)
+
+- **Script:** `server/scripts/migrate_tareas.js`
+- **Dependencia:** `better-sqlite3` (lectura síncrona del .db extraído)
+- **Comando de extracción del .db:**
+  ```
+  adb exec-out "run-as com.example.mistareasapp cat databases/tareas_db" > tareas_db.sqlite
+  ```
+  (Usar `cmd /c` en Windows para evitar corrupción por encoding de PowerShell)
+- **Uso:** `node scripts/migrate_tareas.js ./scripts/tareas_db.sqlite`
+- **Idempotencia:** Migración `004_tareas_unique_constraint.sql` crea UNIQUE indexes `(usuario_id, titulo)` en categorías y `(usuario_id, titulo, fecha_creacion)` en tareas. El script usa `ON CONFLICT DO NOTHING`.
+- **Resolución de categorías:** El campo `categoria` (string libre en Room) se mapea a `categoria_id` (FK) buscando coincidencia exacta por titulo. Si no existe → NULL.
+- **Datos reales verificados (agosto 2026):** 11 categorías, 401 tareas, 67 tareas huérfanas (categorías eliminadas: "MiApp", "App Tareas", "App Hábitos", "App ShopList"), 91 tareas sin categoría, 0 errores de conversión.
+- **Tratamiento de "null" string:** Room almacena en algunos casos el literal `"null"` en vez de NULL real; el script lo trata como sin categoría.
+
+### API REST Tareas (Iteración 5)
+
+- **Prefijo:** `/api/` — todos los endpoints protegidos con `requireAuth` + `resolveUser`
+- **resolveUser middleware:** Resuelve `req.user.sub` (username del JWT) → `req.usuarioId` (id numérico de tabla usuarios). Se ejecuta después de `requireAuth`.
+- **Convención de respuesta:** `{ data: ... }` para éxito, `{ error: "..." }` para errores.
+
+**Endpoints de Categorías:**
+
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| GET | `/api/categorias` | Lista categorías del usuario (orden: fecha_creacion ASC) |
+| POST | `/api/categorias` | Crea categoría. Body: `{ titulo, icono? }` |
+| PUT | `/api/categorias/:id` | Edita categoría. Body: `{ titulo?, icono?, activa? }` |
+| DELETE | `/api/categorias/:id` | Elimina categoría (tareas quedan con categoria_id=NULL) |
+
+**Endpoints de Tareas:**
+
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| GET | `/api/tareas` | Lista tareas (orden: prioridad DESC, fecha_creacion ASC). `?pendientes=true` filtra solo no completadas |
+| GET | `/api/tareas/:id` | Obtiene una tarea por id |
+| POST | `/api/tareas` | Crea tarea. Body: `{ titulo, descripcion?, prioridad?, fecha_limite?, hora_limite?, categoria_id?, repeticion?, pendiente_clasificar?, repeticion_fin?, repeticion_veces? }` |
+| PUT | `/api/tareas/:id` | Edita tarea. Body: cualquier subconjunto de campos |
+| PATCH | `/api/tareas/:id/completar` | Marca/desmarca completada. Body: `{ esta_completada: bool }` |
+| DELETE | `/api/tareas/:id` | Elimina tarea |
+
+### Adaptación Android (Iteración 6)
+
+- **HTTP Client:** Ktor (ya existía en el proyecto para AI/voz) — no se añadió Retrofit. `ApiClient` singleton con inyección automática de JWT via `defaultRequest`.
+- **Token storage:** `AuthManager` usa `DataStore Preferences` (disco interno, cifrado por defecto del sandbox de la app). Persiste `jwt_token` y `username`.
+- **Login flow:** `AuthGate` composable envuelve `MisTareasApp()` en `MainActivity`. Si no hay token → muestra `LoginScreen`. Si hay token → carga directa.
+- **Arquitectura:** `TareasApiViewModel` es un drop-in replacement del `TareasViewModel` original, con la misma interfaz pública (mismo nombre de propiedades y métodos). La diferencia: en vez de usar Room DAOs con Flows reactivos, hace llamadas HTTP y recarga tras cada mutación.
+- **Estrategia de migración:** Room de Tareas se mantiene intacto en el código. El swap se hace en `MiApp.kt` cambiando `TareasViewModel(dao, catDao)` → `TareasApiViewModel()`. Esto permite revertir fácilmente si el corte falla.
+- **Mapeo DTO ↔ Modelo:** `TareasApiRepository` traduce entre DTOs del servidor (snake_case, `categoria_id` como FK numérica) y los modelos locales (camelCase, `categoria` como String nombre). Mantiene un mapa `categoriaId → titulo` que se actualiza al cargar.
+- **Estados de red:** `TareasApiViewModel` expone `isLoading: StateFlow<Boolean>` y `errorRed: StateFlow<String?>` para que las pantallas muestren feedback.
+- **Base URL:** Hardcodeada en `ApiClient.BASE_URL` apuntando al servicio Render. Para desarrollo local se puede cambiar a `http://10.0.2.2:10000`.
+
+## Convenciones establecidas
+
+- Nombres de tabla y columna en **snake_case**, en español (coherencia con el código Android existente)
+- Toda tabla de datos lleva `usuario_id BIGINT NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE`
+- Puerto por defecto del backend: **10000** (coherente con OurMoments)
+- Dependencias con versiones fijadas en package.json (no rangos abiertos)
+- `trust proxy` activado para funcionar detrás del reverse proxy de Render
+- ENUMs de PostgreSQL para campos con valores finitos (ej: `prioridad_tarea`)
+- FK formales con `ON DELETE` explícito: `CASCADE` para usuario_id, `SET NULL` para referencias opcionales (ej: categoría de una tarea)
+- Índices parciales para consultas frecuentes filtradas (ej: tareas pendientes)
+- Nombres de tabla idénticos a Room (`tareas_table`, `categorias_table`) para facilitar mapeo de migración de datos
+
+## Reglas invariables del proyecto
+
+- **NUNCA** romper ni corromper datos existentes en la base de datos de producción. Nunca `DROP`, `TRUNCATE`, `DELETE` masivo sin respaldo verificado previo.
+- La app Android debe seguir siendo usable durante toda la migración: el corte de Room a API se hace módulo a módulo, nunca de golpe.
+- **Nunca** incluir secretos ni credenciales reales en PROYECTO.md ni en ningún fichero versionado en git — solo referencias a dónde están gestionados.
+- Las migraciones SQL deben ser **idempotentes** (`CREATE TABLE IF NOT EXISTS`, `ALTER TABLE ADD COLUMN IF NOT EXISTS`) siempre que sea posible.
+
+## Estructura del monorepo
+
+```
+MyTaskMyHabit/
+├── app/                    # Proyecto Android (Kotlin/Compose)
+├── server/                 # Backend Node.js/Express
+│   ├── package.json
+│   ├── .env.example
+│   ├── README.md
+│   ├── migrations/
+│   │   ├── 001_create_usuarios.sql
+│   │   ├── 002_seed_usuario.sql
+│   │   ├── 003_create_tareas_schema.sql
+│   │   └── 004_tareas_unique_constraint.sql
+│   ├── scripts/
+│   │   └── migrate_tareas.js       # Migración datos Room → Postgres
+│   └── src/
+│       ├── index.js        # Entrada principal, Express setup
+│       ├── config.js       # Parseo de variables de entorno
+│       ├── db.js           # Pool PostgreSQL + initSchema
+│       ├── migrator.js     # Runner de migraciones SQL versionadas
+│       ├── middleware/
+│       │   ├── auth.js     # Middleware JWT (requireAuth)
+│       │   └── resolveUser.js # Resuelve usuario_id desde JWT
+│       └── routes/
+│           ├── auth.js     # POST /auth/login, GET /auth/me
+│           ├── categorias.js # CRUD /api/categorias
+│           └── tareas.js   # CRUD /api/tareas
+├── web/                    # PWA (futuro)
+├── PROYECTO.md             # Este fichero
+├── DATABASE_ANALYSIS.md    # Análisis del schema Room/SQLite actual
+└── ...                     # Ficheros del proyecto Android (gradle, etc.)
+```
+
+## Historial de iteraciones
+
+| # | Título | Fecha | Resumen |
+|---|--------|-------|---------|
+| 1 | Esqueleto backend + auth JWT | Agosto 2026 | Backend Node/Express creado en `server/`. Pool PostgreSQL con SSL condicional. Auth JWT con bcryptjs. Endpoints: GET /health, POST /auth/login, GET /auth/me. 10/10 tests passing. Preparado para despliegue en Render (instrucciones en README.md). |
+| 2 | Tabla usuarios + migraciones SQL | Agosto 2026 | Sistema de migraciones versionadas (`server/migrations/` + `migrator.js` + tabla `migration_log`). Tabla `usuarios` creada. Usuario único `tony` (id=1) dado de alta con seed idempotente. GET /auth/me actualizado para devolver id numérico. 13/13 tests passing. |
+| 3 | Esquema PostgreSQL módulo Tareas | Agosto 2026 | Tipo ENUM `prioridad_tarea`, tabla `categorias_table` y tabla `tareas_table` creadas con FK formales, índices optimizados y corrección del problema de categoría-string-libre de Room. Migración `003_create_tareas_schema.sql`. 12/12 validaciones estáticas OK. Se aplicará en Render en el próximo deploy. |
+| 4 | Script migración datos Tareas | Agosto 2026 | Script `scripts/migrate_tareas.js` creado y verificado contra la BD real del dispositivo (11 categorías, 401 tareas, 67 huérfanas de 4 categorías eliminadas, 0 errores de conversión). Migración `004_tareas_unique_constraint.sql` para idempotencia. Comando adb de extracción documentado. NO ejecutado contra producción — pendiente Iteración 7 (corte coordinado). |
+| 5 | API REST módulo Tareas | Agosto 2026 | Endpoints CRUD para categorías (`/api/categorias`) y tareas (`/api/tareas`) con auth JWT, resolución de usuario_id desde JWT, validaciones, ordenación por prioridad DESC + fecha_creacion ASC, filtro de pendientes. Middleware `resolveUser` creado. Todos los módulos cargan correctamente. Pendiente desplegar en Render y verificar manualmente. |
+| 6 | Adaptar Android: Tareas → API | Agosto 2026 | Capa de red completa con Ktor: `ApiClient` (JWT automático), `AuthManager` (DataStore), `TareasApiService`, `TareasApiRepository` (mapea DTOs ↔ modelos locales). `TareasApiViewModel` como drop-in replacement del ViewModel original. Login screen + AuthGate. Room de Tareas permanece intacto pero desconectado del nuevo flujo. BUILD SUCCESSFUL. Pendiente: swap a TareasApiViewModel en Iteración 7. |
+| 7 | Corte coordinado Tareas (EN CURSO) | Agosto 2026 | Swap realizado: `TareasViewModelRoom` (original con Room) archivado, `TareasViewModel` (API) activo en `TareasApiViewModel.kt`. MiApp.kt usa `viewModel()` sin factory. PantallaCrearTarea actualizada. **Pendiente:** conectar dispositivo para: (1) extraer .db fresco, (2) ejecutar migración contra Render, (3) verificar datos en API, (4) compilar y confirmar BUILD SUCCESSFUL, (5) installDebug, (6) verificación funcional. |
