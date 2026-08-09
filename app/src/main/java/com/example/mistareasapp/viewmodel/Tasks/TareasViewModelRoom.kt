@@ -49,8 +49,8 @@ data class MapasDeTareas(
 
 enum class TipoVista { VENCIMIENTO, CATEGORIAS }
 
-// --- VIEWMODEL PRINCIPAL ---
-class TareasViewModel(
+// --- VIEWMODEL PRINCIPAL (ROOM — ARCHIVADO, USAR TareasViewModel DE TareasApiViewModel.kt) ---
+class TareasViewModelRoom(
     private var tareaDao: TareaDao,
     private var categoriaDao: CategoriaDao
 ) : ViewModel() {

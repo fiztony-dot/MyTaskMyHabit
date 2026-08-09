@@ -10,10 +10,10 @@ class TareasViewModelFactory(
     private val categoriaDao: CategoriaDao
 ) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
-        if (modelClass.isAssignableFrom(TareasViewModel::class.java)) {
+        if (modelClass.isAssignableFrom(TareasViewModelRoom::class.java)) {
             @Suppress("UNCHECKED_CAST")
             // Aquí le pasamos al ViewModel los DAOs que necesita
-            return TareasViewModel(tareaDao, categoriaDao) as T
+            return TareasViewModelRoom(tareaDao, categoriaDao) as T
         }
         throw IllegalArgumentException("Clase ViewModel desconocida: ${modelClass.name}")
     }

@@ -112,11 +112,9 @@ fun MisTareasApp() {
 
     // --- 1. BASE DE DATOS Y VIEWMODELS ---
     val db = AppDatabase.getDatabase(context)
-    val factory = TareasViewModelFactory(
-        tareaDao = db.tareaDao(),
-        categoriaDao = db.categoriaDao()
-    )
-    val viewModel: TareasViewModel = viewModel(factory = factory)
+
+    // Tareas: usa la API REST (migrado en Iteración 7)
+    val viewModel: TareasViewModel = viewModel()
 
     val habitosFactory = HabitosViewModelFactory(db.habitoDao())
     val habitosViewModel: HabitosViewModel = viewModel(factory = habitosFactory)

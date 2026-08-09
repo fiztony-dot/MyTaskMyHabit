@@ -1,0 +1,14 @@
+C:\Users\Usuario\AndroidStudioProjects\MyTaskMyHabit\app\src\main\java\com\example\mistareasapp\core\ai\SpeechLauncher.kt
+C:\Users\Usuario\AndroidStudioProjects\MyTaskMyHabit\app\src\main\java\com\example\mistareasapp\MiApp.kt
+C:\Users\Usuario\AndroidStudioProjects\MyTaskMyHabit\app\src\main\java\com\example\mistareasapp\ui\components\tasks\AccionesTopBarTareas.kt
+C:\Users\Usuario\AndroidStudioProjects\MyTaskMyHabit\app\src\main\java\com\example\mistareasapp\ui\components\tasks\TareaUIComponents.kt
+C:\Users\Usuario\AndroidStudioProjects\MyTaskMyHabit\app\src\main\java\com\example\mistareasapp\ui\screens\GestionArchivosCopias.kt
+C:\Users\Usuario\AndroidStudioProjects\MyTaskMyHabit\app\src\main\java\com\example\mistareasapp\ui\screens\tasks\PantallaConfiguracion.kt
+C:\Users\Usuario\AndroidStudioProjects\MyTaskMyHabit\app\src\main\java\com\example\mistareasapp\ui\screens\tasks\PantallaCrearTarea.kt
+C:\Users\Usuario\AndroidStudioProjects\MyTaskMyHabit\app\src\main\java\com\example\mistareasapp\ui\screens\tasks\PantallaEditarTarea.kt
+C:\Users\Usuario\AndroidStudioProjects\MyTaskMyHabit\app\src\main\java\com\example\mistareasapp\ui\screens\tasks\PantallaGestionCategorias.kt
+C:\Users\Usuario\AndroidStudioProjects\MyTaskMyHabit\app\src\main\java\com\example\mistareasapp\ui\screens\tasks\PantallaListaTareas.kt
+C:\Users\Usuario\AndroidStudioProjects\MyTaskMyHabit\app\src\main\java\com\example\mistareasapp\ui\screens\tasks\VistaPorCategorias.kt
+C:\Users\Usuario\AndroidStudioProjects\MyTaskMyHabit\app\src\main\java\com\example\mistareasapp\viewmodel\Tasks\TareasApiViewModel.kt
+C:\Users\Usuario\AndroidStudioProjects\MyTaskMyHabit\app\src\main\java\com\example\mistareasapp\viewmodel\Tasks\TareasViewModelFactory.kt
+C:\Users\Usuario\AndroidStudioProjects\MyTaskMyHabit\app\src\main\java\com\example\mistareasapp\viewmodel\Tasks\TareasViewModelRoom.kt

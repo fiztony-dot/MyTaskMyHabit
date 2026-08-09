@@ -127,6 +127,9 @@ dependencies {
 
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.6.2")
 
+    // DataStore para almacenamiento seguro del token JWT
+    implementation("androidx.datastore:datastore-preferences:1.1.1")
+
     // Para implementar notificaciones en Android que se activen exactamente en la fecha y hora límite, necesitamos usar WorkManager
     implementation("androidx.work:work-runtime-ktx:2.9.0")
     /*implementation("androidx.compose.material:material-icons-extended:1.7.6")*/

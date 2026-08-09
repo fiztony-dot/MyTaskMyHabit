@@ -1,6 +1,7 @@
 package com.example.mistareasapp.ui.navigation
 
 sealed class Rutas(val ruta: String) {
+    object PantallaLogin : Rutas("login")
     object PantallaTareas : Rutas("tareas")
     object PantallaCrearTarea : Rutas("crear_tarea")
 

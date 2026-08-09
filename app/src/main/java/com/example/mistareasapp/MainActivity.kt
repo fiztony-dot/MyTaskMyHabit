@@ -18,6 +18,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import com.example.mistareasapp.core.backup.BackupScheduler
 import com.example.mistareasapp.ui.screens.SplashScreen
+import com.example.mistareasapp.ui.screens.auth.AuthGate
 import kotlinx.coroutines.delay
 
 class MainActivity : ComponentActivity() {
@@ -31,7 +32,9 @@ class MainActivity : ComponentActivity() {
             if (mostrarSplash) {
                 SplashScreen(onComplete = { mostrarSplash = false })
             } else {
-                MisTareasApp()
+                AuthGate {
+                    MisTareasApp()
+                }
 
                 // Solicitar permisos solo después de que el splash haya terminado
                 LaunchedEffect(Unit) {

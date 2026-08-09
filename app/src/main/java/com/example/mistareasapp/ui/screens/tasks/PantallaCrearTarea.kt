@@ -81,8 +81,7 @@ enum class ModoLimiteRepeticion { SIN_LIMITE, HASTA_FECHA, N_VECES }
 fun PantallaCrearTarea(navController: NavController) {
     val context = LocalContext.current
     val db = AppDatabase.Companion.getDatabase(context)
-    val factory = TareasViewModelFactory(db.tareaDao(), db.categoriaDao())
-    val viewModel: TareasViewModel = viewModel(factory = factory)
+    val viewModel: TareasViewModel = viewModel()
     val scope = rememberCoroutineScope()
 
     // ESTADOS FORMULARIO
