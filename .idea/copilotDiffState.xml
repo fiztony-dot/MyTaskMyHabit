@@ -30,15 +30,6 @@
             </PendingDiffInfo>
           </value>
         </entry>
-        <entry key="$PROJECT_DIR$/app/src/main/res/xml/lista_compra_widget_info.xml">
-          <value>
-            <PendingDiffInfo>
-              <option name="filePath" value="$PROJECT_DIR$/app/src/main/res/xml/lista_compra_widget_info.xml" />
-              <option name="originalContent" value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;utf-8&quot;?&gt;&#10;&lt;appwidget-provider xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot;&#10;    android:initialLayout=&quot;@layout/lista_compra_widget&quot;&#10;    android:minWidth=&quot;72dp&quot;&#10;    android:minHeight=&quot;72dp&quot;&#10;    android:targetCellWidth=&quot;1&quot;&#10;    android:targetCellHeight=&quot;1&quot;&#10;    android:updatePeriodMillis=&quot;0&quot;&#10;    android:resizeMode=&quot;none&quot;&#10;    android:widgetCategory=&quot;home_screen&quot;&#10;    android:previewImage=&quot;@drawable/ic_widget_compra_preview&quot;&#10;    android:description=&quot;@string/widget_compra_description&quot; /&gt;&#10;" />
-              <option name="updatedContent" value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;utf-8&quot;?&gt;&#10;&lt;appwidget-provider xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot;&#10;    android:initialLayout=&quot;@layout/lista_compra_widget&quot;&#10;    android:minWidth=&quot;56dp&quot;&#10;    android:minHeight=&quot;56dp&quot;&#10;    android:targetCellWidth=&quot;1&quot;&#10;    android:targetCellHeight=&quot;1&quot;&#10;    android:updatePeriodMillis=&quot;0&quot;&#10;    android:resizeMode=&quot;none&quot;&#10;    android:widgetCategory=&quot;home_screen&quot;&#10;    android:previewImage=&quot;@drawable/ic_widget_compra_preview&quot;&#10;    android:description=&quot;@string/widget_compra_description&quot; /&gt;&#10;" />
-            </PendingDiffInfo>
-          </value>
-        </entry>
         <entry key="$PROJECT_DIR$/app/src/main/res/xml/my_app_widget_info.xml">
           <value>
             <PendingDiffInfo>

@@ -9,8 +9,9 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.lifecycle.lifecycleScope
+import com.example.mistareasapp.core.network.ApiClient
+import com.example.mistareasapp.core.network.TareasApiRepository
 import com.example.mistareasapp.core.voice.VozTaskParser
-import com.example.mistareasapp.data.AppDatabase
 import com.example.mistareasapp.data.tasks.Tarea
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -33,6 +34,9 @@ class VozTareasActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Asegurar que el token está cargado
+        lifecycleScope.launch { ApiClient.initFromStorage(applicationContext) }
+
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             putExtra(RecognizerIntent.EXTRA_LANGUAGE, "es-ES")
@@ -47,25 +51,31 @@ class VozTareasActivity : ComponentActivity() {
 
     private fun procesarTexto(texto: String) {
         lifecycleScope.launch(Dispatchers.IO) {
-            val datos = VozTaskParser.parse(texto)
-            val dao = AppDatabase.getDatabase(applicationContext).tareaDao()
-            dao.insertar(
-                Tarea(
-                    titulo = datos.titulo,
-                    descripcion = null,
-                    prioridad = datos.prioridad,
-                    fechaLimite = datos.fechaLimite,
-                    horaLimite = datos.horaLimite,
-                    pendienteClasificar = true
+            try {
+                val datos = VozTaskParser.parse(texto)
+                TareasApiRepository.insertar(
+                    Tarea(
+                        titulo = datos.titulo,
+                        descripcion = null,
+                        prioridad = datos.prioridad,
+                        fechaLimite = datos.fechaLimite,
+                        horaLimite = datos.horaLimite,
+                        pendienteClasificar = true
+                    )
                 )
-            )
-            withContext(Dispatchers.Main) {
-                Toast.makeText(
-                    this@VozTareasActivity,
-                    "Tarea añadida: ${datos.titulo}",
-                    Toast.LENGTH_LONG
-                ).show()
-                Handler(Looper.getMainLooper()).postDelayed({ finish() }, 2000)
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(
+                        this@VozTareasActivity,
+                        "Tarea añadida: ${datos.titulo}",
+                        Toast.LENGTH_LONG
+                    ).show()
+                    Handler(Looper.getMainLooper()).postDelayed({ finish() }, 2000)
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(this@VozTareasActivity, "Error: ${e.message}", Toast.LENGTH_LONG).show()
+                    Handler(Looper.getMainLooper()).postDelayed({ finish() }, 2000)
+                }
             }
         }
     }

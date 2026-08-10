@@ -55,13 +55,11 @@ import androidx.navigation.NavController
 import com.example.mistareasapp.data.tasks.Categoria
 import com.example.mistareasapp.data.tasks.Prioridad
 import com.example.mistareasapp.data.tasks.Tarea
-import com.example.mistareasapp.data.AppDatabase
 import com.example.mistareasapp.ui.components.tasks.BotonSelectorDato
 import com.example.mistareasapp.ui.components.tasks.SelectorPrioridad
 import com.example.mistareasapp.ui.components.tasks.obtenerColorIcono
 import com.example.mistareasapp.ui.components.tasks.obtenerIcono
 import com.example.mistareasapp.viewmodel.Tasks.TareasViewModel
-import com.example.mistareasapp.viewmodel.Tasks.TareasViewModelFactory
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.LocalDate
@@ -78,10 +76,8 @@ enum class ModoLimiteRepeticion { SIN_LIMITE, HASTA_FECHA, N_VECES }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PantallaCrearTarea(navController: NavController) {
+fun PantallaCrearTarea(navController: NavController, viewModel: TareasViewModel = viewModel()) {
     val context = LocalContext.current
-    val db = AppDatabase.Companion.getDatabase(context)
-    val viewModel: TareasViewModel = viewModel()
     val scope = rememberCoroutineScope()
 
     // ESTADOS FORMULARIO

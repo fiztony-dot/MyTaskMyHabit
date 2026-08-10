@@ -56,9 +56,8 @@ fun GestionDatosScreen(viewModel: TareasViewModel) {
         uri?.let {
             scope.launch(Dispatchers.IO) {
                 DatabaseBackup.exportDatabase(context, it)
-                val nuevaDb = AppDatabase.getDatabase(context)
                 withContext(Dispatchers.Main) {
-                    viewModel.actualizarDaos(nuevaDb.tareaDao(), nuevaDb.categoriaDao())
+                    viewModel.actualizarDaos()
                 }
             }
         }

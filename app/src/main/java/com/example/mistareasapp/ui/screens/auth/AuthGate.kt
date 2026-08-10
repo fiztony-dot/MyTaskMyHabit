@@ -9,14 +9,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import com.example.mistareasapp.core.network.ApiClient
 import com.example.mistareasapp.core.network.AuthManager
+import com.example.mistareasapp.core.network.TareasApiService
 import kotlinx.coroutines.launch
 
 /**
  * Composable que actúa como puerta de entrada:
- * - Si hay un token guardado, lo carga en ApiClient y muestra la app.
- * - Si no hay token, muestra la pantalla de login.
- *
- * Se usa como wrapper en MainActivity, envolviendo a MisTareasApp().
+ * - Si hay un token guardado, lo verifica contra la API (GET /auth/me).
+ *   Si es válido → muestra la app. Si no → muestra login.
+ * - Si no hay token → muestra login.
  */
 @Composable
 fun AuthGate(content: @Composable () -> Unit) {
@@ -29,7 +29,16 @@ fun AuthGate(content: @Composable () -> Unit) {
         val token = AuthManager.getToken(context)
         if (token != null) {
             ApiClient.updateToken(token)
-            authState = AuthState.Authenticated
+            // Verificar que el token sigue siendo válido
+            try {
+                TareasApiService.me()
+                authState = AuthState.Authenticated
+            } catch (e: Exception) {
+                // Token inválido o expirado — limpiar y pedir login
+                AuthManager.clearSession(context)
+                ApiClient.updateToken(null)
+                authState = AuthState.NotAuthenticated
+            }
         } else {
             authState = AuthState.NotAuthenticated
         }

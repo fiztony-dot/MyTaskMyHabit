@@ -72,7 +72,6 @@ import com.example.mistareasapp.ui.screens.tasks.PantallaGestionCategorias
 import com.example.mistareasapp.ui.screens.tasks.PantallaListaTareas
 import com.example.mistareasapp.ui.theme.MisTareasAppTheme
 import com.example.mistareasapp.viewmodel.Tasks.TareasViewModel
-import com.example.mistareasapp.viewmodel.Tasks.TareasViewModelFactory
 import com.example.mistareasapp.core.notifications.tasks.NotificationHelper
 import com.example.mistareasapp.ui.components.tasks.AccionesTopBarTareas
 import com.example.mistareasapp.ui.navigation.BarraNavegacion
@@ -507,7 +506,7 @@ fun MisTareasApp() {
                 }
 
                 composable(Rutas.PantallaCrearTarea.ruta) {
-                    PantallaCrearTarea(navController)
+                    PantallaCrearTarea(navController, viewModel)
                 }
 
                 composable(Rutas.PantallaCrearHabito.ruta) {

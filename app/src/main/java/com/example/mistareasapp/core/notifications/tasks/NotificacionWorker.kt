@@ -7,11 +7,13 @@ import android.os.Build
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.work.*
-// IMPORTANTE: Estos imports deben coincidir con tus rutas reales
-import com.example.mistareasapp.data.AppDatabase
-import kotlinx.coroutines.runBlocking
 import java.util.concurrent.TimeUnit
 
+/**
+ * Worker que muestra notificaciones de tareas.
+ * Ya no consulta Room (tareas migradas a API). La validación de si la tarea
+ * sigue pendiente se hace al programar la notificación (TareasApiViewModel).
+ */
 class NotificacionWorker(context: Context, params: WorkerParameters) : Worker(context, params) {
 
     override fun doWork(): Result {
@@ -20,30 +22,14 @@ class NotificacionWorker(context: Context, params: WorkerParameters) : Worker(co
         val tipo = inputData.getString("tipo") ?: ""
         val intervalo = inputData.getLong("intervalo", 0L)
 
-        // 1. CONEXIÓN A TU BASE DE DATOS REAL
-        // Cambiado AppDatabase por TareasDatabase que es el tuyo
-        val db = AppDatabase.getDatabase(applicationContext)
-
-        val tareaEnDb = runBlocking {
-            db.tareaDao().obtenerTareaPorIdSincrona(idTarea)
-        }
-
-        // 2. VERIFICACIÓN DE ESTADO
-        // Si la tarea no existe o ya está marcada como completada, frenamos en seco
-        if (tareaEnDb == null || tareaEnDb.estaCompletada == true) {
-            Log.d("LOG-NOTIFICACION", "⏹️ Deteniendo avisos: Tarea completada o inexistente")
-            return Result.success()
-        }
-
-        // 3. LANZAR LA NOTIFICACIÓN
+        // Mostrar la notificación directamente
         mostrarNotificacion(titulo, idTarea, tipo)
 
-        // 4. REPROGRAMACIÓN AUTOMÁTICA
-        // Si es una repetición y la tarea sigue pendiente, el Worker se vuelve a llamar a sí mismo
+        // Reprogramación automática para repeticiones
         if (tipo == "repeticion" && intervalo > 0) {
             val proximaRequest = OneTimeWorkRequestBuilder<NotificacionWorker>()
                 .setInitialDelay(intervalo, TimeUnit.MILLISECONDS)
-                .setInputData(inputData) // Pasa los mismos datos al siguiente aviso
+                .setInputData(inputData)
                 .addTag("notif_${idTarea}_repeticion")
                 .build()
 
@@ -52,7 +38,7 @@ class NotificacionWorker(context: Context, params: WorkerParameters) : Worker(co
                 ExistingWorkPolicy.REPLACE,
                 proximaRequest
             )
-            Log.d("LOG-NOTIFICACION", "🔁 Repetición auto-programada para: $titulo")
+            Log.d("LOG-NOTIFICACION", "Repetición auto-programada para: $titulo")
         }
 
         return Result.success()

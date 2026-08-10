@@ -290,7 +290,8 @@ class TareasViewModel : ViewModel() {
     fun cambiarOrdenCategorias(nuevoOrden: OrdenCategorias) { _ordenCategorias.value = nuevoOrden }
 
     /** Compatibilidad con la pantalla de backup/restore. Con la API no hace nada — los datos están en el servidor. */
-    fun actualizarDaos(tareaDao: com.example.mistareasapp.data.tasks.TareaDao, categoriaDao: com.example.mistareasapp.data.tasks.CategoriaDao) {
+    @Suppress("UNUSED_PARAMETER")
+    fun actualizarDaos(vararg args: Any?) {
         // No-op: con la API no se necesitan DAOs locales. Recargar datos del servidor.
         cargarDatos()
     }

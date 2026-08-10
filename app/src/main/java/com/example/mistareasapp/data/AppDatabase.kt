@@ -7,11 +7,7 @@ import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
-import com.example.mistareasapp.data.tasks.Categoria
-import com.example.mistareasapp.data.tasks.CategoriaDao
 import com.example.mistareasapp.data.Converters
-import com.example.mistareasapp.data.tasks.Tarea
-import com.example.mistareasapp.data.tasks.TareaDao
 import com.example.mistareasapp.data.habits.Habito
 import com.example.mistareasapp.data.habits.HabitoHistorial
 import com.example.mistareasapp.data.habits.HabitoDao
@@ -587,6 +583,17 @@ val MIGRATION_30_31 = object : Migration(30, 31) {
     }
 }
 
+// Migración 31→32: Tareas migradas a API REST (Supabase). Las tablas locales ya no se usan
+// pero se mantienen en SQLite por si se necesita referencia histórica.
+// Room ya no las gestiona (eliminadas del array de entities).
+val MIGRATION_31_32 = object : Migration(31, 32) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        // No eliminamos las tablas físicamente para conservar datos como backup local.
+        // Room simplemente deja de gestionarlas.
+        android.util.Log.d("MIGRATION_31_32", "Tareas migradas a API — tablas locales desvinculadas de Room")
+    }
+}
+
 val MIGRATION_29_30 = object : Migration(29, 30) {
     override fun migrate(database: SupportSQLiteDatabase) {
         // La migración 28→29 dejó esMercadona + tienda; recreamos la tabla con el esquema correcto
@@ -656,18 +663,15 @@ val MIGRATION_20_21 = object : Migration(20, 21) {
 @TypeConverters(Converters::class)
 @Database(
     entities = [
-        Tarea::class, Categoria::class,
         Habito::class, HabitoHistorial::class, CategoriaHabito::class, TareaHabito::class,
         TareaHabitoHistorial::class, HabitoVersion::class, HabitoPausa::class,
         ListaLugar::class, ListaCategoriaProducto::class, ListaProducto::class, ListaItem::class
     ],
-    version = 31,
+    version = 32,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
 
-    abstract fun tareaDao(): TareaDao
-    abstract fun categoriaDao(): CategoriaDao
     abstract fun habitoDao(): HabitoDao
     abstract fun listaCompraDao(): ListaCompraDao
 
@@ -683,7 +687,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "tareas_db"
                 )
-                    .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21, MIGRATION_21_22, MIGRATION_22_23, MIGRATION_23_24, MIGRATION_24_25, MIGRATION_25_26, MIGRATION_26_27, MIGRATION_27_28, MIGRATION_28_29, MIGRATION_29_30, MIGRATION_30_31)
+                    .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21, MIGRATION_21_22, MIGRATION_22_23, MIGRATION_23_24, MIGRATION_24_25, MIGRATION_25_26, MIGRATION_26_27, MIGRATION_27_28, MIGRATION_28_29, MIGRATION_29_30, MIGRATION_30_31, MIGRATION_31_32)
                     .addCallback(DatabaseCallback(context))
                     .setJournalMode(JournalMode.TRUNCATE)
                     .build()

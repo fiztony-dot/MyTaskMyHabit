@@ -1,24 +1,6 @@
-package com.example.mistareasapp.data.Tasks
+package com.example.mistareasapp.data.tasks
 
-import android.content.Context
-import com.example.mistareasapp.data.tasks.Tarea
-import com.example.mistareasapp.data.AppDatabase
-
-object TareaRepository {
-
-    private fun dao(context: Context) =
-        AppDatabase.getDatabase(context).tareaDao()
-
-    suspend fun insertar(context: Context, tarea: Tarea) {
-        dao(context).insertar(tarea)
-    }
-
-    suspend fun insertarSimple(context: Context, texto: String) {
-        dao(context).insertar(
-            Tarea(
-                titulo = texto.replaceFirstChar { it.uppercase() },
-                descripcion = "Voz (Error IA)"
-            )
-        )
-    }
-}
+/**
+ * DEPRECATED: TareaRepository (Room) eliminado.
+ * El módulo Tareas ahora usa TareasApiRepository (core/network/).
+ */
