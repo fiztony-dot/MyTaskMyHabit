@@ -9,36 +9,27 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import com.example.mistareasapp.core.network.ApiClient
 import com.example.mistareasapp.core.network.AuthManager
-import com.example.mistareasapp.core.network.TareasApiService
-import kotlinx.coroutines.launch
 
 /**
  * Composable que actúa como puerta de entrada:
- * - Si hay un token guardado, lo verifica contra la API (GET /auth/me).
- *   Si es válido → muestra la app. Si no → muestra login.
+ * - Si hay un token guardado en DataStore, confía en él y muestra la app directamente
+ *   (sin verificar contra la API — el token tiene 30 días de expiración).
  * - Si no hay token → muestra login.
+ * - Si un endpoint devuelve 401 durante el uso, el ViewModel/ApiService limpiará
+ *   el token y la app redirigirá al login.
  */
 @Composable
 fun AuthGate(content: @Composable () -> Unit) {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
 
     var authState by remember { mutableStateOf<AuthState>(AuthState.Loading) }
 
     LaunchedEffect(Unit) {
         val token = AuthManager.getToken(context)
         if (token != null) {
+            // Confiar en el token local — no verificar contra la API en cada arranque
             ApiClient.updateToken(token)
-            // Verificar que el token sigue siendo válido
-            try {
-                TareasApiService.me()
-                authState = AuthState.Authenticated
-            } catch (e: Exception) {
-                // Token inválido o expirado — limpiar y pedir login
-                AuthManager.clearSession(context)
-                ApiClient.updateToken(null)
-                authState = AuthState.NotAuthenticated
-            }
+            authState = AuthState.Authenticated
         } else {
             authState = AuthState.NotAuthenticated
         }
