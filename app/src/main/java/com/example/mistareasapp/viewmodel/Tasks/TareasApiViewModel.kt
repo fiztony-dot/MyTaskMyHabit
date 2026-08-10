@@ -127,19 +127,30 @@ class TareasViewModel : ViewModel() {
         viewModelScope.launch {
             _isLoading.value = true
             _errorRed.value = null
-            try {
-                val categorias = TareasApiRepository.obtenerCategorias()
-                _categorias.value = categorias
-                TareasApiRepository.actualizarMapaCategorias(categorias)
+            var intentos = 0
+            val maxIntentos = 3
+            while (intentos < maxIntentos) {
+                try {
+                    val categorias = TareasApiRepository.obtenerCategorias()
+                    _categorias.value = categorias
+                    TareasApiRepository.actualizarMapaCategorias(categorias)
 
-                val tareas = TareasApiRepository.obtenerTodas()
-                _tareas.value = tareas
-            } catch (e: Exception) {
-                Log.e("TareasApiVM", "Error cargando datos: ${e.message}")
-                _errorRed.value = e.message ?: "Error de conexión"
-            } finally {
-                _isLoading.value = false
+                    val tareas = TareasApiRepository.obtenerTodas()
+                    _tareas.value = tareas
+                    _errorRed.value = null
+                    break // éxito
+                } catch (e: Exception) {
+                    intentos++
+                    Log.e("TareasApiVM", "Error cargando datos (intento $intentos): ${e.message}")
+                    if (intentos >= maxIntentos) {
+                        _errorRed.value = "Error de conexión. Tira hacia abajo para reintentar."
+                    } else {
+                        // Esperar antes de reintentar (el servidor puede estar arrancando)
+                        kotlinx.coroutines.delay(3000L)
+                    }
+                }
             }
+            _isLoading.value = false
         }
     }
 
