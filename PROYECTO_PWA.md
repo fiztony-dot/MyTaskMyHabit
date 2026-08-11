@@ -172,6 +172,27 @@ Migración progresiva de la app Android "MyTaskMyHabit" (actualmente 100% local 
 - **Navegación:** Botón "Categorías" en la cabecera de Tareas (outline indigo, clase `.t-btn-cats`). Botón "←" en la cabecera de Categorías vuelve a `/tareas` con `useNavigate`.
 - **Build P4:** 111 módulos, `dist/assets/index-CqDuT9w-.js` 251.14 kB (83.86 kB gzip), service worker actualizado.
 
+### PWA — Rediseño visual y funcional de Tareas (Iteración P3b)
+
+- **Material Icons:** Cargado desde CDN de Google Fonts en `index.html`. Los nombres de icono coinciden con los almacenados en la columna `icono` de `categorias_table` (ej. `work`, `home`, `payments`). Renderizado con `<span class="material-icons">nombre</span>`. No hay fallback local — la app requiere conexión para los iconos (aceptable en PWA con NetworkFirst strategy).
+- **Layout pantalla completa:** `max-width: 900px` (antes 700px), background `#f8f9fa` en la página, cards blancas con sombra sutil. En móvil: `max-width: 100%` y secciones sin margen lateral.
+- **Header indigo fijo (56px):** 5 iconos Material a la derecha: `search` (buscador), `filter_list` (chips), `visibility`/`visibility_off` (completadas), `category` (navega a /categorias), `exit_to_app` (logout). Los iconos activos tienen fondo blanco semitransparente.
+- **Tabs integrados en el header indigo** (fondo `#4f46e5`): "Por vencimiento" y "Por categoría". Pestaña activa con `border-bottom: 2px solid white`.
+- **Vista Vencimiento — 7 secciones colapsables:**
+  - Clasificación usa fechas locales (`new Date(y, m-1, d)`) para evitar desfase UTC
+  - `pendiente_clasificar = true` → siempre va a "Pendientes de clasificar" independientemente de la fecha
+  - "Esta semana" = mañana hasta el domingo del calendario actual (incluyendo el domingo)
+  - "Este mes" = semana siguiente hasta el último día del mes
+  - "Pendientes de clasificar" y "Vencidas" arrancan expandidas; el resto colapsado
+  - Cada sección tiene un color y un icono Material propio
+- **Vista Categorías:** Secciones colapsables (todas colapsadas por defecto) agrupadas y ordenadas alfabéticamente. Las tareas sin categoría van al final en "Sin categoría" con icono `label_off`.
+- **Buscador local:** Filtra por `titulo.includes(texto)` sobre las tareas ya cargadas. Al abrir el buscador, el input recibe autoFocus. Al cerrarlo, borra el texto.
+- **Chips de categoría:** Solo muestra categorías activas. El chip seleccionado filtra las dos vistas simultáneamente. Al cerrar el filtro, limpia la selección.
+- **TareaItem rediseñado:** Sin botones de editar/eliminar en la lista (tap = abre el form). Icono de categoría (`cat.icono`) a la derecha. Indicador `repeat` si la tarea tiene repetición. Borde izquierdo: rojo (ALTA), ámbar (MEDIA), verde muy pálido (BAJA).
+- **FAB:** Botón circular indigo fijo en la esquina inferior derecha. En desktop se posiciona respecto al `max-width: 900px` del contenedor.
+- **`catData`:** Añadido a `useCategorias` como `id → objeto completo`, para que `TareaItem` pueda acceder tanto a `titulo` como a `icono` de la categoría en una sola consulta O(1).
+- **Build P3b:** 116 módulos, `dist/assets/index-CbaqY0rt.js` 256.64 kB (85.45 kB gzip).
+
 ### Despliegue en Cloudflare Pages (setup manual único)
 
 Pasos para conectar el repositorio la primera vez desde https://dash.cloudflare.com/:
@@ -270,22 +291,28 @@ MyTaskMyHabit/
 │       ├── components/
 │       │   ├── ProtectedRoute.jsx  # isLoading→spinner, !auth→/login
 │       │   ├── Spinner.jsx         # Spinner centrado compartido
-│       │   ├── TareaItem.jsx       # Fila de tarea con toggle, badges, acciones
-│       │   ├── TareaForm.jsx       # Modal crear/editar tarea
 │       │   ├── CategoriaItem.jsx   # Fila de categoría con icono, contador tareas, acciones
-│       │   └── CategoriaForm.jsx   # Modal crear/editar categoría
+│       │   ├── CategoriaForm.jsx   # Modal crear/editar categoría
+│       │   └── tareas/             # Componentes exclusivos de la pantalla de Tareas
+│       │       ├── TareaItem.jsx       # Fila con Material Icon de categoría e indicador repetición
+│       │       ├── TareaForm.jsx       # Modal crear/editar (campos completos)
+│       │       ├── CabeceraTareas.jsx  # Header indigo fijo: título, búsqueda, filtro, logout
+│       │       ├── BuscadorTareas.jsx  # Input de búsqueda por título (filtrado local)
+│       │       ├── FiltrosCategorias.jsx # Chips horizontales scrollables por categoría
+│       │       ├── SeccionVencimiento.jsx # Sección colapsable con color/icono propio
+│       │       └── SeccionCategoria.jsx   # Sección colapsable por categoría
 │       ├── context/
 │       │   └── AuthContext.jsx     # AuthProvider + AuthContext
 │       ├── hooks/
 │       │   ├── useAuth.js          # Hook con error si fuera de AuthProvider
 │       │   ├── useTareas.js        # Estado de lista, CRUD, toggle optimista
-│       │   └── useCategorias.js    # CRUD completo + catMap id→titulo (todas, incl. inactivas)
+│       │   └── useCategorias.js    # CRUD + catMap + catData (id → objeto completo)
 │       ├── styles/
-│       │   ├── tareas.css          # Estilos de la pantalla Tareas (prefijos .t- y .m-)
-│       │   └── categorias.css      # Estilos de la pantalla Categorías (prefijos .c- y .cf-)
+│       │   ├── tareas.css          # Estilos pantalla Tareas: layout, header, secciones, FAB, modal
+│       │   └── categorias.css      # Estilos pantalla Categorías (prefijos .c- y .cf-)
 │       └── pages/
 │           ├── Login.jsx           # Usa useAuth().login()
-│           ├── Tareas.jsx          # Pantalla principal con CRUD, grupos por prioridad, filtros
+│           ├── Tareas.jsx          # Pantalla principal rediseñada (P3b)
 │           └── Categorias.jsx      # Pantalla de gestión de categorías (CRUD completo)
 ├── PROYECTO_PWA.md         # Este fichero
 ├── DATABASE_ANALYSIS.md    # Análisis del schema Room/SQLite actual
@@ -308,3 +335,4 @@ MyTaskMyHabit/
 | P2 | Auth completo (AuthContext + useAuth + ProtectedRoute robusto) | Agosto 2026 | `AuthContext` con estado de sesión completo (user, token, isLoading, isAuthenticated, login, logout). En mount verifica token con GET /auth/me: 401 cierra sesión, error de red mantiene sesión desde caché localStorage (`mtmh_user`). `useAuth` hook con error descriptivo fuera del provider. `client.js` usa patrón callback `setUnauthorizedHandler` para que el interceptor 401 llame a `logout()` del contexto sin acoplamiento directo. `ProtectedRoute` con spinner durante isLoading. `Login.jsx` usa `useAuth().login()`, muestra spinner durante validación inicial y evita flash del formulario a usuarios autenticados. Clave localStorage: `mtmh_token` / `mtmh_user`. Build OK: 100 módulos. Verificado en dev: routing protegido, redirección correcta. Commit `4b28bbe` pusheado a master. |
 | P3 | Pantalla Tareas completa (CRUD, filtros, grupos por prioridad) | Agosto 2026 | Módulos añadidos: `api/tareas.js`, `api/categorias.js`, `hooks/useTareas.js` (toggle optimista con revert automático), `hooks/useCategorias.js` (catMap id→titulo), `components/TareaItem.jsx` (borde de color por prioridad, badge categoría, fecha roja si vencida, badge "Sin clasificar"), `components/TareaForm.jsx` (modal crear/editar con todos los campos, cierre al pulsar fuera). `Tareas.jsx` reescrita: filtro Todas/Pendientes client-side, grupos ALTA/MEDIA/BAJA con sección de completadas colapsable. CSS en `styles/tareas.css` (prefijos `.t-`/`.m-`), responsive en 480 px. Build: 107 módulos, 245.51 kB. Commit `19256bf` pusheado a master. Cloudflare Pages desplegando automáticamente. |
 | P4 | Pantalla de Categorías (CRUD completo) | Agosto 2026 | `api/categorias.js` extendido con `crearCategoria`, `editarCategoria`, `eliminarCategoria`. `useCategorias` reescrito con CRUD y catMap que incluye categorías inactivas. `CategoriaItem.jsx` (icono monospace, contador de tareas calculado desde `useTareas`, badge "Inactiva", confirm con advertencia de SET NULL antes de eliminar). `CategoriaForm.jsx` (modal crear/editar, checkbox activa solo en edición, hint explicativo). `Categorias.jsx` (pantalla `/categorias` protegida, back button a Tareas). `TareaForm.jsx` actualizado: selector filtra solo categorías activas. Header de Tareas: botón "Categorías" → navega a `/categorias`. `categorias.css` con prefijos `.c-`/`.cf-`. Build: 111 módulos, 251.14 kB. Commit `2adaf0f` pusheado a master. |
+| P3b | Rediseño visual y funcional completo de Tareas | Agosto 2026 | Material Icons desde CDN Google Fonts. Header indigo fijo con 5 iconos (búsqueda, filtro, visibilidad, categorías, logout). Tabs "Por vencimiento" / "Por categoría". 7 secciones colapsables de vencimiento con color e icono Material propio (Pendientes/Vencidas expandidas, resto colapsadas). Vista Categorías agrupada alfabéticamente. Buscador en tiempo real por título (filtrado local). Chips horizontales de filtro por categoría. Toggle mostrar/ocultar completadas. FAB indigo fijo para nueva tarea. `TareaItem` rediseñado sin botones visibles: tap = abre form, icono Material de categoría a la derecha, indicador `repeat`. Layout hasta 900px. `catData` (id→objeto completo) añadido a `useCategorias`. Eliminados `components/TareaItem.jsx` y `components/TareaForm.jsx` (movidos a `components/tareas/`). Build: 116 módulos, 256.64 kB. Commit `d907e1f` pusheado a master. |
