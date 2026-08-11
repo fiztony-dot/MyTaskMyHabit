@@ -8,6 +8,7 @@ const { resolveUser } = require('./middleware/resolveUser');
 const authRoutes = require('./routes/auth');
 const categoriasRoutes = require('./routes/categorias');
 const tareasRoutes = require('./routes/tareas');
+const webhookRoutes = require('./routes/webhooks');
 
 const app = express();
 
@@ -40,6 +41,7 @@ app.get('/health', async (req, res) => {
 });
 
 // --- Rutas ---
+app.use('/webhooks', webhookRoutes);
 app.use('/auth', authRoutes);
 app.use('/api/categorias', requireAuth, resolveUser, categoriasRoutes);
 app.use('/api/tareas', requireAuth, resolveUser, tareasRoutes);
