@@ -136,6 +136,18 @@ Migración progresiva de la app Android "MyTaskMyHabit" (actualmente 100% local 
 - **`package.json` `"type": "module"`:** Los scripts de utilidad (generate-icons) usan extensión `.cjs` para seguir usando CommonJS sin conflicto con el ES module scope de Vite.
 - **Versiones:** Fijadas exactas en `package.json` (sin rangos `^`) siguiendo la convención del proyecto. Resolución desde `package-lock.json`.
 
+### PWA — Auth completo (Iteración P2)
+
+- **Claves localStorage:** `mtmh_token` (JWT) y `mtmh_user` (JSON `{id, username}`). El cambio de claves respecto a P1 (`jwt_token`) implica que los usuarios deban logarse de nuevo tras el deploy — aceptable para app personal.
+- **`AuthContext` y patrón de inicialización:**
+  1. `useState(() => localStorage.getItem('mtmh_token'))` — inicialización lazy del token para evitar re-renders innecesarios.
+  2. `useEffect` en mount llama a `GET /auth/me`. Si el servidor (Render free tier) está dormido y tarda o falla por red (`error.response` es `undefined`), la sesión se restaura desde `mtmh_user` en caché. Solo se limpia la sesión si el servidor devuelve HTTP 401/403 explícitamente.
+  3. Después del login: se llama inmediatamente a `GET /auth/me` para enriquecer el usuario básico (del body del login) con el `id` de la tabla usuarios (necesario en P3 para las llamadas a la API).
+- **Patrón `setUnauthorizedHandler`:** `client.js` exporta una función para registrar un callback que se llama en respuestas 401 no relacionadas con el login. `AuthContext` registra su `logout()` en un `useEffect`. Esto evita importar el contexto React desde un módulo de red (dependencia circular).
+- **`ProtectedRoute` con spinner:** el spinner evita el "auth flash" (login visible brevemente a usuarios autenticados mientras `isLoading = true`). El spinner también aparece en `Login.jsx` por la misma razón — si hay token, se valida antes de mostrar el formulario.
+- **Spinner compartido:** `src/components/Spinner.jsx` — CSS animation `@keyframes mtmh-spin` con nombre prefijado para evitar colisiones si se combina CSS global.
+- **`useNavigate` en `AuthContext`:** `AuthProvider` debe estar dentro de `BrowserRouter` (que vive en `main.jsx`) para que `useNavigate` funcione. La posición en `App.jsx` (dentro del Router, fuera de Routes) es correcta.
+
 ### Despliegue en Cloudflare Pages (setup manual único)
 
 Pasos para conectar el repositorio la primera vez desde https://dash.cloudflare.com/:
@@ -230,12 +242,15 @@ MyTaskMyHabit/
 │       │   ├── client.js       # Axios con interceptores de auth y 401
 │       │   └── auth.js         # login(), getMe()
 │       ├── components/
-│       │   └── ProtectedRoute.jsx
-│       ├── context/            # (reservado para iteraciones futuras)
-│       ├── hooks/              # (reservado para iteraciones futuras)
+│       │   ├── ProtectedRoute.jsx  # isLoading→spinner, !auth→/login
+│       │   └── Spinner.jsx         # Spinner centrado compartido
+│       ├── context/
+│       │   └── AuthContext.jsx     # AuthProvider + AuthContext
+│       ├── hooks/
+│       │   └── useAuth.js          # Hook con error si fuera de AuthProvider
 │       └── pages/
-│           ├── Login.jsx
-│           └── Tareas.jsx      # Placeholder — implementación real en Iteración P3
+│           ├── Login.jsx           # Usa useAuth().login()
+│           └── Tareas.jsx          # Placeholder — implementación real en Iteración P3
 ├── PROYECTO_PWA.md         # Este fichero
 ├── DATABASE_ANALYSIS.md    # Análisis del schema Room/SQLite actual
 └── ...                     # Ficheros del proyecto Android (gradle, etc.)
@@ -254,3 +269,4 @@ MyTaskMyHabit/
 | 7 | Corte coordinado Tareas | Agosto 2026 | Migración de datos ejecutada contra Supabase: 11 categorías insertadas, 401 tareas insertadas, 67 con categoría huérfana (→ NULL), 0 errores. Swap de ViewModel completado (`TareasViewModelRoom` archivado, `TareasViewModel` API activo). App instalada y verificada. Módulo Tareas completamente migrado a servidor. |
 | 8 | Limpieza: retirar Room de Tareas | Agosto 2026 | Eliminados: TareaDao, CategoriaDao, TareasViewModelRoom, TareasViewModelFactory, TareaRepository (Room). Tarea.kt y Categoria.kt convertidas a plain data classes (sin @Entity). AppDatabase v31→v32 sin entidades de Tareas. NotificacionWorker y BootReceiver actualizados (no dependen de Room). TareasBackupJson convertido a no-op. Room sigue activo para Hábitos y Shopping. |
 | P1 | Scaffolding PWA | Agosto 2026 | Carpeta `web/` creada con React 18 + Vite 6. `vite-plugin-pwa` con manifest (name: MyTaskMyHabit, theme: #6366f1, display: standalone, iconos 192+512). Iconos PNG generados por script propio sin dependencias. Cliente HTTP Axios con interceptores de auth (token de localStorage) y 401 (redirect a /login, excepto en el endpoint de login). Routing protegido con `react-router-dom` v7. Páginas placeholder Login y Tareas. `public/_redirects` para SPA en Cloudflare Pages. Build de producción OK (97 módulos, sw.js + workbox). Verificado en dev: error 401 con credenciales erróneas muestra mensaje correcto. Despliegue Cloudflare Pages: pendiente setup manual (pasos documentados en sección "Decisiones de diseño"). |
+| P2 | Auth completo (AuthContext + useAuth + ProtectedRoute robusto) | Agosto 2026 | `AuthContext` con estado de sesión completo (user, token, isLoading, isAuthenticated, login, logout). En mount verifica token con GET /auth/me: 401 cierra sesión, error de red mantiene sesión desde caché localStorage (`mtmh_user`). `useAuth` hook con error descriptivo fuera del provider. `client.js` usa patrón callback `setUnauthorizedHandler` para que el interceptor 401 llame a `logout()` del contexto sin acoplamiento directo. `ProtectedRoute` con spinner durante isLoading. `Login.jsx` usa `useAuth().login()`, muestra spinner durante validación inicial y evita flash del formulario a usuarios autenticados. Clave localStorage: `mtmh_token` / `mtmh_user`. Build OK: 100 módulos. Verificado en dev: routing protegido, redirección correcta. Commit `4b28bbe` pusheado a master. |
