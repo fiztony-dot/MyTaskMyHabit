@@ -1,27 +1,39 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { login } from '../api/auth'
+import { useAuth } from '../hooks/useAuth'
+import Spinner from '../components/Spinner'
 
 export default function Login() {
+  const { login, isLoading, isAuthenticated } = useAuth()
   const navigate = useNavigate()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
-  const [loading, setLoading] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+
+  // Si ya hay sesión activa, ir directo a /tareas
+  useEffect(() => {
+    if (!isLoading && isAuthenticated) {
+      navigate('/tareas', { replace: true })
+    }
+  }, [isLoading, isAuthenticated, navigate])
+
+  // Mostrar spinner mientras se verifica el token al arrancar
+  if (isLoading) return <Spinner />
+  // Evitar flash del formulario si ya está autenticado
+  if (isAuthenticated) return null
 
   async function handleSubmit(e) {
     e.preventDefault()
     setError('')
-    setLoading(true)
+    setSubmitting(true)
     try {
-      const { token, user } = await login(username, password)
-      localStorage.setItem('jwt_token', token)
-      localStorage.setItem('username', user.username)
-      navigate('/tareas', { replace: true })
+      await login(username, password)
+      // La navegación la gestiona AuthContext.login()
     } catch (err) {
       setError(err.response?.data?.error || 'Error al iniciar sesión')
     } finally {
-      setLoading(false)
+      setSubmitting(false)
     }
   }
 
@@ -53,8 +65,12 @@ export default function Login() {
             />
           </div>
           {error && <p style={styles.error}>{error}</p>}
-          <button type="submit" disabled={loading} style={{ ...styles.button, opacity: loading ? 0.7 : 1 }}>
-            {loading ? 'Iniciando sesión...' : 'Iniciar sesión'}
+          <button
+            type="submit"
+            disabled={submitting}
+            style={{ ...styles.button, opacity: submitting ? 0.7 : 1 }}
+          >
+            {submitting ? 'Iniciando sesión...' : 'Iniciar sesión'}
           </button>
         </form>
       </div>

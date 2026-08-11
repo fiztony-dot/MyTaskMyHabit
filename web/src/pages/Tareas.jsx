@@ -1,27 +1,20 @@
-import { useNavigate } from 'react-router-dom'
+import { useAuth } from '../hooks/useAuth'
 
 export default function Tareas() {
-  const navigate = useNavigate()
-  const username = localStorage.getItem('username') || 'usuario'
-
-  function handleLogout() {
-    localStorage.removeItem('jwt_token')
-    localStorage.removeItem('username')
-    navigate('/login', { replace: true })
-  }
+  const { user, logout } = useAuth()
 
   return (
     <div style={styles.wrapper}>
       <header style={styles.header}>
         <h1 style={styles.title}>Tareas</h1>
-        <button onClick={handleLogout} style={styles.logoutBtn}>
+        <button onClick={logout} style={styles.logoutBtn}>
           Cerrar sesión
         </button>
       </header>
       <main style={styles.main}>
         <p style={styles.placeholder}>Módulo Tareas — próximamente</p>
         <p style={styles.subtext}>
-          Sesión iniciada como <strong>{username}</strong>
+          Sesión iniciada como <strong>{user?.username || 'usuario'}</strong>
         </p>
       </main>
     </div>
