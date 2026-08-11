@@ -148,6 +148,19 @@ Migración progresiva de la app Android "MyTaskMyHabit" (actualmente 100% local 
 - **Spinner compartido:** `src/components/Spinner.jsx` — CSS animation `@keyframes mtmh-spin` con nombre prefijado para evitar colisiones si se combina CSS global.
 - **`useNavigate` en `AuthContext`:** `AuthProvider` debe estar dentro de `BrowserRouter` (que vive en `main.jsx`) para que `useNavigate` funcione. La posición en `App.jsx` (dentro del Router, fuera de Routes) es correcta.
 
+### PWA — Pantalla Tareas completa (Iteración P3)
+
+- **Carga de datos:** `useTareas` y `useCategorias` se inicializan en parallel desde `Tareas.jsx`. La carga de categorías falla silenciosamente (no bloquea la pantalla; las tareas sin categoría simplemente no muestran etiqueta).
+- **Filtro client-side:** Se cargan **todas** las tareas (no solo pendientes). El filtro Todas/Pendientes es estado local en `Tareas.jsx` — no re-fetcha. Esto evita dobles cargas en apps con pocos cientos de ítems (401 en este caso).
+- **Toggle optimista:** `useTareas.toggleCompletada` invierte `esta_completada` inmediatamente en el estado local, llama a `PATCH /api/tareas/:id/completar`, y en caso de error revierte al valor original del servidor (`error.response?.data?.data || { ...tarea, esta_completada: !nuevoValor }`). La UX es fluida incluso en conexiones lentas.
+- **Grupos por prioridad:** Las tareas pendientes se muestran en secciones ALTA → MEDIA → BAJA. Las secciones vacías no se renderizan. Las completadas van en una sección colapsada al final (oculta por defecto).
+- **Estrategia CSS:** Un único fichero `src/styles/tareas.css` importado donde se usa. Prefijo `.t-` para la página de tareas y `.m-` para el modal, para evitar colisiones con estilos globales de `index.css`. Sin CSS-in-JS ni CSS modules — suficiente para una app personal de escala pequeña.
+- **Responsive:** `@media (max-width: 480px)` colapsa el grid de 2 columnas del formulario (`.m-row`) a 1 columna, y permite que el título de la tarea haga wrap en vez de truncar con ellipsis.
+- **`TareaForm` — hora_limite:** El campo hora está desactivado si no hay fecha límite. Al enviar, si no hay fecha, `hora_limite` se manda como `null` al servidor aunque el campo tenga valor en el estado del formulario.
+- **`TareaItem` — fechas:** `isVencida` usa `T12:00:00` (mediodía local) para el parsing, evitando que fechas como `2026-08-11` se interpreten como UTC medianoche y aparezcan vencidas un día antes en zonas horarias +0X.
+- **`catMap`:** `Object.fromEntries(categorias.map(c => [c.id, c.titulo]))` — lookup O(1) en `TareaItem` sin propagar el array completo.
+- **Build P3:** 107 módulos, `dist/assets/index-Bzu28zq_.js` 245.51 kB (69.49 kB gzip), service worker actualizado.
+
 ### Despliegue en Cloudflare Pages (setup manual único)
 
 Pasos para conectar el repositorio la primera vez desde https://dash.cloudflare.com/:
@@ -239,18 +252,26 @@ MyTaskMyHabit/
 │       ├── App.jsx
 │       ├── index.css
 │       ├── api/
-│       │   ├── client.js       # Axios con interceptores de auth y 401
-│       │   └── auth.js         # login(), getMe()
+│       │   ├── client.js           # Axios con interceptores de auth y 401
+│       │   ├── auth.js             # login(), getMe()
+│       │   ├── tareas.js           # getTareas, crearTarea, editarTarea, completarTarea, eliminarTarea
+│       │   └── categorias.js       # getCategorias
 │       ├── components/
 │       │   ├── ProtectedRoute.jsx  # isLoading→spinner, !auth→/login
-│       │   └── Spinner.jsx         # Spinner centrado compartido
+│       │   ├── Spinner.jsx         # Spinner centrado compartido
+│       │   ├── TareaItem.jsx       # Fila de tarea con toggle, badges, acciones
+│       │   └── TareaForm.jsx       # Modal crear/editar tarea
 │       ├── context/
 │       │   └── AuthContext.jsx     # AuthProvider + AuthContext
 │       ├── hooks/
-│       │   └── useAuth.js          # Hook con error si fuera de AuthProvider
+│       │   ├── useAuth.js          # Hook con error si fuera de AuthProvider
+│       │   ├── useTareas.js        # Estado de lista, CRUD, toggle optimista
+│       │   └── useCategorias.js    # Carga categorías activas + catMap id→titulo
+│       ├── styles/
+│       │   └── tareas.css          # Estilos de la pantalla Tareas (prefijos .t- y .m-)
 │       └── pages/
 │           ├── Login.jsx           # Usa useAuth().login()
-│           └── Tareas.jsx          # Placeholder — implementación real en Iteración P3
+│           └── Tareas.jsx          # Pantalla principal con CRUD, grupos por prioridad, filtros
 ├── PROYECTO_PWA.md         # Este fichero
 ├── DATABASE_ANALYSIS.md    # Análisis del schema Room/SQLite actual
 └── ...                     # Ficheros del proyecto Android (gradle, etc.)
@@ -270,3 +291,4 @@ MyTaskMyHabit/
 | 8 | Limpieza: retirar Room de Tareas | Agosto 2026 | Eliminados: TareaDao, CategoriaDao, TareasViewModelRoom, TareasViewModelFactory, TareaRepository (Room). Tarea.kt y Categoria.kt convertidas a plain data classes (sin @Entity). AppDatabase v31→v32 sin entidades de Tareas. NotificacionWorker y BootReceiver actualizados (no dependen de Room). TareasBackupJson convertido a no-op. Room sigue activo para Hábitos y Shopping. |
 | P1 | Scaffolding PWA | Agosto 2026 | Carpeta `web/` creada con React 18 + Vite 6. `vite-plugin-pwa` con manifest (name: MyTaskMyHabit, theme: #6366f1, display: standalone, iconos 192+512). Iconos PNG generados por script propio sin dependencias. Cliente HTTP Axios con interceptores de auth (token de localStorage) y 401 (redirect a /login, excepto en el endpoint de login). Routing protegido con `react-router-dom` v7. Páginas placeholder Login y Tareas. `public/_redirects` para SPA en Cloudflare Pages. Build de producción OK (97 módulos, sw.js + workbox). Verificado en dev: error 401 con credenciales erróneas muestra mensaje correcto. Despliegue Cloudflare Pages: pendiente setup manual (pasos documentados en sección "Decisiones de diseño"). |
 | P2 | Auth completo (AuthContext + useAuth + ProtectedRoute robusto) | Agosto 2026 | `AuthContext` con estado de sesión completo (user, token, isLoading, isAuthenticated, login, logout). En mount verifica token con GET /auth/me: 401 cierra sesión, error de red mantiene sesión desde caché localStorage (`mtmh_user`). `useAuth` hook con error descriptivo fuera del provider. `client.js` usa patrón callback `setUnauthorizedHandler` para que el interceptor 401 llame a `logout()` del contexto sin acoplamiento directo. `ProtectedRoute` con spinner durante isLoading. `Login.jsx` usa `useAuth().login()`, muestra spinner durante validación inicial y evita flash del formulario a usuarios autenticados. Clave localStorage: `mtmh_token` / `mtmh_user`. Build OK: 100 módulos. Verificado en dev: routing protegido, redirección correcta. Commit `4b28bbe` pusheado a master. |
+| P3 | Pantalla Tareas completa (CRUD, filtros, grupos por prioridad) | Agosto 2026 | Módulos añadidos: `api/tareas.js`, `api/categorias.js`, `hooks/useTareas.js` (toggle optimista con revert automático), `hooks/useCategorias.js` (catMap id→titulo), `components/TareaItem.jsx` (borde de color por prioridad, badge categoría, fecha roja si vencida, badge "Sin clasificar"), `components/TareaForm.jsx` (modal crear/editar con todos los campos, cierre al pulsar fuera). `Tareas.jsx` reescrita: filtro Todas/Pendientes client-side, grupos ALTA/MEDIA/BAJA con sección de completadas colapsable. CSS en `styles/tareas.css` (prefijos `.t-`/`.m-`), responsive en 480 px. Build: 107 módulos, 245.51 kB. Commit `19256bf` pusheado a master. Cloudflare Pages desplegando automáticamente. |
