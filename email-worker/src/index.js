@@ -1,33 +1,24 @@
 import PostalMime from 'postal-mime';
 
 const BACKEND_URL = 'https://mytaskmyhabit-api.onrender.com/webhooks/email';
+const FETCH_TIMEOUT_MS = 30_000; // Render puede tardar ~30s en despertar del sleep
 
-// ── Limpieza del cuerpo ───────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function limpiarCuerpo(texto) {
   if (!texto) return null;
-
   const lineas = texto.split('\n');
   const resultado = [];
-
   for (const linea of lineas) {
     const trim = linea.trim();
-
-    // Firma estándar: -- / — / --- solos en una línea
     if (trim === '--' || trim === '—' || trim === '---') break;
-
-    // Historia quoted: líneas que empiezan por >
     if (trim.startsWith('>')) continue;
-
-    // Cabecera de bloque quoted: "On ... wrote:" / "El ... escribió:"
     if (
       /^(On\s|El\s).+wrote\s*:/i.test(trim) ||
       /^(On\s|El\s).+escribi[oó]\s*:/i.test(trim)
     ) break;
-
     resultado.push(linea);
   }
-
   const limpio = resultado.join('\n').trim();
   if (!limpio) return null;
   return limpio.length > 1000 ? limpio.substring(0, 997) + '...' : limpio;
@@ -49,46 +40,69 @@ function stripHtml(html) {
   return texto || null;
 }
 
+// ── Fetch con timeout explícito ───────────────────────────────────────────────
+
+async function fetchConTimeout(url, options) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } catch (err) {
+    if (err.name === 'AbortError') throw new Error(`fetch timeout (>${FETCH_TIMEOUT_MS}ms)`);
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 // ── Handler principal ─────────────────────────────────────────────────────────
 
 export default {
   async email(message, env, ctx) {
-    try {
-      // Bufferar el stream (ReadableStream es single-use)
-      const buffer = await new Response(message.raw).arrayBuffer();
-      const parsed = await PostalMime.parse(buffer);
+    // ctx.waitUntil() garantiza que el Worker no se corta antes de terminar
+    // el fetch, incluso si la respuesta de Render tarda (free tier duerme).
+    ctx.waitUntil((async () => {
+      try {
+        console.log(`[email-worker] START from=${message.from} to=${message.to} size=${message.rawSize}`);
 
-      // Asunto: postal-mime lo decodifica correctamente (UTF-8, Q-encoding, etc.)
-      const subject = (parsed.subject || 'Sin asunto').substring(0, 255);
+        // 1. Verificar que el secret está configurado
+        const secret = env.WEBHOOK_SECRET || '';
+        if (!secret) console.warn('[email-worker] WARN: WEBHOOK_SECRET está vacío');
 
-      // Remitente: usar el envelope from (SMTP MAIL FROM, más seguro que el header)
-      const from = message.from;
+        // 2. Parsear MIME (bufferar primero — el stream es single-use)
+        console.log('[email-worker] parsing MIME...');
+        const buffer = await new Response(message.raw).arrayBuffer();
+        const parsed = await PostalMime.parse(buffer);
+        console.log(`[email-worker] parsed ok — subject="${parsed.subject}" hasText=${!!parsed.text} hasHtml=${!!parsed.html}`);
 
-      // Cuerpo: preferir texto plano; fallback a HTML con etiquetas eliminadas
-      let bodyText = parsed.text;
-      if (!bodyText && parsed.html) {
-        bodyText = stripHtml(parsed.html);
+        // 3. Extraer campos
+        const subject = (parsed.subject || 'Sin asunto').substring(0, 255);
+        const from = message.from;
+
+        let bodyText = parsed.text;
+        if (!bodyText && parsed.html) {
+          bodyText = stripHtml(parsed.html);
+          console.log('[email-worker] using HTML→text fallback');
+        }
+        const textoLimpio = limpiarCuerpo(bodyText) ?? '';
+        console.log(`[email-worker] body cleaned len=${textoLimpio.length}`);
+
+        // 4. Construir FormData y llamar al backend
+        const form = new FormData();
+        form.append('subject', subject);
+        form.append('text', textoLimpio);
+        form.append('from', from);
+
+        const url = `${BACKEND_URL}?secret=${encodeURIComponent(secret)}`;
+        console.log(`[email-worker] fetching ${BACKEND_URL} (timeout=${FETCH_TIMEOUT_MS}ms)...`);
+
+        const res = await fetchConTimeout(url, { method: 'POST', body: form });
+        const data = await res.json().catch(() => ({}));
+        console.log(`[email-worker] DONE status=${res.status} ok=${data.ok} tareaId=${data.tareaId}`);
+
+      } catch (err) {
+        console.error(`[email-worker] ERROR ${err.name}: ${err.message}`);
       }
-      const textoLimpio = limpiarCuerpo(bodyText) ?? '';
-
-      console.log(`[email-worker] from=${from} subject="${subject}" body_len=${textoLimpio.length}`);
-
-      // Llamar al backend de Render con multipart/form-data
-      const form = new FormData();
-      form.append('subject', subject);
-      form.append('text', textoLimpio);
-      form.append('from', from);
-
-      const secret = env.WEBHOOK_SECRET || '';
-      const url = `${BACKEND_URL}?secret=${encodeURIComponent(secret)}`;
-
-      const res = await fetch(url, { method: 'POST', body: form });
-      const data = await res.json().catch(() => ({}));
-      console.log(`[email-worker] webhook status=${res.status} ok=${data.ok} tareaId=${data.tareaId}`);
-
-    } catch (err) {
-      // No relanzar — el worker no debe fallar ni rechazar el email
-      console.error('[email-worker] error:', err.message);
-    }
+    })());
   },
 };
