@@ -21,6 +21,7 @@ Migración progresiva de la app Android "MyTaskMyHabit" (actualmente 100% local 
 | Supabase (PostgreSQL) | Base de datos de producción | Free | https://supabase.com/dashboard | Sustituye a Render PostgreSQL (descartado por expiración a 90 días). Sin expiración en el tier free. |
 | GitHub | Repositorio monorepo | Free | https://github.com/fiztony-dot/MyTaskMyHabit | Contiene proyecto Android + server/ + web/. Rama: `master` |
 | Cloudflare Pages | Hosting de la PWA | Free | https://dash.cloudflare.com/ | Nombre del proyecto: `mytaskmyhabit`. URL: pendiente primer despliegue manual. Root dir: `web`, build command: `npm run build`, output: `dist` |
+| SendGrid | Email inbound (Inbound Parse) + envío de confirmaciones | Free | https://app.sendgrid.com/ | Inbound Parse: recibe emails y hace POST al webhook. Mail Send: envía confirmaciones al remitente. |
 
 ## Variables de entorno por servicio
 
@@ -30,6 +31,10 @@ Migración progresiva de la app Android "MyTaskMyHabit" (actualmente 100% local 
 | `JWT_SECRET` | Render (Web Service) — sección Environment | Firma de tokens JWT |
 | `AUTH_USERS` | Render (Web Service) — sección Environment | Usuarios válidos (formato `usuario:bcryptHash`) |
 | `PORT` | Render (Web Service) — inyectado automáticamente | Puerto del servidor (no configurar manualmente) |
+| `WEBHOOK_SECRET` | Render (Web Service) — sección Environment | Clave para verificar que el webhook viene de SendGrid (incluir en la URL: `?secret=VALOR`) |
+| `SENDGRID_API_KEY` | Render (Web Service) — sección Environment | API Key de SendGrid con permiso "Mail Send" para enviar emails de confirmación |
+| `SENDGRID_FROM_EMAIL` | Render (Web Service) — sección Environment | Dirección verificada en SendGrid desde la que se envían las confirmaciones |
+| `SENDGRID_INBOUND_EMAIL` | Solo documentación | Dirección asignada por SendGrid Inbound Parse a la que el usuario reenvía correos |
 
 ## Estado de la migración por módulo
 
@@ -40,6 +45,61 @@ Migración progresiva de la app Android "MyTaskMyHabit" (actualmente 100% local 
 | Hábitos | ⬜ | ⬜ | ⬜ | ⬜ | Pendiente |
 | Shopping | ⬜ | ⬜ | ⬜ | ⬜ | Pendiente |
 | PWA | ✅ | — | — | — | Scaffolding completado (Iteración P1). Despliegue Cloudflare Pages pendiente primer setup manual. |
+
+## Configuración manual de SendGrid (Iteración E1)
+
+Los siguientes pasos deben realizarse manualmente en el dashboard de SendGrid **una sola vez**:
+
+### a) Crear cuenta y verificar remitente
+
+1. Registrarse en https://sendgrid.com (plan Free: 100 emails/día permanente)
+2. Verificar el email remitente: **Settings → Sender Authentication → Single Sender Verification**
+   - Este email será `SENDGRID_FROM_EMAIL` (p.ej. `tareas@tudominio.com` o `tu@gmail.com`)
+   - SendGrid enviará un email de verificación — hacer clic en el enlace
+
+### b) Generar API Key para envío
+
+1. **Settings → API Keys → Create API Key**
+2. Nombre: `mytaskmyhabit-mail`
+3. Permisos: **Restricted Access → Mail Send** (solo el permiso necesario)
+4. Copiar el API Key generado → guardarlo como `SENDGRID_API_KEY` en Render
+
+### c) Activar Inbound Parse
+
+1. **Settings → Inbound Parse → Add Host & URL**
+2. **Subdomain** (opcional): dejar vacío o poner un subdominio propio
+3. **Domain**: usar el dominio asignado por SendGrid (si no tienes dominio propio, contactar soporte o usar la dirección que SendGrid proporcione)
+4. **Destination URL**:
+   ```
+   https://mytaskmyhabit-api.onrender.com/webhooks/email?secret=TU_WEBHOOK_SECRET
+   ```
+   — sustituir `TU_WEBHOOK_SECRET` por el valor generado con `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`
+5. **Check spam** y **POST the raw, full MIME message**: dejar **desmarcados** (queremos el parse estructurado con campos individuales)
+6. SendGrid asignará una dirección de email inbound (p.ej. `parse@tu-subdominio.sendgrid.net`) — esta es `SENDGRID_INBOUND_EMAIL`
+
+### d) Configurar variables de entorno en Render
+
+En el dashboard de Render, servicio `mytaskmyhabit-api`, sección **Environment**:
+
+| Variable | Valor |
+|----------|-------|
+| `WEBHOOK_SECRET` | Valor aleatorio generado (hex de 32 bytes) |
+| `SENDGRID_API_KEY` | API Key del paso b) |
+| `SENDGRID_FROM_EMAIL` | Email verificado del paso a) |
+
+Render redesplegará automáticamente al guardar las variables.
+
+### e) Crear contacto en el gestor de correo
+
+Crear un contacto llamado **"Tareas"** (o similar) con la dirección `SENDGRID_INBOUND_EMAIL` para poder reenviar correos fácilmente desde el móvil.
+
+### f) Verificar el webhook
+
+```bash
+WEBHOOK_SECRET=tu_secret node scripts/test_webhook.js https://mytaskmyhabit-api.onrender.com
+```
+
+---
 
 ## Decisiones de diseño
 
@@ -336,4 +396,5 @@ MyTaskMyHabit/
 | P3 | Pantalla Tareas completa (CRUD, filtros, grupos por prioridad) | Agosto 2026 | Módulos añadidos: `api/tareas.js`, `api/categorias.js`, `hooks/useTareas.js` (toggle optimista con revert automático), `hooks/useCategorias.js` (catMap id→titulo), `components/TareaItem.jsx` (borde de color por prioridad, badge categoría, fecha roja si vencida, badge "Sin clasificar"), `components/TareaForm.jsx` (modal crear/editar con todos los campos, cierre al pulsar fuera). `Tareas.jsx` reescrita: filtro Todas/Pendientes client-side, grupos ALTA/MEDIA/BAJA con sección de completadas colapsable. CSS en `styles/tareas.css` (prefijos `.t-`/`.m-`), responsive en 480 px. Build: 107 módulos, 245.51 kB. Commit `19256bf` pusheado a master. Cloudflare Pages desplegando automáticamente. |
 | P4 | Pantalla de Categorías (CRUD completo) | Agosto 2026 | `api/categorias.js` extendido con `crearCategoria`, `editarCategoria`, `eliminarCategoria`. `useCategorias` reescrito con CRUD y catMap que incluye categorías inactivas. `CategoriaItem.jsx` (icono monospace, contador de tareas calculado desde `useTareas`, badge "Inactiva", confirm con advertencia de SET NULL antes de eliminar). `CategoriaForm.jsx` (modal crear/editar, checkbox activa solo en edición, hint explicativo). `Categorias.jsx` (pantalla `/categorias` protegida, back button a Tareas). `TareaForm.jsx` actualizado: selector filtra solo categorías activas. Header de Tareas: botón "Categorías" → navega a `/categorias`. `categorias.css` con prefijos `.c-`/`.cf-`. Build: 111 módulos, 251.14 kB. Commit `2adaf0f` pusheado a master. |
 | P3b | Rediseño visual y funcional completo de Tareas | Agosto 2026 | Material Icons desde CDN Google Fonts. Header indigo fijo con 5 iconos (búsqueda, filtro, visibilidad, categorías, logout). Tabs "Por vencimiento" / "Por categoría". 7 secciones colapsables de vencimiento con color e icono Material propio (Pendientes/Vencidas expandidas, resto colapsadas). Vista Categorías agrupada alfabéticamente. Buscador en tiempo real por título (filtrado local). Chips horizontales de filtro por categoría. Toggle mostrar/ocultar completadas. FAB indigo fijo para nueva tarea. `TareaItem` rediseñado sin botones visibles: tap = abre form, icono Material de categoría a la derecha, indicador `repeat`. Layout hasta 900px. `catData` (id→objeto completo) añadido a `useCategorias`. Eliminados `components/TareaItem.jsx` y `components/TareaForm.jsx` (movidos a `components/tareas/`). Build: 116 módulos, 256.64 kB. Commit `d907e1f` pusheado a master. |
+| E1 | Email inbound: crear tareas desde correo (SendGrid + backend) | Agosto 2026 | Endpoint `POST /webhooks/email` sin JWT, verificado por `WEBHOOK_SECRET` en query param (403 si no coincide). Parsing multipart/form-data con `multer` (upload.none()). `limpiarCuerpo()` elimina historial quoted (líneas `>`, bloques "On...wrote:", "El...escribió:"), firmas (`--`/`—`/`---`) y trunca a 1000 chars. INSERT en `tareas_table` con `pendiente_clasificar=true`, `prioridad=MEDIA`, `categoria_id=NULL`. Email de confirmación via `@sendgrid/mail` ("✅ Tarea creada: [título]"); si falla se loguea sin romper el webhook. Responde 200 siempre (incluso en error) para que SendGrid no reintente. `server/scripts/test_webhook.js`: 4 tests con `fetch`+`FormData` de Node 18 (403 bad secret, tarea normal, quoted history, sin asunto). Variables de entorno: `WEBHOOK_SECRET`, `SENDGRID_API_KEY`, `SENDGRID_FROM_EMAIL`, `SENDGRID_INBOUND_EMAIL`. Pasos manuales de configuración SendGrid documentados en PROYECTO_PWA.md. Commit `6f28667` pusheado a master. Deploy Render en curso. |
 | P5 | Ajustes finales PWA: expandir/contraer, fade-out, CORS, meta tags | Agosto 2026 | **Botón expandir/contraer todas las secciones** añadido al header (icono `unfold_more`/`unfold_less`): `expandirCtrl` en `Tareas.jsx` (objeto `{open,seq}` que cambia referencia en cada click); `SeccionVencimiento` y `SeccionCategoria` escuchan el prop con `useEffect([expandirCtrl])` para sincronizar estado interno. **Fade-out al completar tarea** con completadas ocultas: `fadingIds` (Set) mantiene la tarea visible 400ms con clase `ti-fading-out` (animación CSS fadeOut+translateX) antes de que el filtro la retire. **Mensaje vacío con término** de búsqueda: "Sin resultados para '{término}'" + "Prueba con otras palabras". **Meta tags Apple PWA**: `apple-mobile-web-app-capable`, `apple-mobile-web-app-status-bar-style`, `apple-mobile-web-app-title`, `apple-touch-icon`. **Manifest PWA**: ya tenía `background_color: '#ffffff'` y `start_url: '/'` correctos. **CORS backend** restringido a `mytaskmyhabitpwa.pages.dev` + `localhost:5173/5174` (eliminado el wildcard `*` del TODO). Build: 116 módulos, 257.75 kB. Commit `f57bfb7` pusheado a master. |
