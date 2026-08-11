@@ -1,19 +1,47 @@
-import { useState, useEffect } from 'react'
-import { getCategorias } from '../api/categorias'
+import { useState, useEffect, useCallback } from 'react'
+import * as api from '../api/categorias'
 
 export function useCategorias() {
   const [categorias, setCategorias] = useState([])
   const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState(null)
 
-  useEffect(() => {
-    getCategorias()
-      .then((data) => setCategorias(data.filter((c) => c.activa !== false)))
-      .catch(() => {})
-      .finally(() => setIsLoading(false))
+  const cargar = useCallback(async () => {
+    setIsLoading(true)
+    setError(null)
+    try {
+      const data = await api.getCategorias()
+      setCategorias(data)
+    } catch {
+      setError('Error al cargar las categorías.')
+    } finally {
+      setIsLoading(false)
+    }
   }, [])
 
-  // Mapa id → titulo para resolución rápida en TareaItem
+  useEffect(() => {
+    cargar()
+  }, [cargar])
+
+  // Mapa id → titulo para todas las categorías (incluidas inactivas)
   const catMap = Object.fromEntries(categorias.map((c) => [c.id, c.titulo]))
 
-  return { categorias, catMap, isLoading }
+  const crear = useCallback(async (body) => {
+    const nueva = await api.crearCategoria(body)
+    setCategorias((prev) => [...prev, nueva])
+    return nueva
+  }, [])
+
+  const editar = useCallback(async (id, body) => {
+    const updated = await api.editarCategoria(id, body)
+    setCategorias((prev) => prev.map((c) => (c.id === id ? updated : c)))
+    return updated
+  }, [])
+
+  const eliminar = useCallback(async (id) => {
+    await api.eliminarCategoria(id)
+    setCategorias((prev) => prev.filter((c) => c.id !== id))
+  }, [])
+
+  return { categorias, catMap, isLoading, error, cargar, crear, editar, eliminar }
 }

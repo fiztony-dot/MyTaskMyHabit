@@ -37,6 +37,17 @@
   cursor: pointer;
   white-space: nowrap;
 }
+.t-btn-cats {
+  padding: 0.375rem 0.7rem;
+  background: transparent;
+  color: #6366f1;
+  border: 1px solid #c7d2fe;
+  border-radius: 6px;
+  font-size: 0.8125rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.t-btn-cats:hover { background: #eef2ff; }
 .t-btn-logout {
   padding: 0.375rem 0.7rem;
   background: transparent;

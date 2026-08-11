@@ -2,6 +2,7 @@ import { Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider } from './context/AuthContext'
 import Login from './pages/Login'
 import Tareas from './pages/Tareas'
+import Categorias from './pages/Categorias'
 import ProtectedRoute from './components/ProtectedRoute'
 
 function App() {
@@ -14,6 +15,14 @@ function App() {
           element={
             <ProtectedRoute>
               <Tareas />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/categorias"
+          element={
+            <ProtectedRoute>
+              <Categorias />
             </ProtectedRoute>
           }
         />

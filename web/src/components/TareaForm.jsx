@@ -133,7 +133,7 @@ export default function TareaForm({ tarea, categorias, onGuardar, onEliminar, on
               <label className="m-label" htmlFor="tf-cat">Categoría</label>
               <select id="tf-cat" className="m-select" value={form.categoria_id} onChange={set('categoria_id')}>
                 <option value="">Sin categoría</option>
-                {categorias.map((c) => (
+                {categorias.filter((c) => c.activa !== false).map((c) => (
                   <option key={c.id} value={String(c.id)}>{c.titulo}</option>
                 ))}
               </select>

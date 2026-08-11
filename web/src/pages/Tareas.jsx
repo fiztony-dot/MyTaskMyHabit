@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { useTareas } from '../hooks/useTareas'
 import { useCategorias } from '../hooks/useCategorias'
@@ -21,6 +22,7 @@ function agruparPorPrioridad(tareas) {
 }
 
 export default function Tareas() {
+  const navigate = useNavigate()
   const { user, logout } = useAuth()
   const { tareas, isLoading, error, cargar, toggleCompletada, crear, editar, eliminar } = useTareas()
   const { categorias, catMap } = useCategorias()
@@ -55,6 +57,9 @@ export default function Tareas() {
         <h1 className="t-header-title">Tareas</h1>
         <button className="t-btn-nueva" onClick={() => setFormTarea(false)}>
           + Nueva
+        </button>
+        <button className="t-btn-cats" onClick={() => navigate('/categorias')}>
+          Categorías
         </button>
         <button className="t-btn-logout" onClick={logout} title={`Sesión: ${user?.username}`}>
           Salir
