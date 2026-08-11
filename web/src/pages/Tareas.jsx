@@ -1,84 +1,190 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { useAuth } from '../hooks/useAuth'
+import { useState, useMemo } from 'react'
 import { useTareas } from '../hooks/useTareas'
 import { useCategorias } from '../hooks/useCategorias'
-import TareaItem from '../components/TareaItem'
-import TareaForm from '../components/TareaForm'
+import { useAuth } from '../hooks/useAuth'
+import CabeceraTareas from '../components/tareas/CabeceraTareas'
+import BuscadorTareas from '../components/tareas/BuscadorTareas'
+import FiltrosCategorias from '../components/tareas/FiltrosCategorias'
+import SeccionVencimiento from '../components/tareas/SeccionVencimiento'
+import SeccionCategoria from '../components/tareas/SeccionCategoria'
+import TareaForm from '../components/tareas/TareaForm'
 import Spinner from '../components/Spinner'
 import '../styles/tareas.css'
 
-const PRIORIDADES = ['ALTA', 'MEDIA', 'BAJA']
-const PRIORIDAD_LABEL = { ALTA: 'Alta', MEDIA: 'Media', BAJA: 'Baja' }
-const DOT_CLASS = { ALTA: 't-dot-alta', MEDIA: 't-dot-media', BAJA: 't-dot-baja' }
+// ── Configuración de secciones de vencimiento ──────────────────────────────
+const SECCIONES_VENC = [
+  { key: 'clasificar', label: 'Pendientes de clasificar', color: '#ea580c', icono: 'help_outline',    defaultOpen: true  },
+  { key: 'vencidas',   label: 'Vencidas',                 color: '#ef4444', icono: 'warning',         defaultOpen: true  },
+  { key: 'hoy',        label: 'Hoy',                      color: '#f59e0b', icono: 'today',            defaultOpen: false },
+  { key: 'semana',     label: 'Esta semana',              color: '#10b981', icono: 'date_range',       defaultOpen: false },
+  { key: 'mes',        label: 'Este mes',                 color: '#3b82f6', icono: 'calendar_month',   defaultOpen: false },
+  { key: 'adelante',   label: 'Más adelante',             color: '#6b7280', icono: 'schedule',         defaultOpen: false },
+  { key: 'sin-fecha',  label: 'Sin fecha',                color: '#9ca3af', icono: 'event_busy',       defaultOpen: false },
+]
 
-// ── Agrupa las tareas pendientes por prioridad ──
-function agruparPorPrioridad(tareas) {
-  return PRIORIDADES.reduce((acc, p) => {
-    const grupo = tareas.filter((t) => t.prioridad === p && !t.esta_completada)
-    if (grupo.length) acc[p] = grupo
-    return acc
-  }, {})
+// ── Utilidades de fecha ─────────────────────────────────────────────────────
+function startOfDay(d) {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate())
 }
 
+function tareaDay(tarea) {
+  const [y, m, d] = tarea.fecha_limite.substring(0, 10).split('-').map(Number)
+  return new Date(y, m - 1, d)
+}
+
+function endOfWeek(hoy) {
+  const d = new Date(hoy)
+  const diasHastaDomingo = d.getDay() === 0 ? 0 : 7 - d.getDay()
+  d.setDate(d.getDate() + diasHastaDomingo)
+  return d
+}
+
+function clasificarTarea(tarea) {
+  if (tarea.pendiente_clasificar) return 'clasificar'
+  if (!tarea.fecha_limite) return 'sin-fecha'
+
+  const hoy = startOfDay(new Date())
+  const dia = tareaDay(tarea)
+
+  if (dia < hoy) return 'vencidas'
+  if (dia.getTime() === hoy.getTime()) return 'hoy'
+
+  const finSemana = endOfWeek(hoy)
+  if (dia <= finSemana) return 'semana'
+
+  const finMes = startOfDay(new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0))
+  if (dia <= finMes) return 'mes'
+
+  return 'adelante'
+}
+
+// ── Componente principal ────────────────────────────────────────────────────
 export default function Tareas() {
-  const navigate = useNavigate()
-  const { user, logout } = useAuth()
+  const { logout } = useAuth()
   const { tareas, isLoading, error, cargar, toggleCompletada, crear, editar, eliminar } = useTareas()
-  const { categorias, catMap } = useCategorias()
+  const { categorias, catData } = useCategorias()
 
-  const [soloP, setSoloP] = useState(false)         // filtro Todas / Pendientes
-  const [formTarea, setFormTarea] = useState(null)   // null=cerrado, false=nueva, tarea=editar
+  const [vista, setVista] = useState('vencimiento')
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [filterOpen, setFilterOpen] = useState(false)
+  const [textoBusqueda, setTextoBusqueda] = useState('')
+  const [catSelec, setCatSelec] = useState(null)
   const [mostrarCompletadas, setMostrarCompletadas] = useState(false)
+  const [formTarea, setFormTarea] = useState(null) // null=cerrado, false=nueva, obj=editar
 
-  // Separar pendientes y completadas
-  const pendientes = tareas.filter((t) => !t.esta_completada)
-  const completadas = tareas.filter((t) => t.esta_completada)
+  // Filtrado: búsqueda + categoría + completadas
+  const tareasFiltradas = useMemo(() => {
+    return tareas.filter((t) => {
+      if (!mostrarCompletadas && t.esta_completada) return false
+      if (catSelec !== null && t.categoria_id !== catSelec) return false
+      if (textoBusqueda) {
+        const texto = textoBusqueda.toLowerCase()
+        if (!t.titulo.toLowerCase().includes(texto)) return false
+      }
+      return true
+    })
+  }, [tareas, mostrarCompletadas, catSelec, textoBusqueda])
 
-  // Grupos por prioridad (solo sobre pendientes)
-  const grupos = agruparPorPrioridad(pendientes)
-  const hayPendientes = pendientes.length > 0
-  const hayCompletadas = completadas.length > 0 && !soloP
+  const totalPendientes = useMemo(
+    () => tareas.filter((t) => !t.esta_completada).length,
+    [tareas]
+  )
+
+  // Agrupación por vencimiento
+  const gruposVenc = useMemo(() => {
+    const grupos = Object.fromEntries(SECCIONES_VENC.map((s) => [s.key, []]))
+    tareasFiltradas.forEach((t) => {
+      const key = clasificarTarea(t)
+      if (grupos[key]) grupos[key].push(t)
+    })
+    return grupos
+  }, [tareasFiltradas])
+
+  // Agrupación por categoría — Map preserva orden de primera aparición
+  const gruposCat = useMemo(() => {
+    const map = new Map()
+    const sinCat = []
+    tareasFiltradas.forEach((t) => {
+      if (t.categoria_id == null) {
+        sinCat.push(t)
+      } else {
+        if (!map.has(t.categoria_id)) map.set(t.categoria_id, [])
+        map.get(t.categoria_id).push(t)
+      }
+    })
+    // Ordenar por nombre de categoría
+    const sorted = new Map(
+      [...map.entries()].sort((a, b) => {
+        const na = catData?.[a[0]]?.titulo ?? ''
+        const nb = catData?.[b[0]]?.titulo ?? ''
+        return na.localeCompare(nb, 'es')
+      })
+    )
+    return { map: sorted, sinCat }
+  }, [tareasFiltradas, catData])
 
   async function handleGuardar(body, id) {
-    if (id) {
-      await editar(id, body)
-    } else {
-      await crear(body)
-    }
+    if (id) await editar(id, body)
+    else await crear(body)
+  }
+
+  function toggleSearch() {
+    if (searchOpen) setTextoBusqueda('')
+    setSearchOpen((v) => !v)
+  }
+
+  function toggleFilter() {
+    if (filterOpen) setCatSelec(null)
+    setFilterOpen((v) => !v)
   }
 
   if (isLoading) return <Spinner />
 
   return (
     <div className="t-page">
-      {/* ── Header ── */}
-      <header className="t-header">
-        <h1 className="t-header-title">Tareas</h1>
-        <button className="t-btn-nueva" onClick={() => setFormTarea(false)}>
-          + Nueva
-        </button>
-        <button className="t-btn-cats" onClick={() => navigate('/categorias')}>
-          Categorías
-        </button>
-        <button className="t-btn-logout" onClick={logout} title={`Sesión: ${user?.username}`}>
-          Salir
-        </button>
-      </header>
+      {/* ── Cabecera fija ── */}
+      <CabeceraTareas
+        totalPendientes={totalPendientes}
+        searchOpen={searchOpen}
+        filterOpen={filterOpen}
+        mostrarCompletadas={mostrarCompletadas}
+        onSearch={toggleSearch}
+        onFilter={toggleFilter}
+        onToggleCompletadas={() => setMostrarCompletadas((v) => !v)}
+        onLogout={logout}
+      />
 
-      {/* ── Filtro ── */}
-      <div className="t-filtro">
+      {/* ── Buscador ── */}
+      {searchOpen && (
+        <BuscadorTareas valor={textoBusqueda} onChange={setTextoBusqueda} />
+      )}
+
+      {/* ── Chips de filtro por categoría ── */}
+      {filterOpen && (
+        <FiltrosCategorias
+          categorias={categorias}
+          catSelec={catSelec}
+          onChange={setCatSelec}
+        />
+      )}
+
+      {/* ── Tabs ── */}
+      <div className="t-tabs" role="tablist">
         <button
-          className={`t-filtro-btn${!soloP ? ' activo' : ''}`}
-          onClick={() => setSoloP(false)}
+          role="tab"
+          className={`t-tab${vista === 'vencimiento' ? ' activo' : ''}`}
+          aria-selected={vista === 'vencimiento'}
+          onClick={() => setVista('vencimiento')}
         >
-          Todas ({tareas.length})
+          Por vencimiento
         </button>
         <button
-          className={`t-filtro-btn${soloP ? ' activo' : ''}`}
-          onClick={() => setSoloP(true)}
+          role="tab"
+          className={`t-tab${vista === 'categorias' ? ' activo' : ''}`}
+          aria-selected={vista === 'categorias'}
+          onClick={() => setVista('categorias')}
         >
-          Pendientes ({pendientes.length})
+          Por categoría
         </button>
       </div>
 
@@ -90,63 +196,72 @@ export default function Tareas() {
         </div>
       )}
 
-      {/* ── Lista vacía ── */}
-      {!error && !hayPendientes && !hayCompletadas && (
+      {/* ── Estado vacío ── */}
+      {!error && tareasFiltradas.length === 0 && (
         <div className="t-vacio">
-          <p className="t-vacio-titulo">No hay tareas {soloP ? 'pendientes' : ''}</p>
-          <p>Pulsa "+ Nueva" para crear la primera.</p>
+          <span className="material-icons">check_circle_outline</span>
+          <p className="t-vacio-titulo">
+            {textoBusqueda
+              ? 'Sin resultados para la búsqueda'
+              : catSelec !== null
+              ? 'No hay tareas en esta categoría'
+              : 'No hay tareas pendientes'}
+          </p>
         </div>
       )}
 
-      {/* ── Grupos por prioridad (pendientes) ── */}
-      {PRIORIDADES.map((p) => {
-        const grupo = grupos[p]
-        if (!grupo) return null
-        return (
-          <section key={p} className="t-section">
-            <div className="t-section-header">
-              <span className={`t-dot ${DOT_CLASS[p]}`} />
-              {PRIORIDAD_LABEL[p]} · {grupo.length}
-            </div>
-            {grupo.map((t) => (
-              <TareaItem
-                key={t.id}
-                tarea={t}
-                catMap={catMap}
-                onToggle={toggleCompletada}
-                onEdit={setFormTarea}
-                onDelete={eliminar}
-              />
-            ))}
-          </section>
-        )
-      })}
-
-      {/* ── Sección Completadas ── */}
-      {hayCompletadas && (
-        <section className="t-section">
-          <button
-            className="t-completadas-toggle"
-            onClick={() => setMostrarCompletadas((v) => !v)}
-          >
-            <span className="t-dot t-dot-done" />
-            Completadas ({completadas.length}) {mostrarCompletadas ? '▲' : '▼'}
-          </button>
-          {mostrarCompletadas &&
-            completadas.map((t) => (
-              <TareaItem
-                key={t.id}
-                tarea={t}
-                catMap={catMap}
-                onToggle={toggleCompletada}
-                onEdit={setFormTarea}
-                onDelete={eliminar}
-              />
-            ))}
-        </section>
+      {/* ── Vista: Por vencimiento ── */}
+      {vista === 'vencimiento' && (
+        <div className="t-lista" role="tabpanel">
+          {SECCIONES_VENC.map((s) => (
+            <SeccionVencimiento
+              key={s.key}
+              config={s}
+              tareas={gruposVenc[s.key]}
+              catData={catData}
+              onEdit={setFormTarea}
+              onToggle={toggleCompletada}
+            />
+          ))}
+        </div>
       )}
 
-      {/* ── Modal Crear / Editar ── */}
+      {/* ── Vista: Por categoría ── */}
+      {vista === 'categorias' && (
+        <div className="t-lista" role="tabpanel">
+          {Array.from(gruposCat.map.entries()).map(([catId, catTareas]) => (
+            <SeccionCategoria
+              key={catId}
+              categoria={catData?.[catId]}
+              tareas={catTareas}
+              catData={catData}
+              onEdit={setFormTarea}
+              onToggle={toggleCompletada}
+            />
+          ))}
+          {gruposCat.sinCat.length > 0 && (
+            <SeccionCategoria
+              key="sin-categoria"
+              categoria={null}
+              tareas={gruposCat.sinCat}
+              catData={catData}
+              onEdit={setFormTarea}
+              onToggle={toggleCompletada}
+            />
+          )}
+        </div>
+      )}
+
+      {/* ── FAB nueva tarea ── */}
+      <button
+        className="t-fab"
+        onClick={() => setFormTarea(false)}
+        aria-label="Nueva tarea"
+      >
+        <span className="material-icons">add</span>
+      </button>
+
+      {/* ── Modal crear/editar ── */}
       {formTarea !== null && (
         <TareaForm
           tarea={formTarea || null}

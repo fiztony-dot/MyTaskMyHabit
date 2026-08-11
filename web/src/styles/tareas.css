@@ -1,229 +1,265 @@
-/* ── Layout principal ── */
+/* ══════════════════════════════════════
+   PANTALLA DE TAREAS — estilos completos
+   ══════════════════════════════════════ */
+
+/* ── Página ── */
 .t-page {
-  max-width: 700px;
+  max-width: 900px;
   margin: 0 auto;
-  padding: 0 0.75rem 5rem;
   min-height: 100vh;
+  background: #f8f9fa;
+  position: relative;
+  padding-bottom: 80px;
 }
 
-/* ── Header ── */
+/* ── Header fijo ── */
 .t-header {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.875rem 0 0.75rem;
+  gap: 0.125rem;
+  padding: 0 0.5rem 0 1rem;
+  height: 56px;
+  background: #6366f1;
   position: sticky;
   top: 0;
-  background: #f9fafb;
-  z-index: 20;
-  border-bottom: 1px solid #e5e7eb;
-  margin-bottom: 0.875rem;
+  z-index: 30;
 }
 .t-header-title {
-  margin: 0;
-  font-size: 1.25rem;
-  font-weight: 700;
-  color: #6366f1;
   flex: 1;
-}
-.t-btn-nueva {
-  padding: 0.4rem 0.875rem;
-  background: #6366f1;
-  color: #fff;
-  border: none;
-  border-radius: 6px;
-  font-size: 0.875rem;
-  font-weight: 600;
-  cursor: pointer;
-  white-space: nowrap;
-}
-.t-btn-cats {
-  padding: 0.375rem 0.7rem;
-  background: transparent;
-  color: #6366f1;
-  border: 1px solid #c7d2fe;
-  border-radius: 6px;
-  font-size: 0.8125rem;
-  cursor: pointer;
-  white-space: nowrap;
-}
-.t-btn-cats:hover { background: #eef2ff; }
-.t-btn-logout {
-  padding: 0.375rem 0.7rem;
-  background: transparent;
-  color: #6b7280;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  font-size: 0.8125rem;
-  cursor: pointer;
-}
-
-/* ── Filtro ── */
-.t-filtro {
-  display: flex;
-  gap: 0.5rem;
-  margin-bottom: 1rem;
-}
-.t-filtro-btn {
-  padding: 0.3rem 0.875rem;
-  border-radius: 20px;
-  border: 1px solid #d1d5db;
-  background: #fff;
-  color: #6b7280;
-  font-size: 0.8125rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.12s;
-}
-.t-filtro-btn.activo {
-  background: #6366f1;
-  color: #fff;
-  border-color: #6366f1;
-}
-
-/* ── Sección de prioridad ── */
-.t-section {
-  margin-bottom: 1.25rem;
-}
-.t-section-header {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  font-size: 0.6875rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: #9ca3af;
-  margin-bottom: 0.4rem;
-}
-.t-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-.t-dot-alta  { background: #ef4444; }
-.t-dot-media { background: #f59e0b; }
-.t-dot-baja  { background: #10b981; }
-.t-dot-done  { background: #d1d5db; }
-
-/* ── Item de tarea ── */
-.t-item {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.625rem;
-  padding: 0.625rem 0.75rem;
-  background: #fff;
-  border-radius: 8px;
-  margin-bottom: 0.375rem;
-  border: 1px solid #f3f4f6;
-  border-left: 3px solid transparent;
-  transition: border-color 0.12s, box-shadow 0.12s;
-}
-.t-item:hover          { box-shadow: 0 1px 4px rgba(99,102,241,0.08); border-color: #e0e7ff; border-left-color: inherit; }
-.t-item.completada     { opacity: 0.5; background: #fafafa; }
-.t-item.alta           { border-left-color: #ef4444; }
-.t-item.media          { border-left-color: #f59e0b; }
-.t-item.baja           { border-left-color: #10b981; }
-.t-item.completada     { border-left-color: #d1d5db !important; }
-
-.t-check {
-  width: 17px;
-  height: 17px;
-  margin-top: 2px;
-  cursor: pointer;
-  accent-color: #6366f1;
-  flex-shrink: 0;
-}
-.t-body {
-  flex: 1;
-  min-width: 0;
-  cursor: pointer;
-}
-.t-titulo {
   font-size: 0.9375rem;
-  font-weight: 500;
-  color: #111827;
-  margin: 0 0 0.2rem;
+  font-weight: 700;
+  color: #fff;
+  margin: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.t-titulo.completada {
-  text-decoration: line-through;
-  color: #9ca3af;
-}
-.t-meta {
+.t-header-btn {
+  width: 36px;
+  height: 36px;
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
   align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: 50%;
+  color: rgba(255,255,255,0.8);
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+  flex-shrink: 0;
 }
-.t-cat {
-  font-size: 0.6875rem;
-  color: #6366f1;
-  background: #eef2ff;
-  padding: 0.1rem 0.45rem;
-  border-radius: 3px;
+.t-header-btn:hover  { background: rgba(255,255,255,0.15); color: #fff; }
+.t-header-btn.activo { background: rgba(255,255,255,0.25); color: #fff; }
+.t-header-btn .material-icons { font-size: 22px; }
+
+/* ── Buscador ── */
+.t-search-bar {
+  background: #4f46e5;
+  padding: 0.5rem 0.75rem;
+}
+.t-search-input {
+  width: 100%;
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 24px;
+  background: rgba(255,255,255,0.2);
+  color: #fff;
+  font-size: 0.9375rem;
+  font-family: inherit;
+  box-sizing: border-box;
+}
+.t-search-input::placeholder { color: rgba(255,255,255,0.6); }
+.t-search-input:focus { outline: none; background: rgba(255,255,255,0.3); }
+
+/* ── Chips de categoría ── */
+.t-chips {
+  display: flex;
+  gap: 0.375rem;
+  padding: 0.625rem 0.75rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+  background: #fff;
+  border-bottom: 1px solid #e5e7eb;
+}
+.t-chips::-webkit-scrollbar { display: none; }
+.t-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.275rem 0.75rem;
+  border-radius: 20px;
+  border: 1px solid #d1d5db;
+  background: #fff;
+  color: #374151;
+  font-size: 0.8125rem;
   font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.12s;
+  flex-shrink: 0;
 }
-.t-fecha {
+.t-chip:hover  { border-color: #a5b4fc; color: #4338ca; }
+.t-chip.activa { background: #6366f1; color: #fff; border-color: #6366f1; }
+.t-chip .material-icons { font-size: 15px !important; line-height: 1; }
+
+/* ── Tabs ── */
+.t-tabs {
+  display: flex;
+  background: #4f46e5;
+}
+.t-tab {
+  flex: 1;
+  padding: 0.5rem 0.5rem 0.625rem;
+  text-align: center;
+  color: rgba(255,255,255,0.6);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  cursor: pointer;
+  letter-spacing: 0.03em;
+  transition: color 0.12s, border-color 0.12s;
+}
+.t-tab.activo { color: #fff; border-bottom-color: #fff; }
+
+/* ── Contenedor de secciones ── */
+.t-lista { padding: 0.5rem 0 0; }
+
+/* ── Sección colapsable ── */
+.t-section {
+  margin: 0 0.5rem 0.5rem;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.07);
+}
+.t-section-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.625rem 0.875rem;
+  background: #fff;
+  border: none;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.t-section-header:hover { background: #f9fafb; }
+.t-section-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.t-section-mat-icon {
+  font-size: 18px !important;
+  flex-shrink: 0;
+}
+.t-section-name {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  flex: 1;
+}
+.t-section-count {
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: #f3f4f6;
+  color: #6b7280;
+  padding: 0.1rem 0.45rem;
+  border-radius: 10px;
+}
+.t-section-chevron { font-size: 20px !important; color: #9ca3af; }
+
+/* ── Item de tarea ── */
+.ti-item {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.625rem 0.875rem;
+  background: #fff;
+  border-bottom: 1px solid #f3f4f6;
+  border-left: 3px solid transparent;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.ti-item:last-child { border-bottom: none; }
+.ti-item:hover   { background: #f9fafb; }
+.ti-item.alta    { border-left-color: #ef4444; }
+.ti-item.media   { border-left-color: #f59e0b; }
+.ti-item.baja    { border-left-color: #d1fae5; }
+.ti-item.completada { opacity: 0.45; }
+
+.ti-check {
+  width: 18px;
+  height: 18px;
+  accent-color: #6366f1;
+  cursor: pointer;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.ti-body {
+  flex: 1;
+  min-width: 0;
+}
+.ti-titulo {
+  font-size: 0.9375rem;
+  color: #111827;
+  font-weight: 500;
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ti-titulo.completada { text-decoration: line-through; color: #9ca3af; }
+.ti-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  margin-top: 0.125rem;
+  flex-wrap: wrap;
+}
+.ti-fecha {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.175rem;
   font-size: 0.6875rem;
   color: #6b7280;
 }
-.t-fecha.vencida { color: #ef4444; font-weight: 600; }
-.t-badge-clasificar {
+.ti-fecha.vencida { color: #ef4444; font-weight: 600; }
+.ti-fecha .material-icons { font-size: 12px !important; }
+.ti-badge-sin-cat {
   font-size: 0.625rem;
   font-weight: 600;
   color: #b45309;
   background: #fffbeb;
   border: 1px solid #fde68a;
-  padding: 0.05rem 0.375rem;
+  padding: 0.05rem 0.35rem;
   border-radius: 3px;
 }
-.t-actions {
-  display: flex;
-  gap: 0.125rem;
-  flex-shrink: 0;
-  margin-top: 1px;
-}
-.t-btn-icon {
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 0.3rem;
-  color: #d1d5db;
-  border-radius: 4px;
-  font-size: 0.875rem;
-  line-height: 1;
-  transition: color 0.12s, background 0.12s;
-}
-.t-btn-icon:hover         { color: #6b7280; background: #f3f4f6; }
-.t-btn-icon.del:hover     { color: #ef4444; background: #fef2f2; }
-
-/* ── Completadas toggle ── */
-.t-completadas-toggle {
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-size: 0.8125rem;
-  color: #6b7280;
-  padding: 0.4rem 0;
+.ti-right {
   display: flex;
   align-items: center;
-  gap: 0.35rem;
-  font-weight: 500;
-  margin-bottom: 0.5rem;
+  gap: 0.25rem;
+  flex-shrink: 0;
 }
+.ti-cat-icon { font-size: 18px !important; color: #6366f1; }
+.ti-rep-icon { font-size: 14px !important; color: #9ca3af; }
 
-/* ── Estados: vacío, error, carga ── */
+/* ── Estados: vacío, error ── */
 .t-vacio {
-  text-align: center;
-  padding: 3.5rem 1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 4rem 1.5rem;
   color: #9ca3af;
+  gap: 0.5rem;
+  text-align: center;
 }
-.t-vacio p { margin: 0.25rem 0; }
-.t-vacio-titulo { font-size: 1rem; color: #6b7280; font-weight: 500; }
+.t-vacio .material-icons { font-size: 52px !important; color: #d1d5db; }
+.t-vacio-titulo { font-size: 1rem; color: #6b7280; font-weight: 500; margin: 0; }
 .t-error {
   text-align: center;
   padding: 1.25rem;
@@ -241,7 +277,29 @@
   font-size: 0.8125rem;
 }
 
-/* ── Modal ── */
+/* ── FAB ── */
+.t-fab {
+  position: fixed;
+  bottom: 1.5rem;
+  right: calc(50% - 450px + 1.5rem);
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: #6366f1;
+  color: #fff;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 14px rgba(99,102,241,0.45);
+  z-index: 25;
+  transition: background 0.12s, box-shadow 0.12s;
+}
+.t-fab:hover { background: #4f46e5; box-shadow: 0 6px 18px rgba(99,102,241,0.55); }
+.t-fab .material-icons { font-size: 28px; }
+
+/* ── Modal Tarea (prefijo m-) — usado por TareaForm ── */
 .m-overlay {
   position: fixed;
   inset: 0;
@@ -268,31 +326,10 @@
   justify-content: space-between;
   margin-bottom: 1.125rem;
 }
-.m-title {
-  font-size: 1rem;
-  font-weight: 700;
-  color: #111827;
-  margin: 0;
-}
-.m-close {
-  background: none;
-  border: none;
-  font-size: 1.125rem;
-  color: #9ca3af;
-  cursor: pointer;
-  padding: 0.125rem;
-  line-height: 1;
-}
-.m-field {
-  margin-bottom: 0.8rem;
-}
-.m-label {
-  display: block;
-  font-size: 0.8125rem;
-  font-weight: 600;
-  color: #374151;
-  margin-bottom: 0.275rem;
-}
+.m-title  { font-size: 1rem; font-weight: 700; color: #111827; margin: 0; }
+.m-close  { background: none; border: none; font-size: 1.125rem; color: #9ca3af; cursor: pointer; padding: 0.125rem; line-height: 1; }
+.m-field  { margin-bottom: 0.8rem; }
+.m-label  { display: block; font-size: 0.8125rem; font-weight: 600; color: #374151; margin-bottom: 0.275rem; }
 .m-input, .m-select, .m-textarea {
   width: 100%;
   padding: 0.5rem 0.75rem;
@@ -310,49 +347,32 @@
   box-shadow: 0 0 0 3px rgba(99,102,241,0.1);
 }
 .m-textarea { resize: vertical; min-height: 68px; }
-.m-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.75rem;
-}
-.m-footer {
-  display: flex;
-  align-items: center;
-  gap: 0.625rem;
-  margin-top: 1.125rem;
-}
+.m-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+.m-footer { display: flex; align-items: center; gap: 0.625rem; margin-top: 1.125rem; }
 .m-btn-primary {
   padding: 0.525rem 1.125rem;
-  background: #6366f1;
-  color: #fff;
-  border: none;
-  border-radius: 6px;
-  font-size: 0.875rem;
-  font-weight: 600;
-  cursor: pointer;
+  background: #6366f1; color: #fff; border: none;
+  border-radius: 6px; font-size: 0.875rem; font-weight: 600; cursor: pointer;
 }
 .m-btn-primary:disabled { opacity: 0.65; cursor: not-allowed; }
 .m-btn-secondary {
   padding: 0.525rem 0.875rem;
-  background: #fff;
-  color: #374151;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  font-size: 0.875rem;
-  cursor: pointer;
+  background: #fff; color: #374151; border: 1px solid #d1d5db;
+  border-radius: 6px; font-size: 0.875rem; cursor: pointer;
 }
 .m-btn-danger {
   padding: 0.525rem 0.875rem;
-  background: #fff;
-  color: #ef4444;
-  border: 1px solid #fca5a5;
-  border-radius: 6px;
-  font-size: 0.875rem;
-  cursor: pointer;
-  margin-right: auto;
+  background: #fff; color: #ef4444; border: 1px solid #fca5a5;
+  border-radius: 6px; font-size: 0.875rem; cursor: pointer; margin-right: auto;
 }
 
+/* ── Responsive ── */
+@media (max-width: 900px) {
+  .t-fab { right: 1.5rem; }
+}
 @media (max-width: 480px) {
+  .t-page { max-width: 100%; }
+  .t-section { margin: 0 0 0.375rem; border-radius: 0; }
   .m-row { grid-template-columns: 1fr; }
-  .t-titulo { white-space: normal; }
+  .ti-titulo { white-space: normal; }
 }

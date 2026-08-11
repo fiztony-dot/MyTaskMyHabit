@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import '../styles/tareas.css'
+import '../../styles/tareas.css'
 
 const FORM_VACIO = {
   titulo: '',
@@ -38,7 +38,6 @@ export default function TareaForm({ tarea, categorias, onGuardar, onEliminar, on
   const [guardando, setGuardando] = useState(false)
   const [error, setError] = useState('')
 
-  // Si se abre el mismo modal con otra tarea (edición a edición), recargar form
   useEffect(() => {
     setForm(tarea ? tareaToForm(tarea) : FORM_VACIO)
     setError('')
@@ -50,10 +49,7 @@ export default function TareaForm({ tarea, categorias, onGuardar, onEliminar, on
 
   async function handleSubmit(e) {
     e.preventDefault()
-    if (!form.titulo.trim()) {
-      setError('El título es obligatorio.')
-      return
-    }
+    if (!form.titulo.trim()) { setError('El título es obligatorio.'); return }
     setGuardando(true)
     setError('')
     try {
@@ -78,7 +74,6 @@ export default function TareaForm({ tarea, categorias, onGuardar, onEliminar, on
     }
   }
 
-  // Cerrar al pulsar fuera del panel
   function handleOverlayClick(e) {
     if (e.target === e.currentTarget) onCerrar()
   }
@@ -92,34 +87,24 @@ export default function TareaForm({ tarea, categorias, onGuardar, onEliminar, on
         </div>
 
         <form onSubmit={handleSubmit}>
-          {/* Título */}
           <div className="m-field">
             <label className="m-label" htmlFor="tf-titulo">Título *</label>
             <input
-              id="tf-titulo"
-              className="m-input"
-              type="text"
-              value={form.titulo}
-              onChange={set('titulo')}
-              required
-              autoFocus
-              placeholder="¿Qué hay que hacer?"
+              id="tf-titulo" className="m-input" type="text"
+              value={form.titulo} onChange={set('titulo')}
+              required autoFocus placeholder="¿Qué hay que hacer?"
             />
           </div>
 
-          {/* Descripción */}
           <div className="m-field">
             <label className="m-label" htmlFor="tf-desc">Descripción</label>
             <textarea
-              id="tf-desc"
-              className="m-textarea"
-              value={form.descripcion}
-              onChange={set('descripcion')}
+              id="tf-desc" className="m-textarea"
+              value={form.descripcion} onChange={set('descripcion')}
               placeholder="Detalles opcionales…"
             />
           </div>
 
-          {/* Prioridad y Categoría */}
           <div className="m-row">
             <div className="m-field">
               <label className="m-label" htmlFor="tf-prio">Prioridad</label>
@@ -140,16 +125,12 @@ export default function TareaForm({ tarea, categorias, onGuardar, onEliminar, on
             </div>
           </div>
 
-          {/* Fecha y hora límite */}
           <div className="m-row">
             <div className="m-field">
               <label className="m-label" htmlFor="tf-fecha">Fecha límite</label>
               <input
-                id="tf-fecha"
-                className="m-input"
-                type="date"
-                value={form.fecha_limite}
-                onChange={set('fecha_limite')}
+                id="tf-fecha" className="m-input" type="date"
+                value={form.fecha_limite} onChange={set('fecha_limite')}
               />
             </div>
             <div className="m-field">
@@ -157,11 +138,8 @@ export default function TareaForm({ tarea, categorias, onGuardar, onEliminar, on
                 Hora límite{!form.fecha_limite && <span style={{ color: '#d1d5db' }}> (requiere fecha)</span>}
               </label>
               <input
-                id="tf-hora"
-                className="m-input"
-                type="time"
-                value={form.hora_limite}
-                onChange={set('hora_limite')}
+                id="tf-hora" className="m-input" type="time"
+                value={form.hora_limite} onChange={set('hora_limite')}
                 disabled={!form.fecha_limite}
               />
             </div>
@@ -171,12 +149,7 @@ export default function TareaForm({ tarea, categorias, onGuardar, onEliminar, on
 
           <div className="m-footer">
             {esEdicion && (
-              <button
-                type="button"
-                className="m-btn-danger"
-                onClick={handleEliminar}
-                disabled={guardando}
-              >
+              <button type="button" className="m-btn-danger" onClick={handleEliminar} disabled={guardando}>
                 Eliminar
               </button>
             )}

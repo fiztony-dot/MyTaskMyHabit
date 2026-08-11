@@ -23,8 +23,10 @@ export function useCategorias() {
     cargar()
   }, [cargar])
 
-  // Mapa id → titulo para todas las categorías (incluidas inactivas)
+  // Mapa id → titulo (para compatibilidad)
   const catMap = Object.fromEntries(categorias.map((c) => [c.id, c.titulo]))
+  // Mapa id → objeto categoría completo (titulo + icono + activa)
+  const catData = Object.fromEntries(categorias.map((c) => [c.id, c]))
 
   const crear = useCallback(async (body) => {
     const nueva = await api.crearCategoria(body)
@@ -43,5 +45,5 @@ export function useCategorias() {
     setCategorias((prev) => prev.filter((c) => c.id !== id))
   }, [])
 
-  return { categorias, catMap, isLoading, error, cargar, crear, editar, eliminar }
+  return { categorias, catMap, catData, isLoading, error, cargar, crear, editar, eliminar }
 }
