@@ -161,6 +161,17 @@ Migración progresiva de la app Android "MyTaskMyHabit" (actualmente 100% local 
 - **`catMap`:** `Object.fromEntries(categorias.map(c => [c.id, c.titulo]))` — lookup O(1) en `TareaItem` sin propagar el array completo.
 - **Build P3:** 107 módulos, `dist/assets/index-Bzu28zq_.js` 245.51 kB (69.49 kB gzip), service worker actualizado.
 
+### PWA — Pantalla Categorías (Iteración P4)
+
+- **`useCategorias` con CRUD completo:** El hook se reescribió para exponer `crear`, `editar`, `eliminar` además de la lista. Ya no filtra por `activa` en el fetch — devuelve todas las categorías. Esto permite a `Categorias.jsx` mostrar categorías inactivas y a `TareaItem.jsx` mostrar el nombre de la categoría aunque esté inactiva. El único lugar donde se filtra es el selector de `TareaForm` (`categorias.filter(c => c.activa !== false)`), para no ofrecer categorías inactivas al crear o editar tareas.
+- **Contador de tareas sin endpoint extra:** `Categorias.jsx` llama a `useTareas()` (fetch independiente) y calcula un mapa `categoriaId → nº de tareas` con `reduce`. No se añadió ningún endpoint al backend. El coste es un fetch adicional de las tareas al entrar en `/categorias`, aceptable para 401 registros.
+- **Icono como texto libre:** El campo `icono` es un `<input type="text">` (igual que en la app Android). Se muestra en `CategoriaItem` en un badge monospace de color indigo, o con un guión gris si no hay icono. No hay picker visual.
+- **Advertencia de eliminación:** `window.confirm` con texto explícito: _"Las tareas asociadas NO se borrarán, pero quedarán sin categoría asignada."_ Refleja el comportamiento real del endpoint `DELETE /api/categorias/:id` (FK `ON DELETE SET NULL` en la base de datos).
+- **Checkbox `activa` solo en edición:** El campo activa no existe al crear (el servidor lo inicializa a `true`). Al editar, si se desmarca, aparece un hint: _"Las categorías inactivas no aparecen en el selector al crear tareas."_
+- **Prefijo CSS `.c-` / `.cf-`:** Equivalente al `.t-` / `.m-` de `tareas.css`. Cada pantalla tiene su propio fichero CSS (`categorias.css`) sin dependencias entre ellos — los estilos de modal se duplican deliberadamente para evitar acoplamiento.
+- **Navegación:** Botón "Categorías" en la cabecera de Tareas (outline indigo, clase `.t-btn-cats`). Botón "←" en la cabecera de Categorías vuelve a `/tareas` con `useNavigate`.
+- **Build P4:** 111 módulos, `dist/assets/index-CqDuT9w-.js` 251.14 kB (83.86 kB gzip), service worker actualizado.
+
 ### Despliegue en Cloudflare Pages (setup manual único)
 
 Pasos para conectar el repositorio la primera vez desde https://dash.cloudflare.com/:
@@ -260,18 +271,22 @@ MyTaskMyHabit/
 │       │   ├── ProtectedRoute.jsx  # isLoading→spinner, !auth→/login
 │       │   ├── Spinner.jsx         # Spinner centrado compartido
 │       │   ├── TareaItem.jsx       # Fila de tarea con toggle, badges, acciones
-│       │   └── TareaForm.jsx       # Modal crear/editar tarea
+│       │   ├── TareaForm.jsx       # Modal crear/editar tarea
+│       │   ├── CategoriaItem.jsx   # Fila de categoría con icono, contador tareas, acciones
+│       │   └── CategoriaForm.jsx   # Modal crear/editar categoría
 │       ├── context/
 │       │   └── AuthContext.jsx     # AuthProvider + AuthContext
 │       ├── hooks/
 │       │   ├── useAuth.js          # Hook con error si fuera de AuthProvider
 │       │   ├── useTareas.js        # Estado de lista, CRUD, toggle optimista
-│       │   └── useCategorias.js    # Carga categorías activas + catMap id→titulo
+│       │   └── useCategorias.js    # CRUD completo + catMap id→titulo (todas, incl. inactivas)
 │       ├── styles/
-│       │   └── tareas.css          # Estilos de la pantalla Tareas (prefijos .t- y .m-)
+│       │   ├── tareas.css          # Estilos de la pantalla Tareas (prefijos .t- y .m-)
+│       │   └── categorias.css      # Estilos de la pantalla Categorías (prefijos .c- y .cf-)
 │       └── pages/
 │           ├── Login.jsx           # Usa useAuth().login()
-│           └── Tareas.jsx          # Pantalla principal con CRUD, grupos por prioridad, filtros
+│           ├── Tareas.jsx          # Pantalla principal con CRUD, grupos por prioridad, filtros
+│           └── Categorias.jsx      # Pantalla de gestión de categorías (CRUD completo)
 ├── PROYECTO_PWA.md         # Este fichero
 ├── DATABASE_ANALYSIS.md    # Análisis del schema Room/SQLite actual
 └── ...                     # Ficheros del proyecto Android (gradle, etc.)
@@ -292,3 +307,4 @@ MyTaskMyHabit/
 | P1 | Scaffolding PWA | Agosto 2026 | Carpeta `web/` creada con React 18 + Vite 6. `vite-plugin-pwa` con manifest (name: MyTaskMyHabit, theme: #6366f1, display: standalone, iconos 192+512). Iconos PNG generados por script propio sin dependencias. Cliente HTTP Axios con interceptores de auth (token de localStorage) y 401 (redirect a /login, excepto en el endpoint de login). Routing protegido con `react-router-dom` v7. Páginas placeholder Login y Tareas. `public/_redirects` para SPA en Cloudflare Pages. Build de producción OK (97 módulos, sw.js + workbox). Verificado en dev: error 401 con credenciales erróneas muestra mensaje correcto. Despliegue Cloudflare Pages: pendiente setup manual (pasos documentados en sección "Decisiones de diseño"). |
 | P2 | Auth completo (AuthContext + useAuth + ProtectedRoute robusto) | Agosto 2026 | `AuthContext` con estado de sesión completo (user, token, isLoading, isAuthenticated, login, logout). En mount verifica token con GET /auth/me: 401 cierra sesión, error de red mantiene sesión desde caché localStorage (`mtmh_user`). `useAuth` hook con error descriptivo fuera del provider. `client.js` usa patrón callback `setUnauthorizedHandler` para que el interceptor 401 llame a `logout()` del contexto sin acoplamiento directo. `ProtectedRoute` con spinner durante isLoading. `Login.jsx` usa `useAuth().login()`, muestra spinner durante validación inicial y evita flash del formulario a usuarios autenticados. Clave localStorage: `mtmh_token` / `mtmh_user`. Build OK: 100 módulos. Verificado en dev: routing protegido, redirección correcta. Commit `4b28bbe` pusheado a master. |
 | P3 | Pantalla Tareas completa (CRUD, filtros, grupos por prioridad) | Agosto 2026 | Módulos añadidos: `api/tareas.js`, `api/categorias.js`, `hooks/useTareas.js` (toggle optimista con revert automático), `hooks/useCategorias.js` (catMap id→titulo), `components/TareaItem.jsx` (borde de color por prioridad, badge categoría, fecha roja si vencida, badge "Sin clasificar"), `components/TareaForm.jsx` (modal crear/editar con todos los campos, cierre al pulsar fuera). `Tareas.jsx` reescrita: filtro Todas/Pendientes client-side, grupos ALTA/MEDIA/BAJA con sección de completadas colapsable. CSS en `styles/tareas.css` (prefijos `.t-`/`.m-`), responsive en 480 px. Build: 107 módulos, 245.51 kB. Commit `19256bf` pusheado a master. Cloudflare Pages desplegando automáticamente. |
+| P4 | Pantalla de Categorías (CRUD completo) | Agosto 2026 | `api/categorias.js` extendido con `crearCategoria`, `editarCategoria`, `eliminarCategoria`. `useCategorias` reescrito con CRUD y catMap que incluye categorías inactivas. `CategoriaItem.jsx` (icono monospace, contador de tareas calculado desde `useTareas`, badge "Inactiva", confirm con advertencia de SET NULL antes de eliminar). `CategoriaForm.jsx` (modal crear/editar, checkbox activa solo en edición, hint explicativo). `Categorias.jsx` (pantalla `/categorias` protegida, back button a Tareas). `TareaForm.jsx` actualizado: selector filtra solo categorías activas. Header de Tareas: botón "Categorías" → navega a `/categorias`. `categorias.css` con prefijos `.c-`/`.cf-`. Build: 111 módulos, 251.14 kB. Commit `2adaf0f` pusheado a master. |
