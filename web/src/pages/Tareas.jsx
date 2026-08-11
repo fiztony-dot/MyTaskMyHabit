@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import { useTareas } from '../hooks/useTareas'
 import { useCategorias } from '../hooks/useCategorias'
 import { useAuth } from '../hooks/useAuth'
@@ -71,11 +71,33 @@ export default function Tareas() {
   const [catSelec, setCatSelec] = useState(null)
   const [mostrarCompletadas, setMostrarCompletadas] = useState(false)
   const [formTarea, setFormTarea] = useState(null) // null=cerrado, false=nueva, obj=editar
+  const [expandirCtrl, setExpandirCtrl] = useState(null) // { open: bool, seq: number }
+  const [fadingIds, setFadingIds] = useState(new Set())
 
-  // Filtrado: búsqueda + categoría + completadas
+  function handleExpandirTodas() {
+    setExpandirCtrl((prev) => ({
+      open: prev?.open !== true,
+      seq: (prev?.seq ?? 0) + 1,
+    }))
+  }
+
+  const handleToggle = useCallback((tarea) => {
+    const completando = !tarea.esta_completada
+    if (completando && !mostrarCompletadas) {
+      setFadingIds((prev) => { const s = new Set(prev); s.add(tarea.id); return s })
+      toggleCompletada(tarea)
+      setTimeout(() => {
+        setFadingIds((prev) => { const s = new Set(prev); s.delete(tarea.id); return s })
+      }, 400)
+    } else {
+      toggleCompletada(tarea)
+    }
+  }, [mostrarCompletadas, toggleCompletada])
+
+  // Filtrado: búsqueda + categoría + completadas (tareas en fade-out se mantienen visibles)
   const tareasFiltradas = useMemo(() => {
     return tareas.filter((t) => {
-      if (!mostrarCompletadas && t.esta_completada) return false
+      if (!mostrarCompletadas && t.esta_completada && !fadingIds.has(t.id)) return false
       if (catSelec !== null && t.categoria_id !== catSelec) return false
       if (textoBusqueda) {
         const texto = textoBusqueda.toLowerCase()
@@ -83,7 +105,7 @@ export default function Tareas() {
       }
       return true
     })
-  }, [tareas, mostrarCompletadas, catSelec, textoBusqueda])
+  }, [tareas, mostrarCompletadas, catSelec, textoBusqueda, fadingIds])
 
   const totalPendientes = useMemo(
     () => tareas.filter((t) => !t.esta_completada).length,
@@ -148,9 +170,11 @@ export default function Tareas() {
         searchOpen={searchOpen}
         filterOpen={filterOpen}
         mostrarCompletadas={mostrarCompletadas}
+        expandirTodas={expandirCtrl}
         onSearch={toggleSearch}
         onFilter={toggleFilter}
         onToggleCompletadas={() => setMostrarCompletadas((v) => !v)}
+        onExpandirTodas={handleExpandirTodas}
         onLogout={logout}
       />
 
@@ -199,14 +223,19 @@ export default function Tareas() {
       {/* ── Estado vacío ── */}
       {!error && tareasFiltradas.length === 0 && (
         <div className="t-vacio">
-          <span className="material-icons">check_circle_outline</span>
+          <span className="material-icons">
+            {textoBusqueda ? 'search_off' : 'check_circle_outline'}
+          </span>
           <p className="t-vacio-titulo">
             {textoBusqueda
-              ? 'Sin resultados para la búsqueda'
+              ? `Sin resultados para "${textoBusqueda}"`
               : catSelec !== null
               ? 'No hay tareas en esta categoría'
               : 'No hay tareas pendientes'}
           </p>
+          {textoBusqueda && (
+            <p className="t-vacio-sub">Prueba con otras palabras</p>
+          )}
         </div>
       )}
 
@@ -220,7 +249,9 @@ export default function Tareas() {
               tareas={gruposVenc[s.key]}
               catData={catData}
               onEdit={setFormTarea}
-              onToggle={toggleCompletada}
+              onToggle={handleToggle}
+              expandirCtrl={expandirCtrl}
+              fadingIds={fadingIds}
             />
           ))}
         </div>
@@ -236,7 +267,9 @@ export default function Tareas() {
               tareas={catTareas}
               catData={catData}
               onEdit={setFormTarea}
-              onToggle={toggleCompletada}
+              onToggle={handleToggle}
+              expandirCtrl={expandirCtrl}
+              fadingIds={fadingIds}
             />
           ))}
           {gruposCat.sinCat.length > 0 && (
@@ -246,7 +279,9 @@ export default function Tareas() {
               tareas={gruposCat.sinCat}
               catData={catData}
               onEdit={setFormTarea}
-              onToggle={toggleCompletada}
+              onToggle={handleToggle}
+              expandirCtrl={expandirCtrl}
+              fadingIds={fadingIds}
             />
           )}
         </div>

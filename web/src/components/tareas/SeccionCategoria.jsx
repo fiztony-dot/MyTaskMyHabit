@@ -1,9 +1,13 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import TareaItem from './TareaItem'
 import '../../styles/tareas.css'
 
-export default function SeccionCategoria({ categoria, tareas, catData, onEdit, onToggle }) {
+export default function SeccionCategoria({ categoria, tareas, catData, onEdit, onToggle, expandirCtrl, fadingIds }) {
   const [open, setOpen] = useState(false)
+
+  useEffect(() => {
+    if (expandirCtrl) setOpen(expandirCtrl.open)
+  }, [expandirCtrl])
 
   if (!tareas || tareas.length === 0) return null
 
@@ -40,6 +44,7 @@ export default function SeccionCategoria({ categoria, tareas, catData, onEdit, o
           catData={catData}
           onEdit={onEdit}
           onToggle={onToggle}
+          fadingOut={fadingIds?.has(t.id) ?? false}
         />
       ))}
     </section>

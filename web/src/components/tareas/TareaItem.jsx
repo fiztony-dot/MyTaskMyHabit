@@ -19,7 +19,7 @@ function isVencida(fechaStr) {
   return dia < hoy
 }
 
-export default function TareaItem({ tarea, catData, onEdit, onToggle }) {
+export default function TareaItem({ tarea, catData, onEdit, onToggle, fadingOut }) {
   const cat = catData?.[tarea.categoria_id]
   const fechaHora = formatFechaHora(tarea.fecha_limite, tarea.hora_limite)
   const vencida = isVencida(tarea.fecha_limite) && !tarea.esta_completada
@@ -32,7 +32,7 @@ export default function TareaItem({ tarea, catData, onEdit, onToggle }) {
 
   return (
     <div
-      className={`ti-item ${priClass}${tarea.esta_completada ? ' completada' : ''}`}
+      className={`ti-item ${priClass}${tarea.esta_completada ? ' completada' : ''}${fadingOut ? ' ti-fading-out' : ''}`}
       onClick={() => onEdit(tarea)}
     >
       <input

@@ -6,9 +6,11 @@ export default function CabeceraTareas({
   searchOpen,
   filterOpen,
   mostrarCompletadas,
+  expandirTodas,
   onSearch,
   onFilter,
   onToggleCompletadas,
+  onExpandirTodas,
   onLogout,
 }) {
   const navigate = useNavigate()
@@ -40,6 +42,16 @@ export default function CabeceraTareas({
       >
         <span className="material-icons">
           {mostrarCompletadas ? 'visibility' : 'visibility_off'}
+        </span>
+      </button>
+
+      <button
+        className="t-header-btn"
+        onClick={onExpandirTodas}
+        aria-label={expandirTodas?.open === true ? 'Contraer todas las secciones' : 'Expandir todas las secciones'}
+      >
+        <span className="material-icons">
+          {expandirTodas?.open === true ? 'unfold_less' : 'unfold_more'}
         </span>
       </button>
 

@@ -192,6 +192,15 @@
 .ti-item.baja    { border-left-color: #d1fae5; }
 .ti-item.completada { opacity: 0.45; }
 
+@keyframes ti-fadeout {
+  from { opacity: 0.45; transform: translateX(0); }
+  to   { opacity: 0;    transform: translateX(-14px); }
+}
+.ti-item.ti-fading-out {
+  animation: ti-fadeout 0.4s ease-out forwards;
+  pointer-events: none;
+}
+
 .ti-check {
   width: 18px;
   height: 18px;
@@ -260,6 +269,7 @@
 }
 .t-vacio .material-icons { font-size: 52px !important; color: #d1d5db; }
 .t-vacio-titulo { font-size: 1rem; color: #6b7280; font-weight: 500; margin: 0; }
+.t-vacio-sub    { font-size: 0.875rem; color: #9ca3af; margin: 0; }
 .t-error {
   text-align: center;
   padding: 1.25rem;

@@ -14,9 +14,18 @@ const app = express();
 // Render (y otros PaaS) colocan un reverse proxy delante del servicio
 app.set('trust proxy', 1);
 
-// CORS: por ahora abierto (*) para desarrollo.
-// TODO: Restringir al dominio de la PWA en Cloudflare Pages cuando exista.
-app.use(cors());
+const ALLOWED_ORIGINS = [
+  'https://mytaskmyhabitpwa.pages.dev',
+  'http://localhost:5173',
+  'http://localhost:5174',
+]
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin || ALLOWED_ORIGINS.includes(origin)) callback(null, true)
+    else callback(new Error('CORS: origin not allowed'))
+  },
+  credentials: true,
+}));
 
 app.use(express.json());
 
