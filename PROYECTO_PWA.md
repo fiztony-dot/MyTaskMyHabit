@@ -10,8 +10,8 @@ Migración progresiva de la app Android "MyTaskMyHabit" (actualmente 100% local 
 - **Base de datos:** PostgreSQL en Supabase
 - **Auth:** JWT propio, usuarios válidos en variable de entorno AUTH_USERS (bcrypt hashes)
 - **App Android:** Kotlin/Jetpack Compose (Room/SQLite, en proceso de retirada módulo a módulo)
-- **PWA (futura):** React + Vite, Cloudflare Pages
-- **Repositorio:** monorepo en GitHub (proyecto Android + `server/` + `web/` en el futuro)
+- **PWA:** React + Vite, Cloudflare Pages
+- **Repositorio:** monorepo en GitHub (proyecto Android + `server/` + `web/`)
 
 ## Servicios de terceros
 
@@ -19,8 +19,8 @@ Migración progresiva de la app Android "MyTaskMyHabit" (actualmente 100% local 
 |----------|-------------------|------|-------------------|-------|
 | Render (Web Service) | Hosting del backend Node/Express | Free | https://dashboard.render.com/ | Nombre del servicio: `mytaskmyhabit-api` |
 | Supabase (PostgreSQL) | Base de datos de producción | Free | https://supabase.com/dashboard | Sustituye a Render PostgreSQL (descartado por expiración a 90 días). Sin expiración en el tier free. |
-| GitHub | Repositorio monorepo | Free | https://github.com/fiztony-dot/MyTaskMyHabit | Contiene proyecto Android + server/ (+ web/ en el futuro). Rama: `master` |
-| Cloudflare Pages | Hosting de la PWA (futuro) | Free | — | Pendiente hasta Fase PWA |
+| GitHub | Repositorio monorepo | Free | https://github.com/fiztony-dot/MyTaskMyHabit | Contiene proyecto Android + server/ + web/. Rama: `master` |
+| Cloudflare Pages | Hosting de la PWA | Free | https://dash.cloudflare.com/ | Nombre del proyecto: `mytaskmyhabit`. URL: pendiente primer despliegue manual. Root dir: `web`, build command: `npm run build`, output: `dist` |
 
 ## Variables de entorno por servicio
 
@@ -39,7 +39,7 @@ Migración progresiva de la app Android "MyTaskMyHabit" (actualmente 100% local 
 | Tareas | ✅ | ✅ | ✅ | ✅ | Completado (Iteraciones 3-7) |
 | Hábitos | ⬜ | ⬜ | ⬜ | ⬜ | Pendiente |
 | Shopping | ⬜ | ⬜ | ⬜ | ⬜ | Pendiente |
-| PWA | ⬜ | — | — | — | Pendiente |
+| PWA | ✅ | — | — | — | Scaffolding completado (Iteración P1). Despliegue Cloudflare Pages pendiente primer setup manual. |
 
 ## Decisiones de diseño
 
@@ -123,6 +123,35 @@ Migración progresiva de la app Android "MyTaskMyHabit" (actualmente 100% local 
 | PATCH | `/api/tareas/:id/completar` | Marca/desmarca completada. Body: `{ esta_completada: bool }` |
 | DELETE | `/api/tareas/:id` | Elimina tarea |
 
+### PWA — Scaffolding (Iteración P1)
+
+- **Framework:** React 18 + Vite 6, sin TypeScript (JS es suficiente para app personal con un único desarrollador).
+- **Routing:** `react-router-dom` v7 con `BrowserRouter`. Rutas: `/login`, `/tareas` (protegida), `/` → redirect a `/tareas`.
+- **Auth en PWA:** Token JWT guardado en `localStorage` (clave `jwt_token`). `ProtectedRoute` comprueba `localStorage` en cada render — si no hay token, redirige a `/login`. Sin contexto React de auth: el token en localStorage es la fuente de verdad, lo cual es suficiente para un solo usuario.
+- **Cliente HTTP:** `axios` con interceptor de request (añade `Authorization: Bearer <token>` automáticamente) e interceptor de response (limpia token y redirige a `/login` en 401, **excepto** en el endpoint `/auth/login` propio para evitar redirect en credenciales erróneas).
+- **Login response:** El servidor devuelve `{ token, user: { username } }` directamente (sin envoltura `{ data: ... }`). Los endpoints `/api/*` sí usan la convención `{ data: ... }`.
+- **PWA manifest:** `vite-plugin-pwa` v0.21 con `registerType: 'autoUpdate'`. Theme color: `#6366f1` (indigo). Iconos: PNG sólidos generados por `scripts/generate-icons.cjs` (sin dependencias externas — solo `zlib` built-in de Node).
+- **Service worker strategy:** `generateSW` (Workbox automático). Assets estáticos: precache. Llamadas a la API (`/api/*` en Render): `NetworkFirst` con cache de 24h y máx. 50 entradas.
+- **SPA redirect en Cloudflare Pages:** `public/_redirects` con `/* /index.html 200` para que el routing client-side funcione en cualquier URL.
+- **`package.json` `"type": "module"`:** Los scripts de utilidad (generate-icons) usan extensión `.cjs` para seguir usando CommonJS sin conflicto con el ES module scope de Vite.
+- **Versiones:** Fijadas exactas en `package.json` (sin rangos `^`) siguiendo la convención del proyecto. Resolución desde `package-lock.json`.
+
+### Despliegue en Cloudflare Pages (setup manual único)
+
+Pasos para conectar el repositorio la primera vez desde https://dash.cloudflare.com/:
+
+1. **Pages → Create project → Connect to Git**
+2. Seleccionar repositorio `fiztony-dot/MyTaskMyHabit`
+3. Configuración del build:
+   - Framework preset: **Vite**
+   - Root directory: **`web`**
+   - Build command: **`npm run build`**
+   - Build output directory: **`dist`**
+   - Branch de producción: **`master`**
+4. Sin variables de entorno adicionales (la base URL de la API está hardcodeada en `src/api/client.js`)
+5. Hacer clic en **Save and Deploy**
+6. Una vez desplegado, anotar la URL asignada (formato `*.pages.dev`) y actualizar este fichero
+
 ### Adaptación Android (Iteración 6)
 
 - **HTTP Client:** Ktor (ya existía en el proyecto para AI/voz) — no se añadió Retrofit. `ApiClient` singleton con inyección automática de JWT via `defaultRequest`.
@@ -181,8 +210,33 @@ MyTaskMyHabit/
 │           ├── auth.js     # POST /auth/login, GET /auth/me
 │           ├── categorias.js # CRUD /api/categorias
 │           └── tareas.js   # CRUD /api/tareas
-├── web/                    # PWA (futuro)
-├── PROYECTO.md             # Este fichero
+├── web/                    # PWA React + Vite
+│   ├── package.json
+│   ├── vite.config.js
+│   ├── index.html
+│   ├── .gitignore
+│   ├── scripts/
+│   │   └── generate-icons.cjs  # Genera iconos PNG placeholder sin dependencias externas
+│   ├── public/
+│   │   ├── _redirects          # SPA fallback para Cloudflare Pages
+│   │   └── icons/
+│   │       ├── icon-192.png
+│   │       └── icon-512.png
+│   └── src/
+│       ├── main.jsx
+│       ├── App.jsx
+│       ├── index.css
+│       ├── api/
+│       │   ├── client.js       # Axios con interceptores de auth y 401
+│       │   └── auth.js         # login(), getMe()
+│       ├── components/
+│       │   └── ProtectedRoute.jsx
+│       ├── context/            # (reservado para iteraciones futuras)
+│       ├── hooks/              # (reservado para iteraciones futuras)
+│       └── pages/
+│           ├── Login.jsx
+│           └── Tareas.jsx      # Placeholder — implementación real en Iteración P3
+├── PROYECTO_PWA.md         # Este fichero
 ├── DATABASE_ANALYSIS.md    # Análisis del schema Room/SQLite actual
 └── ...                     # Ficheros del proyecto Android (gradle, etc.)
 ```
@@ -199,3 +253,4 @@ MyTaskMyHabit/
 | 6 | Adaptar Android: Tareas → API | Agosto 2026 | Capa de red completa con Ktor: `ApiClient` (JWT automático), `AuthManager` (DataStore), `TareasApiService`, `TareasApiRepository` (mapea DTOs ↔ modelos locales). `TareasApiViewModel` como drop-in replacement del ViewModel original. Login screen + AuthGate. Room de Tareas permanece intacto pero desconectado del nuevo flujo. BUILD SUCCESSFUL. Pendiente: swap a TareasApiViewModel en Iteración 7. |
 | 7 | Corte coordinado Tareas | Agosto 2026 | Migración de datos ejecutada contra Supabase: 11 categorías insertadas, 401 tareas insertadas, 67 con categoría huérfana (→ NULL), 0 errores. Swap de ViewModel completado (`TareasViewModelRoom` archivado, `TareasViewModel` API activo). App instalada y verificada. Módulo Tareas completamente migrado a servidor. |
 | 8 | Limpieza: retirar Room de Tareas | Agosto 2026 | Eliminados: TareaDao, CategoriaDao, TareasViewModelRoom, TareasViewModelFactory, TareaRepository (Room). Tarea.kt y Categoria.kt convertidas a plain data classes (sin @Entity). AppDatabase v31→v32 sin entidades de Tareas. NotificacionWorker y BootReceiver actualizados (no dependen de Room). TareasBackupJson convertido a no-op. Room sigue activo para Hábitos y Shopping. |
+| P1 | Scaffolding PWA | Agosto 2026 | Carpeta `web/` creada con React 18 + Vite 6. `vite-plugin-pwa` con manifest (name: MyTaskMyHabit, theme: #6366f1, display: standalone, iconos 192+512). Iconos PNG generados por script propio sin dependencias. Cliente HTTP Axios con interceptores de auth (token de localStorage) y 401 (redirect a /login, excepto en el endpoint de login). Routing protegido con `react-router-dom` v7. Páginas placeholder Login y Tareas. `public/_redirects` para SPA en Cloudflare Pages. Build de producción OK (97 módulos, sw.js + workbox). Verificado en dev: error 401 con credenciales erróneas muestra mensaje correcto. Despliegue Cloudflare Pages: pendiente setup manual (pasos documentados en sección "Decisiones de diseño"). |
