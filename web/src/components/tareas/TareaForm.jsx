@@ -1,5 +1,14 @@
 import { useState, useEffect } from 'react'
+import { getIconColor } from '../../lib/iconColors'
 import '../../styles/tareas.css'
+
+const OPCIONES_REPETICION = [
+  'Sin repetición',
+  'Una vez al día',
+  'Una vez a la semana',
+  'Una vez al mes',
+  'Una vez al año',
+]
 
 const FORM_VACIO = {
   titulo: '',
@@ -8,6 +17,9 @@ const FORM_VACIO = {
   categoria_id: '',
   fecha_limite: '',
   hora_limite: '',
+  repeticion: 'Sin repetición',
+  repeticion_fin: '',
+  repeticion_veces: '',
 }
 
 function tareaToForm(tarea) {
@@ -18,10 +30,14 @@ function tareaToForm(tarea) {
     categoria_id: tarea.categoria_id != null ? String(tarea.categoria_id) : '',
     fecha_limite: tarea.fecha_limite ? tarea.fecha_limite.substring(0, 10) : '',
     hora_limite: tarea.hora_limite ? tarea.hora_limite.substring(0, 5) : '',
+    repeticion: tarea.repeticion || 'Sin repetición',
+    repeticion_fin: tarea.repeticion_fin ? tarea.repeticion_fin.substring(0, 10) : '',
+    repeticion_veces: tarea.repeticion_veces != null ? String(tarea.repeticion_veces) : '',
   }
 }
 
 function formToBody(form) {
+  const tieneRepeticion = form.repeticion !== 'Sin repetición'
   return {
     titulo: form.titulo.trim(),
     descripcion: form.descripcion.trim() || null,
@@ -29,6 +45,9 @@ function formToBody(form) {
     categoria_id: form.categoria_id ? Number(form.categoria_id) : null,
     fecha_limite: form.fecha_limite || null,
     hora_limite: form.fecha_limite && form.hora_limite ? form.hora_limite : null,
+    repeticion: form.repeticion,
+    repeticion_fin: tieneRepeticion && form.repeticion_fin ? form.repeticion_fin : null,
+    repeticion_veces: tieneRepeticion && form.repeticion_veces ? Number(form.repeticion_veces) : null,
   }
 }
 
@@ -83,6 +102,13 @@ export default function TareaForm({ tarea, categorias, onGuardar, onEliminar, on
     if (e.target === e.currentTarget) onCerrar()
   }
 
+  const categoriasActivas = categorias.filter((c) => c.activa !== false)
+  const selectedCat = form.categoria_id
+    ? categoriasActivas.find((c) => String(c.id) === form.categoria_id)
+    : null
+
+  const tieneRepeticion = form.repeticion !== 'Sin repetición'
+
   return (
     <div className="m-overlay" onClick={handleOverlayClick}>
       <div className="m-panel" role="dialog" aria-modal="true">
@@ -121,12 +147,22 @@ export default function TareaForm({ tarea, categorias, onGuardar, onEliminar, on
             </div>
             <div className="m-field">
               <label className="m-label" htmlFor="tf-cat">Categoría</label>
-              <select id="tf-cat" className="m-select" value={form.categoria_id} onChange={set('categoria_id')}>
-                <option value="">Sin categoría</option>
-                {categorias.filter((c) => c.activa !== false).map((c) => (
-                  <option key={c.id} value={String(c.id)}>{c.titulo}</option>
-                ))}
-              </select>
+              <div className="m-cat-wrap">
+                <select id="tf-cat" className="m-select" value={form.categoria_id} onChange={set('categoria_id')}>
+                  <option value="">Sin categoría</option>
+                  {categoriasActivas.map((c) => (
+                    <option key={c.id} value={String(c.id)}>{c.titulo}</option>
+                  ))}
+                </select>
+                {selectedCat?.icono && (
+                  <span
+                    className="material-icons m-cat-icon-preview"
+                    style={{ color: getIconColor(selectedCat.icono) }}
+                  >
+                    {selectedCat.icono}
+                  </span>
+                )}
+              </div>
             </div>
           </div>
 
@@ -149,6 +185,36 @@ export default function TareaForm({ tarea, categorias, onGuardar, onEliminar, on
               />
             </div>
           </div>
+
+          <div className="m-field">
+            <label className="m-label" htmlFor="tf-rep">Repetición</label>
+            <select id="tf-rep" className="m-select" value={form.repeticion} onChange={set('repeticion')}>
+              {OPCIONES_REPETICION.map((op) => (
+                <option key={op} value={op}>{op}</option>
+              ))}
+            </select>
+          </div>
+
+          {tieneRepeticion && (
+            <div className="m-row">
+              <div className="m-field">
+                <label className="m-label" htmlFor="tf-rep-fin">Fin de repetición</label>
+                <input
+                  id="tf-rep-fin" className="m-input" type="date"
+                  value={form.repeticion_fin} onChange={set('repeticion_fin')}
+                />
+              </div>
+              <div className="m-field">
+                <label className="m-label" htmlFor="tf-rep-veces">Máx. repeticiones</label>
+                <input
+                  id="tf-rep-veces" className="m-input" type="number"
+                  min="1" max="999"
+                  value={form.repeticion_veces} onChange={set('repeticion_veces')}
+                  placeholder="Sin límite"
+                />
+              </div>
+            </div>
+          )}
 
           {error && <p style={{ color: '#ef4444', fontSize: '.8125rem', margin: '0 0 .75rem' }}>{error}</p>}
 

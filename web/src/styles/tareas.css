@@ -392,6 +392,15 @@
   border-radius: 6px; font-size: 0.875rem; cursor: pointer; margin-right: auto;
 }
 
+/* ── Selector de categoría con preview de icono ── */
+.m-cat-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.m-cat-wrap .m-select { flex: 1; min-width: 0; }
+.m-cat-icon-preview { font-size: 22px !important; flex-shrink: 0; }
+
 /* ── Responsive ── */
 @media (max-width: 900px) {
   .t-fab { right: 1.5rem; }

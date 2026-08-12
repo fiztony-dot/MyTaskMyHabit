@@ -1,3 +1,4 @@
+import { getIconColor } from '../../lib/iconColors'
 import '../../styles/tareas.css'
 
 const PRIO_CLASS = { ALTA: 'alta', MEDIA: 'media', BAJA: 'baja' }
@@ -47,7 +48,7 @@ export default function TareaItem({ tarea, catData, onEdit, onToggle, fadingOut 
       {/* Icono de categoría — siempre visible para alinear el contenido */}
       <span
         className="material-icons ti-cat-icon-left"
-        style={{ color: cat ? '#6366f1' : '#e5e7eb' }}
+        style={{ color: cat ? getIconColor(cat.icono) : '#e5e7eb' }}
         title={cat?.titulo ?? ''}
       >
         {cat?.icono ?? 'circle'}

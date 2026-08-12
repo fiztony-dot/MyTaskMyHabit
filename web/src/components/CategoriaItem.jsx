@@ -1,3 +1,4 @@
+import { getIconColor } from '../lib/iconColors'
 import '../styles/categorias.css'
 
 export default function CategoriaItem({ categoria, tareasCount, onEdit, onDelete }) {
@@ -18,17 +19,19 @@ export default function CategoriaItem({ categoria, tareasCount, onEdit, onDelete
   }
 
   const inactiva = categoria.activa === false
+  const iconColor = getIconColor(categoria.icono)
 
   return (
     <div
       className={`c-item${inactiva ? ' inactiva' : ''}`}
       onClick={() => onEdit(categoria)}
     >
-      {categoria.icono ? (
-        <span className="c-item-icon">{categoria.icono}</span>
-      ) : (
-        <span className="c-item-icon" style={{ color: '#d1d5db', background: '#f9fafb' }}>—</span>
-      )}
+      <span
+        className="material-icons c-item-icon-mat"
+        style={{ color: iconColor }}
+      >
+        {categoria.icono || 'label_off'}
+      </span>
 
       <div className="c-item-body">
         <span className="c-item-name">{categoria.titulo}</span>

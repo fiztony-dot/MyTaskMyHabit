@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 import SidebarItem from './SidebarItem'
 import SidebarSeccion from './SidebarSeccion'
+import { getIconColor } from '../../lib/iconColors'
 import '../../styles/layout.css'
 
 const TIEMPO_ITEMS = [
@@ -94,6 +95,7 @@ export default function Sidebar({
             label={cat.titulo}
             badge={contadores.cat[cat.id] ?? 0}
             activo={categorias.has(cat.id)}
+            iconColor={getIconColor(cat.icono || 'label')}
             onClick={() => onToggleCategoria(cat.id)}
           />
         ))}
