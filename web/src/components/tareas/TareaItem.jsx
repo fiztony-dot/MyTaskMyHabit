@@ -44,6 +44,15 @@ export default function TareaItem({ tarea, catData, onEdit, onToggle, fadingOut 
         aria-label={`${tarea.esta_completada ? 'Desmarcar' : 'Completar'} "${tarea.titulo}"`}
       />
 
+      {/* Icono de categoría — siempre visible para alinear el contenido */}
+      <span
+        className="material-icons ti-cat-icon-left"
+        style={{ color: cat ? '#6366f1' : '#e5e7eb' }}
+        title={cat?.titulo ?? ''}
+      >
+        {cat?.icono ?? 'circle'}
+      </span>
+
       <div className="ti-body">
         <p className={`ti-titulo${tarea.esta_completada ? ' completada' : ''}`}>
           {tarea.titulo}
@@ -61,18 +70,13 @@ export default function TareaItem({ tarea, catData, onEdit, onToggle, fadingOut 
         </div>
       </div>
 
-      <div className="ti-right">
-        {cat?.icono && (
-          <span className="material-icons ti-cat-icon" title={cat.titulo}>
-            {cat.icono}
-          </span>
-        )}
-        {tarea.repeticion && (
+      {tarea.repeticion && (
+        <div className="ti-right">
           <span className="material-icons ti-rep-icon" title="Tarea repetitiva">
             repeat
           </span>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   )
 }

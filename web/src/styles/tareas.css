@@ -258,13 +258,19 @@
   padding: 0.05rem 0.35rem;
   border-radius: 3px;
 }
+.ti-cat-icon-left {
+  font-size: 18px !important;
+  flex-shrink: 0;
+  width: 20px;
+  text-align: center;
+  line-height: 1;
+}
 .ti-right {
   display: flex;
   align-items: center;
   gap: 0.25rem;
   flex-shrink: 0;
 }
-.ti-cat-icon { font-size: 18px !important; color: #6366f1; }
 .ti-rep-icon { font-size: 14px !important; color: #9ca3af; }
 
 /* ── Estados: vacío, error ── */

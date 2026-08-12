@@ -4,9 +4,11 @@ export default function PanelCabecera({
   titulo,
   count,
   searchOpen,
+  sortActive,
   expandirCtrl,
   onMenuMobile,
   onSearch,
+  onSort,
   onExpandirTodas,
   onNuevaTarea,
 }) {
@@ -36,6 +38,15 @@ export default function PanelCabecera({
         aria-label={searchOpen ? 'Cerrar búsqueda' : 'Buscar'}
       >
         <span className="material-icons">{searchOpen ? 'close' : 'search'}</span>
+      </button>
+
+      {/* Ordenar / agrupar */}
+      <button
+        className={`panel-header-btn${sortActive ? ' activo' : ''}`}
+        onClick={onSort}
+        aria-label="Ordenar y agrupar"
+      >
+        <span className="material-icons">swap_vert</span>
       </button>
 
       {/* Expandir/colapsar secciones */}
