@@ -61,7 +61,7 @@ function clasificarTarea(tarea) {
 // ── Componente principal ────────────────────────────────────────────────────
 export default function Tareas() {
   const { logout } = useAuth()
-  const { tareas, isLoading, error, cargar, toggleCompletada, crear, editar, eliminar } = useTareas()
+  const { tareas, isLoading, error, cargar, toggleCompletada, crear, editar, eliminar, realtimeConectado } = useTareas()
   const { categorias, catData } = useCategorias()
 
   const [vista, setVista] = useState('vencimiento')
@@ -171,6 +171,7 @@ export default function Tareas() {
         filterOpen={filterOpen}
         mostrarCompletadas={mostrarCompletadas}
         expandirTodas={expandirCtrl}
+        realtimeConectado={realtimeConectado}
         onSearch={toggleSearch}
         onFilter={toggleFilter}
         onToggleCompletadas={() => setMostrarCompletadas((v) => !v)}

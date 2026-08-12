@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import * as api from '../api/tareas'
+import { useRealtimeTareas } from './useRealtimeTareas'
 
 export function useTareas() {
   const [tareas, setTareas] = useState([])
@@ -22,6 +23,21 @@ export function useTareas() {
   useEffect(() => {
     cargar()
   }, [cargar])
+
+  // Supabase Realtime — actualiza el estado local al recibir eventos de BD
+  const { conectado: realtimeConectado } = useRealtimeTareas({
+    onInsert: useCallback((nueva) => {
+      setTareas((prev) =>
+        prev.some((t) => t.id === nueva.id) ? prev : [...prev, nueva]
+      )
+    }, []),
+    onUpdate: useCallback((actualizada) => {
+      setTareas((prev) => prev.map((t) => (t.id === actualizada.id ? actualizada : t)))
+    }, []),
+    onDelete: useCallback((eliminada) => {
+      setTareas((prev) => prev.filter((t) => t.id !== eliminada.id))
+    }, []),
+  })
 
   // Actualización optimista: flip inmediato, revert si falla
   const toggleCompletada = useCallback(async (tarea) => {
@@ -55,5 +71,9 @@ export function useTareas() {
     setTareas((prev) => prev.filter((t) => t.id !== id))
   }, [])
 
-  return { tareas, isLoading, error, cargar, toggleCompletada, crear, editar, eliminar }
+  return {
+    tareas, isLoading, error, cargar,
+    toggleCompletada, crear, editar, eliminar,
+    realtimeConectado,
+  }
 }

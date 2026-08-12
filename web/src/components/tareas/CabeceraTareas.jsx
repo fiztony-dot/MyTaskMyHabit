@@ -7,6 +7,7 @@ export default function CabeceraTareas({
   filterOpen,
   mostrarCompletadas,
   expandirTodas,
+  realtimeConectado,
   onSearch,
   onFilter,
   onToggleCompletadas,
@@ -17,7 +18,14 @@ export default function CabeceraTareas({
 
   return (
     <header className="t-header">
-      <h1 className="t-header-title">MIS TAREAS ({totalPendientes})</h1>
+      <h1 className="t-header-title">
+        MIS TAREAS ({totalPendientes})
+        <span
+          className="t-realtime-dot"
+          style={{ background: realtimeConectado ? '#22c55e' : '#6b7280' }}
+          title={realtimeConectado ? 'Sincronización en tiempo real activa' : 'Sin sincronización en tiempo real'}
+        />
+      </h1>
 
       <button
         className={`t-header-btn${searchOpen ? ' activo' : ''}`}

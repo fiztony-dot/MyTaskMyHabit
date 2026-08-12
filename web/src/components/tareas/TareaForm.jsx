@@ -53,7 +53,12 @@ export default function TareaForm({ tarea, categorias, onGuardar, onEliminar, on
     setGuardando(true)
     setError('')
     try {
-      await onGuardar(formToBody(form), tarea?.id)
+      const body = formToBody(form)
+      // Auto-clasificar: si tenía pendiente_clasificar y el usuario asigna categoría → false
+      if (tarea?.pendiente_clasificar && body.categoria_id !== null) {
+        body.pendiente_clasificar = false
+      }
+      await onGuardar(body, tarea?.id)
       onCerrar()
     } catch (err) {
       setError(err.response?.data?.error || 'Error al guardar la tarea.')
