@@ -4,7 +4,7 @@ import { useCategorias } from '../hooks/useCategorias'
 import { useAuth } from '../hooks/useAuth'
 import { useFiltros, clasificarSidebar } from '../hooks/useFiltros'
 import { useOrden } from '../hooks/useOrden'
-import { getIconColor } from '../lib/iconColors'
+import { getIconColor, getIconColorSaturated } from '../lib/iconColors'
 import AppLayout from '../components/layout/AppLayout'
 import Sidebar from '../components/layout/Sidebar'
 import PanelCabecera from '../components/layout/PanelCabecera'
@@ -134,7 +134,7 @@ export default function Tareas() {
     categorias.filter((c) => c.activa !== false).forEach((cat) => {
       const k = String(cat.id)
       if (gruposPanel[k]?.length > 0) {
-        result.push({ key: k, label: cat.titulo, color: getIconColor(cat.icono || 'label'), icono: cat.icono || 'label', defaultOpen: true })
+        result.push({ key: k, label: cat.titulo, color: getIconColorSaturated(cat.icono || 'label'), icono: cat.icono || 'label', defaultOpen: true })
       }
     })
     if (gruposPanel['__sin_cat']?.length > 0) {
