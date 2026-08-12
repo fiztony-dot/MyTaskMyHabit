@@ -386,14 +386,17 @@ MyTaskMyHabit/
 │       │   ├── Spinner.jsx         # Spinner centrado compartido
 │       │   ├── CategoriaItem.jsx   # Fila de categoría con icono, contador tareas, acciones
 │       │   ├── CategoriaForm.jsx   # Modal crear/editar categoría
-│       │   └── tareas/             # Componentes exclusivos de la pantalla de Tareas
+│       │   ├── layout/             # Componentes del layout principal (P7)
+│       │   │   ├── AppLayout.jsx       # Contenedor flex sidebar + panel + overlay móvil
+│       │   │   ├── Sidebar.jsx         # Sidebar completo (bandeja/tiempo/cats/archivo)
+│       │   │   ├── SidebarItem.jsx     # Ítem individual con icono, label, badge
+│       │   │   ├── SidebarSeccion.jsx  # Sección colapsable del sidebar
+│       │   │   └── PanelCabecera.jsx   # Header sticky del panel (hamburguesa, título, acciones)
+│       │   └── tareas/             # Componentes de la lista de tareas
 │       │       ├── TareaItem.jsx       # Fila con Material Icon de categoría e indicador repetición
 │       │       ├── TareaForm.jsx       # Modal crear/editar (campos completos)
-│       │       ├── CabeceraTareas.jsx  # Header indigo fijo: título, búsqueda, filtro, logout
 │       │       ├── BuscadorTareas.jsx  # Input de búsqueda por título (filtrado local)
-│       │       ├── FiltrosCategorias.jsx # Chips horizontales scrollables por categoría
-│       │       ├── SeccionVencimiento.jsx # Sección colapsable con color/icono propio
-│       │       └── SeccionCategoria.jsx   # Sección colapsable por categoría
+│       │       └── SeccionVencimiento.jsx # Sección colapsable con color/icono propio
 │       ├── context/
 │       │   └── AuthContext.jsx     # AuthProvider + AuthContext
 │       ├── lib/
@@ -402,13 +405,15 @@ MyTaskMyHabit/
 │       │   ├── useAuth.js          # Hook con error si fuera de AuthProvider
 │       │   ├── useTareas.js        # Estado de lista, CRUD, toggle optimista, realtimeConectado
 │       │   ├── useRealtimeTareas.js # Suscripción postgres_changes con useRef callbacks
-│       │   └── useCategorias.js    # CRUD + catMap + catData (id → objeto completo)
+│       │   ├── useCategorias.js    # CRUD + catMap + catData (id → objeto completo)
+│       │   └── useFiltros.js       # Estado de filtros, contadores, displayMode, auto-posicionamiento
 │       ├── styles/
-│       │   ├── tareas.css          # Estilos pantalla Tareas: layout, header, secciones, FAB, modal
-│       │   └── categorias.css      # Estilos pantalla Categorías (prefijos .c- y .cf-)
+│       │   ├── tareas.css          # Estilos TareaItem, secciones, modal TareaForm, FAB, vacío
+│       │   ├── categorias.css      # Estilos pantalla Categorías (prefijos .c- y .cf-)
+│       │   └── layout.css          # Estilos layout dos columnas, sidebar, panel header (P7)
 │       └── pages/
 │           ├── Login.jsx           # Usa useAuth().login()
-│           ├── Tareas.jsx          # Pantalla principal rediseñada (P3b)
+│           ├── Tareas.jsx          # Orquestador principal: layout + filtros + contenido panel
 │           └── Categorias.jsx      # Pantalla de gestión de categorías (CRUD completo)
 ├── PROYECTO_PWA.md         # Este fichero
 ├── DATABASE_ANALYSIS.md    # Análisis del schema Room/SQLite actual
@@ -435,4 +440,5 @@ MyTaskMyHabit/
 | E2 | Cloudflare Email Worker: recibir emails y crear tareas | Agosto 2026 | Worker `mytaskmyhabit-email-worker` desplegado en Cloudflare Workers. Usa `postal-mime` para parsear el MIME completo del email (subject, from envelope, text/plain con fallback HTML→texto). `limpiarCuerpo()` elimina historial quoted y firmas, trunca a 1000 chars. Llama al backend `POST /webhooks/email?secret=...` con `FormData`. No relanza errores (el Worker no debe fallar). `WEBHOOK_SECRET` configurado como Cloudflare Worker secret via `wrangler secret put`. Pendiente manual: (1) poner el mismo `WEBHOOK_SECRET` en Render → backend; (2) conectar el Worker en Cloudflare Email Routing → Routing rules → `tareas@myafiappdomain.com` → Send to Worker. Commit `8aed126` pusheado a master. |
 | E1 | Email inbound: crear tareas desde correo (SendGrid + backend) | Agosto 2026 | Endpoint `POST /webhooks/email` sin JWT, verificado por `WEBHOOK_SECRET` en query param (403 si no coincide). Parsing multipart/form-data con `multer` (upload.none()). `limpiarCuerpo()` elimina historial quoted (líneas `>`, bloques "On...wrote:", "El...escribió:"), firmas (`--`/`—`/`---`) y trunca a 1000 chars. INSERT en `tareas_table` con `pendiente_clasificar=true`, `prioridad=MEDIA`, `categoria_id=NULL`. Email de confirmación via `@sendgrid/mail` ("✅ Tarea creada: [título]"); si falla se loguea sin romper el webhook. Responde 200 siempre (incluso en error) para que SendGrid no reintente. `server/scripts/test_webhook.js`: 4 tests con `fetch`+`FormData` de Node 18 (403 bad secret, tarea normal, quoted history, sin asunto). Variables de entorno: `WEBHOOK_SECRET`, `SENDGRID_API_KEY`, `SENDGRID_FROM_EMAIL`, `SENDGRID_INBOUND_EMAIL`. Pasos manuales de configuración SendGrid documentados en PROYECTO_PWA.md. Commit `6f28667` pusheado a master. Deploy Render en curso. |
 | P5 | Ajustes finales PWA: expandir/contraer, fade-out, CORS, meta tags | Agosto 2026 | **Botón expandir/contraer todas las secciones** añadido al header (icono `unfold_more`/`unfold_less`): `expandirCtrl` en `Tareas.jsx` (objeto `{open,seq}` que cambia referencia en cada click); `SeccionVencimiento` y `SeccionCategoria` escuchan el prop con `useEffect([expandirCtrl])` para sincronizar estado interno. **Fade-out al completar tarea** con completadas ocultas: `fadingIds` (Set) mantiene la tarea visible 400ms con clase `ti-fading-out` (animación CSS fadeOut+translateX) antes de que el filtro la retire. **Mensaje vacío con término** de búsqueda: "Sin resultados para '{término}'" + "Prueba con otras palabras". **Meta tags Apple PWA**: `apple-mobile-web-app-capable`, `apple-mobile-web-app-status-bar-style`, `apple-mobile-web-app-title`, `apple-touch-icon`. **Manifest PWA**: ya tenía `background_color: '#ffffff'` y `start_url: '/'` correctos. **CORS backend** restringido a `mytaskmyhabitpwa.pages.dev` + `localhost:5173/5174` (eliminado el wildcard `*` del TODO). Build: 116 módulos, 257.75 kB. Commit `f57bfb7` pusheado a master. |
+| P7 | Layout dos columnas con sidebar de navegación | Agosto 2026 | **Estructura:** `AppLayout.jsx` (flex sidebar 260px + panel flex:1 + overlay móvil). **Sidebar:** cabecera indigo con logo, punto Realtime y logout; 4 secciones — Bandeja (badge rojo cuando hay `pendiente_clasificar`), Por tiempo (Vencidas/Hoy/Esta semana/Resto/Todas, selección múltiple), Categorías (una por categoría activa, badge contador, link "Gestionar" → `/categorias`, colapsable si >7), Archivo (Completadas); botón "Limpiar filtros" visible cuando no es el estado inicial. **Panel:** `PanelCabecera.jsx` sticky con hamburguesa (solo móvil), título dinámico (`modo · tiempos · categorías`), contador de tareas, búsqueda, expandir/colapsar, +nueva. **useFiltros.js:** estado `modo` ('bandeja'/'tiempo'/'completadas'), `tiempos` (Set<'vencidas'\|'hoy'\|'semana'\|'resto'\|'todas'>), `categorias` (Set<id>); `displayMode` derivado ('flat'/'flat-desc'/'sections-all'/'sections'/'sections-cat'); contadores por bucket; auto-posicionamiento al cargar (bandeja si hay pendientes, hoy si no). **Contenido panel:** lista plana (bandeja/completadas/cat-sin-tiempo), 4 secciones alineadas con sidebar (resto=mes+adelante+sinFecha), combinación tiempo+categoría muestra secciones filtradas. **Responsive 768px:** sidebar oculto, deslizante desde izquierda con overlay oscuro, cierra al seleccionar filtro. **Buscador, fade-out, CRUD y Realtime sin cambios.** Build: 165 módulos, 483 kB. Commit `4a6b671` pusheado a master. |
 | P6 | Supabase Realtime + fix pendiente_clasificar | Agosto 2026 | **Supabase Realtime:** `@supabase/supabase-js` instalado. `src/lib/supabase.js` crea el cliente con fallback `null` si faltan las env vars (Realtime desactivado silenciosamente). `src/hooks/useRealtimeTareas.js` suscribe al canal `postgres_changes` para `tareas_table` (`event: '*'`); usa `useRef` para callbacks estables sin re-suscribir. `useTareas` integra el hook y expone `realtimeConectado`. De-duplicación en handler INSERT (evita duplicar la tarea que el propio usuario acaba de crear). **Indicador visual:** Punto de 8px en el header (verde `#22c55e` = conectado, gris `#6b7280` = sin Realtime), clase `.t-realtime-dot`. **Fix `pendiente_clasificar`:** En `TareaForm.handleSubmit`, si `tarea.pendiente_clasificar && body.categoria_id !== null`, se añade `body.pendiente_clasificar = false` antes de la llamada a la API; el backend actualiza el campo en el mismo PATCH. **Pasos manuales pendientes:** (1) Activar Realtime en Supabase Dashboard para `tareas_table` (Database → Replication → Source → tareas_table); (2) crear `web/.env` con `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY`; (3) añadir esas mismas variables en Cloudflare Pages → Settings → Environment variables. Sin las variables, la PWA funciona exactamente igual que antes (sin Realtime). Build: 161 módulos, 258.63 kB. Commit `c9d461f` pusheado a master. |
