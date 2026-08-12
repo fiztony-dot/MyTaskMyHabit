@@ -36,8 +36,8 @@ export function useRealtimeTareas({ onInsert, onUpdate, onDelete }) {
         }
       )
       .subscribe((status, err) => {
-        console.log('[realtime] Estado canal:', status, err ? `| error: ${err.message}` : '')
-        if (err) console.error('[realtime] Error de suscripción:', err)
+        console.log('[realtime] Canal:', status, err ? err.message : '')
+        if (err) console.error('[realtime] Error:', err)
         setConectado(status === 'SUBSCRIBED')
       })
 

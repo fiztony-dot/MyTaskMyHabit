@@ -2,148 +2,127 @@ import { useState, useMemo, useCallback } from 'react'
 import { useTareas } from '../hooks/useTareas'
 import { useCategorias } from '../hooks/useCategorias'
 import { useAuth } from '../hooks/useAuth'
-import CabeceraTareas from '../components/tareas/CabeceraTareas'
+import { useFiltros, clasificarSidebar, sortPrioFecha } from '../hooks/useFiltros'
+import AppLayout from '../components/layout/AppLayout'
+import Sidebar from '../components/layout/Sidebar'
+import PanelCabecera from '../components/layout/PanelCabecera'
 import BuscadorTareas from '../components/tareas/BuscadorTareas'
-import FiltrosCategorias from '../components/tareas/FiltrosCategorias'
 import SeccionVencimiento from '../components/tareas/SeccionVencimiento'
-import SeccionCategoria from '../components/tareas/SeccionCategoria'
+import TareaItem from '../components/tareas/TareaItem'
 import TareaForm from '../components/tareas/TareaForm'
 import Spinner from '../components/Spinner'
 import '../styles/tareas.css'
+import '../styles/layout.css'
 
-// ── Configuración de secciones de vencimiento ──────────────────────────────
-const SECCIONES_VENC = [
-  { key: 'clasificar', label: 'Pendientes de clasificar', color: '#ea580c', icono: 'help_outline',    defaultOpen: true  },
-  { key: 'vencidas',   label: 'Vencidas',                 color: '#ef4444', icono: 'warning',         defaultOpen: true  },
-  { key: 'hoy',        label: 'Hoy',                      color: '#f59e0b', icono: 'today',            defaultOpen: false },
-  { key: 'semana',     label: 'Esta semana',              color: '#10b981', icono: 'date_range',       defaultOpen: false },
-  { key: 'mes',        label: 'Este mes',                 color: '#3b82f6', icono: 'calendar_month',   defaultOpen: false },
-  { key: 'adelante',   label: 'Más adelante',             color: '#6b7280', icono: 'schedule',         defaultOpen: false },
-  { key: 'sin-fecha',  label: 'Sin fecha',                color: '#9ca3af', icono: 'event_busy',       defaultOpen: false },
+// ── Secciones del panel (alineadas con los ítems del sidebar) ──────────────
+const SECCIONES_PANEL = [
+  { key: 'vencidas', label: 'Vencidas',    color: '#ef4444', icono: 'warning',    defaultOpen: true  },
+  { key: 'hoy',      label: 'Hoy',         color: '#f59e0b', icono: 'today',      defaultOpen: true  },
+  { key: 'semana',   label: 'Esta semana', color: '#10b981', icono: 'date_range', defaultOpen: false },
+  { key: 'resto',    label: 'Resto',       color: '#6b7280', icono: 'schedule',   defaultOpen: false },
 ]
 
-// ── Utilidades de fecha ─────────────────────────────────────────────────────
-function startOfDay(d) {
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate())
-}
-
-function tareaDay(tarea) {
-  const [y, m, d] = tarea.fecha_limite.substring(0, 10).split('-').map(Number)
-  return new Date(y, m - 1, d)
-}
-
-function endOfWeek(hoy) {
-  const d = new Date(hoy)
-  const diasHastaDomingo = d.getDay() === 0 ? 0 : 7 - d.getDay()
-  d.setDate(d.getDate() + diasHastaDomingo)
-  return d
-}
-
-function clasificarTarea(tarea) {
-  if (tarea.pendiente_clasificar) return 'clasificar'
-  if (!tarea.fecha_limite) return 'sin-fecha'
-
-  const hoy = startOfDay(new Date())
-  const dia = tareaDay(tarea)
-
-  if (dia < hoy) return 'vencidas'
-  if (dia.getTime() === hoy.getTime()) return 'hoy'
-
-  const finSemana = endOfWeek(hoy)
-  if (dia <= finSemana) return 'semana'
-
-  const finMes = startOfDay(new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0))
-  if (dia <= finMes) return 'mes'
-
-  return 'adelante'
+const TIEMPO_LABELS = {
+  vencidas: 'Vencidas',
+  hoy: 'Hoy',
+  semana: 'Esta semana',
+  resto: 'Resto',
+  todas: 'Todas las tareas',
 }
 
 // ── Componente principal ────────────────────────────────────────────────────
 export default function Tareas() {
   const { logout } = useAuth()
-  const { tareas, isLoading, error, cargar, toggleCompletada, crear, editar, eliminar, realtimeConectado } = useTareas()
+  const {
+    tareas, isLoading, error, cargar,
+    toggleCompletada, crear, editar, eliminar,
+    realtimeConectado,
+  } = useTareas()
   const { categorias, catData } = useCategorias()
 
-  const [vista, setVista] = useState('vencimiento')
-  const [searchOpen, setSearchOpen] = useState(false)
-  const [filterOpen, setFilterOpen] = useState(false)
+  const filtros = useFiltros(tareas, isLoading)
+  const {
+    modo, tiempos, categorias: catFiltros, contadores,
+    displayMode, tareasFiltradas: tareasBase, mostrarLimpiar,
+    irABandeja, irACompletadas, toggleTiempo, toggleCategoria, limpiarFiltros,
+  } = filtros
+
+  // ── UI state ───────────────────────────────────────────────────────────────
+  const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [searchOpen, setSearchOpen]   = useState(false)
   const [textoBusqueda, setTextoBusqueda] = useState('')
-  const [catSelec, setCatSelec] = useState(null)
-  const [mostrarCompletadas, setMostrarCompletadas] = useState(false)
-  const [formTarea, setFormTarea] = useState(null) // null=cerrado, false=nueva, obj=editar
-  const [expandirCtrl, setExpandirCtrl] = useState(null) // { open: bool, seq: number }
-  const [fadingIds, setFadingIds] = useState(new Set())
+  const [formTarea, setFormTarea]     = useState(null)
+  const [expandirCtrl, setExpandirCtrl] = useState(null)
+  const [fadingIds, setFadingIds]     = useState(new Set())
 
-  function handleExpandirTodas() {
-    setExpandirCtrl((prev) => ({
-      open: prev?.open !== true,
-      seq: (prev?.seq ?? 0) + 1,
-    }))
-  }
-
-  const handleToggle = useCallback((tarea) => {
-    const completando = !tarea.esta_completada
-    if (completando && !mostrarCompletadas) {
-      setFadingIds((prev) => { const s = new Set(prev); s.add(tarea.id); return s })
-      toggleCompletada(tarea)
-      setTimeout(() => {
-        setFadingIds((prev) => { const s = new Set(prev); s.delete(tarea.id); return s })
-      }, 400)
-    } else {
-      toggleCompletada(tarea)
-    }
-  }, [mostrarCompletadas, toggleCompletada])
-
-  // Filtrado: búsqueda + categoría + completadas (tareas en fade-out se mantienen visibles)
+  // ── Tareas: reintegrar fading + aplicar búsqueda ─────────────────────────
   const tareasFiltradas = useMemo(() => {
-    return tareas.filter((t) => {
-      if (!mostrarCompletadas && t.esta_completada && !fadingIds.has(t.id)) return false
-      if (catSelec !== null && t.categoria_id !== catSelec) return false
-      if (textoBusqueda) {
-        const texto = textoBusqueda.toLowerCase()
-        if (!t.titulo.toLowerCase().includes(texto)) return false
-      }
-      return true
-    })
-  }, [tareas, mostrarCompletadas, catSelec, textoBusqueda, fadingIds])
+    // Reintegrar items en fading que ya no están en tareasBase
+    let base = tareasBase
+    if (fadingIds.size > 0) {
+      const ids = new Set(tareasBase.map((t) => t.id))
+      const extra = tareas.filter((t) => fadingIds.has(t.id) && !ids.has(t.id))
+      base = [...tareasBase, ...extra]
+    }
+    if (!textoBusqueda) return base
+    const txt = textoBusqueda.toLowerCase()
+    return base.filter((t) => t.titulo.toLowerCase().includes(txt))
+  }, [tareasBase, fadingIds, tareas, textoBusqueda])
 
-  const totalPendientes = useMemo(
-    () => tareas.filter((t) => !t.esta_completada).length,
-    [tareas]
+  // ── Agrupar por sección temporal (4 buckets del sidebar) ─────────────────
+  const gruposPanel = useMemo(() => {
+    if (!displayMode.startsWith('sections')) return null
+    const g = { vencidas: [], hoy: [], semana: [], resto: [] }
+    tareasFiltradas.forEach((t) => {
+      g[clasificarSidebar(t)].push(t)
+    })
+    Object.values(g).forEach((arr) => arr.sort(sortPrioFecha))
+    return g
+  }, [tareasFiltradas, displayMode])
+
+  const seccionesAMostrar = useMemo(() => {
+    if (displayMode === 'sections-all') return SECCIONES_PANEL
+    if (displayMode === 'sections' || displayMode === 'sections-cat') {
+      return SECCIONES_PANEL.filter((s) => tiempos.has(s.key))
+    }
+    return []
+  }, [displayMode, tiempos])
+
+  // ── Título dinámico del panel ─────────────────────────────────────────────
+  const tituloPanelTexto = useMemo(() => {
+    if (modo === 'bandeja') return 'Bandeja de entrada'
+    if (modo === 'completadas') return 'Completadas'
+    const partes = []
+    if (!tiempos.has('todas') && tiempos.size > 0) {
+      tiempos.forEach((k) => { if (TIEMPO_LABELS[k]) partes.push(TIEMPO_LABELS[k]) })
+    }
+    catFiltros.forEach((id) => {
+      const cat = catData?.[id]
+      if (cat) partes.push(cat.titulo)
+    })
+    return partes.length > 0 ? partes.join(' · ') : 'Todas las tareas'
+  }, [modo, tiempos, catFiltros, catData])
+
+  // ── Handlers ──────────────────────────────────────────────────────────────
+  const handleToggle = useCallback(
+    (tarea) => {
+      const completando = !tarea.esta_completada
+      if (completando && modo !== 'completadas') {
+        setFadingIds((prev) => { const s = new Set(prev); s.add(tarea.id); return s })
+        toggleCompletada(tarea)
+        setTimeout(() => {
+          setFadingIds((prev) => { const s = new Set(prev); s.delete(tarea.id); return s })
+        }, 400)
+      } else {
+        toggleCompletada(tarea)
+      }
+    },
+    [modo, toggleCompletada]
   )
 
-  // Agrupación por vencimiento
-  const gruposVenc = useMemo(() => {
-    const grupos = Object.fromEntries(SECCIONES_VENC.map((s) => [s.key, []]))
-    tareasFiltradas.forEach((t) => {
-      const key = clasificarTarea(t)
-      if (grupos[key]) grupos[key].push(t)
-    })
-    return grupos
-  }, [tareasFiltradas])
-
-  // Agrupación por categoría — Map preserva orden de primera aparición
-  const gruposCat = useMemo(() => {
-    const map = new Map()
-    const sinCat = []
-    tareasFiltradas.forEach((t) => {
-      if (t.categoria_id == null) {
-        sinCat.push(t)
-      } else {
-        if (!map.has(t.categoria_id)) map.set(t.categoria_id, [])
-        map.get(t.categoria_id).push(t)
-      }
-    })
-    // Ordenar por nombre de categoría
-    const sorted = new Map(
-      [...map.entries()].sort((a, b) => {
-        const na = catData?.[a[0]]?.titulo ?? ''
-        const nb = catData?.[b[0]]?.titulo ?? ''
-        return na.localeCompare(nb, 'es')
-      })
-    )
-    return { map: sorted, sinCat }
-  }, [tareasFiltradas, catData])
+  function handleExpandirTodas() {
+    setExpandirCtrl((prev) => ({ open: prev?.open !== true, seq: (prev?.seq ?? 0) + 1 }))
+  }
 
   async function handleGuardar(body, id) {
     if (id) await editar(id, body)
@@ -155,138 +134,110 @@ export default function Tareas() {
     setSearchOpen((v) => !v)
   }
 
-  function toggleFilter() {
-    if (filterOpen) setCatSelec(null)
-    setFilterOpen((v) => !v)
+  // Cierra el sidebar móvil tras seleccionar un filtro
+  function filtroYCierra(fn) {
+    return (...args) => { fn(...args); setSidebarOpen(false) }
   }
 
   if (isLoading) return <Spinner />
 
+  // ── Render ─────────────────────────────────────────────────────────────────
   return (
-    <div className="t-page">
-      {/* ── Cabecera fija ── */}
-      <CabeceraTareas
-        totalPendientes={totalPendientes}
-        searchOpen={searchOpen}
-        filterOpen={filterOpen}
-        mostrarCompletadas={mostrarCompletadas}
-        expandirTodas={expandirCtrl}
-        realtimeConectado={realtimeConectado}
-        onSearch={toggleSearch}
-        onFilter={toggleFilter}
-        onToggleCompletadas={() => setMostrarCompletadas((v) => !v)}
-        onExpandirTodas={handleExpandirTodas}
-        onLogout={logout}
-      />
-
-      {/* ── Buscador ── */}
-      {searchOpen && (
-        <BuscadorTareas valor={textoBusqueda} onChange={setTextoBusqueda} />
-      )}
-
-      {/* ── Chips de filtro por categoría ── */}
-      {filterOpen && (
-        <FiltrosCategorias
-          categorias={categorias}
-          catSelec={catSelec}
-          onChange={setCatSelec}
+    <AppLayout
+      sidebarOpen={sidebarOpen}
+      onCloseSidebar={() => setSidebarOpen(false)}
+      sidebar={
+        <Sidebar
+          modo={modo}
+          tiempos={tiempos}
+          categorias={catFiltros}
+          contadores={contadores}
+          categoriasLista={categorias}
+          realtimeConectado={realtimeConectado}
+          mostrarLimpiar={mostrarLimpiar}
+          onBandeja={filtroYCierra(irABandeja)}
+          onCompletadas={filtroYCierra(irACompletadas)}
+          onToggleTiempo={filtroYCierra(toggleTiempo)}
+          onToggleCategoria={filtroYCierra(toggleCategoria)}
+          onLimpiar={filtroYCierra(limpiarFiltros)}
+          onLogout={logout}
         />
-      )}
-
-      {/* ── Tabs ── */}
-      <div className="t-tabs" role="tablist">
-        <button
-          role="tab"
-          className={`t-tab${vista === 'vencimiento' ? ' activo' : ''}`}
-          aria-selected={vista === 'vencimiento'}
-          onClick={() => setVista('vencimiento')}
-        >
-          Por vencimiento
-        </button>
-        <button
-          role="tab"
-          className={`t-tab${vista === 'categorias' ? ' activo' : ''}`}
-          aria-selected={vista === 'categorias'}
-          onClick={() => setVista('categorias')}
-        >
-          Por categoría
-        </button>
+      }
+    >
+      {/* ── Panel sticky (cabecera + buscador) ── */}
+      <div className="panel-sticky">
+        <PanelCabecera
+          titulo={tituloPanelTexto}
+          count={tareasFiltradas.length}
+          searchOpen={searchOpen}
+          expandirCtrl={expandirCtrl}
+          onMenuMobile={() => setSidebarOpen(true)}
+          onSearch={toggleSearch}
+          onExpandirTodas={handleExpandirTodas}
+          onNuevaTarea={() => setFormTarea(false)}
+        />
+        {searchOpen && (
+          <BuscadorTareas valor={textoBusqueda} onChange={setTextoBusqueda} />
+        )}
       </div>
 
-      {/* ── Error ── */}
-      {error && (
-        <div className="t-error">
-          <p>{error}</p>
-          <button onClick={cargar}>Reintentar</button>
-        </div>
-      )}
+      {/* ── Cuerpo del panel ── */}
+      <div className="panel-body">
+        {error && (
+          <div className="t-error">
+            <p>{error}</p>
+            <button onClick={cargar}>Reintentar</button>
+          </div>
+        )}
 
-      {/* ── Estado vacío ── */}
-      {!error && tareasFiltradas.length === 0 && (
-        <div className="t-vacio">
-          <span className="material-icons">
-            {textoBusqueda ? 'search_off' : 'check_circle_outline'}
-          </span>
-          <p className="t-vacio-titulo">
-            {textoBusqueda
-              ? `Sin resultados para "${textoBusqueda}"`
-              : catSelec !== null
-              ? 'No hay tareas en esta categoría'
-              : 'No hay tareas pendientes'}
-          </p>
-          {textoBusqueda && (
-            <p className="t-vacio-sub">Prueba con otras palabras</p>
-          )}
-        </div>
-      )}
+        {!error && tareasFiltradas.length === 0 && (
+          <div className="t-vacio">
+            <span className="material-icons">
+              {textoBusqueda ? 'search_off' : 'check_circle_outline'}
+            </span>
+            <p className="t-vacio-titulo">
+              {textoBusqueda ? `Sin resultados para "${textoBusqueda}"` : 'Sin tareas'}
+            </p>
+            {textoBusqueda && <p className="t-vacio-sub">Prueba con otras palabras</p>}
+          </div>
+        )}
 
-      {/* ── Vista: Por vencimiento ── */}
-      {vista === 'vencimiento' && (
-        <div className="t-lista" role="tabpanel">
-          {SECCIONES_VENC.map((s) => (
-            <SeccionVencimiento
-              key={s.key}
-              config={s}
-              tareas={gruposVenc[s.key]}
-              catData={catData}
-              onEdit={setFormTarea}
-              onToggle={handleToggle}
-              expandirCtrl={expandirCtrl}
-              fadingIds={fadingIds}
-            />
-          ))}
-        </div>
-      )}
+        {/* Lista plana (bandeja, completadas, categoría sin tiempo) */}
+        {(displayMode === 'flat' || displayMode === 'flat-desc') && tareasFiltradas.length > 0 && (
+          <div className="t-lista">
+            <div className="t-section">
+              {tareasFiltradas.map((t) => (
+                <TareaItem
+                  key={t.id}
+                  tarea={t}
+                  catData={catData}
+                  onEdit={setFormTarea}
+                  onToggle={handleToggle}
+                  fadingOut={fadingIds.has(t.id)}
+                />
+              ))}
+            </div>
+          </div>
+        )}
 
-      {/* ── Vista: Por categoría ── */}
-      {vista === 'categorias' && (
-        <div className="t-lista" role="tabpanel">
-          {Array.from(gruposCat.map.entries()).map(([catId, catTareas]) => (
-            <SeccionCategoria
-              key={catId}
-              categoria={catData?.[catId]}
-              tareas={catTareas}
-              catData={catData}
-              onEdit={setFormTarea}
-              onToggle={handleToggle}
-              expandirCtrl={expandirCtrl}
-              fadingIds={fadingIds}
-            />
-          ))}
-          {gruposCat.sinCat.length > 0 && (
-            <SeccionCategoria
-              key="sin-categoria"
-              categoria={null}
-              tareas={gruposCat.sinCat}
-              catData={catData}
-              onEdit={setFormTarea}
-              onToggle={handleToggle}
-              expandirCtrl={expandirCtrl}
-              fadingIds={fadingIds}
-            />
-          )}
-        </div>
-      )}
+        {/* Lista por secciones temporales */}
+        {gruposPanel && seccionesAMostrar.length > 0 && (
+          <div className="t-lista">
+            {seccionesAMostrar.map((s) => (
+              <SeccionVencimiento
+                key={s.key}
+                config={s}
+                tareas={gruposPanel[s.key]}
+                catData={catData}
+                onEdit={setFormTarea}
+                onToggle={handleToggle}
+                expandirCtrl={expandirCtrl}
+                fadingIds={fadingIds}
+              />
+            ))}
+          </div>
+        )}
+      </div>
 
       {/* ── FAB nueva tarea ── */}
       <button
@@ -307,6 +258,6 @@ export default function Tareas() {
           onCerrar={() => setFormTarea(null)}
         />
       )}
-    </div>
+    </AppLayout>
   )
 }
