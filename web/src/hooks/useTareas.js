@@ -56,7 +56,8 @@ export function useTareas() {
 
   const crear = useCallback(async (body) => {
     const nueva = await api.crearTarea(body)
-    setTareas((prev) => [...prev, nueva])
+    // Realtime puede haber llegado antes que el POST: evitar duplicado
+    setTareas((prev) => prev.some((t) => t.id === nueva.id) ? prev : [...prev, nueva])
     return nueva
   }, [])
 
