@@ -7,10 +7,10 @@
  *
  * Ejemplos:
  *   WEBHOOK_SECRET=xxx node scripts/test.js
- *   WEBHOOK_SECRET=xxx node scripts/test.js https://mytaskmyhabit-api.onrender.com
+ *   WEBHOOK_SECRET=xxx node scripts/test.js https://mytaskmyhabit-production.up.railway.app
  */
 
-const BASE_URL = process.argv[2] || 'https://mytaskmyhabit-api.onrender.com';
+const BASE_URL = process.argv[2] || 'https://mytaskmyhabit-production.up.railway.app';
 const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET;
 
 if (!WEBHOOK_SECRET) {

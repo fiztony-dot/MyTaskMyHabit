@@ -1,7 +1,7 @@
 import PostalMime from 'postal-mime';
 
-const BACKEND_URL = 'https://mytaskmyhabit-api.onrender.com/webhooks/email';
-const FETCH_TIMEOUT_MS = 30_000; // Render puede tardar ~30s en despertar del sleep
+const BACKEND_URL = 'https://mytaskmyhabit-production.up.railway.app/webhooks/email';
+const FETCH_TIMEOUT_MS = 30_000;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

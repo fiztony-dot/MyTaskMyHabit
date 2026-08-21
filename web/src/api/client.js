@@ -1,6 +1,6 @@
 import axios from 'axios'
 
-const BASE_URL = 'https://mytaskmyhabit-api.onrender.com'
+const BASE_URL = 'https://mytaskmyhabit-production.up.railway.app'
 
 // AuthContext registra aquí su función logout para que el interceptor la llame en 401
 let onUnauthorized = null

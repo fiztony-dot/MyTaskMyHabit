@@ -104,7 +104,7 @@ Los siguientes pasos deben realizarse manualmente en el dashboard de SendGrid **
 3. **Domain**: usar el dominio asignado por SendGrid (si no tienes dominio propio, contactar soporte o usar la dirección que SendGrid proporcione)
 4. **Destination URL**:
    ```
-   https://mytaskmyhabit-api.onrender.com/webhooks/email?secret=TU_WEBHOOK_SECRET
+   https://mytaskmyhabit-production.up.railway.app/webhooks/email?secret=TU_WEBHOOK_SECRET
    ```
    — sustituir `TU_WEBHOOK_SECRET` por el valor generado con `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`
 5. **Check spam** y **POST the raw, full MIME message**: dejar **desmarcados** (queremos el parse estructurado con campos individuales)
@@ -129,7 +129,7 @@ Crear un contacto llamado **"Tareas"** (o similar) con la dirección `SENDGRID_I
 ### f) Verificar el webhook
 
 ```bash
-WEBHOOK_SECRET=tu_secret node scripts/test_webhook.js https://mytaskmyhabit-api.onrender.com
+WEBHOOK_SECRET=tu_secret node scripts/test_webhook.js https://mytaskmyhabit-production.up.railway.app
 ```
 
 ---

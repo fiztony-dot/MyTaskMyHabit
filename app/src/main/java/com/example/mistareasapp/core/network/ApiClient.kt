@@ -16,9 +16,9 @@ import kotlinx.serialization.json.Json
  */
 object ApiClient {
 
-    // URL base configurable — apunta al backend en Render
+    // URL base configurable — apunta al backend en Railway
     // En desarrollo local se puede cambiar a http://10.0.2.2:10000 (emulador)
-    const val BASE_URL = "https://mytaskmyhabit-api.onrender.com"
+    const val BASE_URL = "https://mytaskmyhabit-production.up.railway.app"
 
     private var cachedToken: String? = null
 

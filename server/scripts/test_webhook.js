@@ -7,7 +7,7 @@
  *
  * Ejemplos:
  *   node scripts/test_webhook.js                             # local
- *   node scripts/test_webhook.js https://mytaskmyhabit-api.onrender.com
+ *   node scripts/test_webhook.js https://mytaskmyhabit-production.up.railway.app
  *
  * Variables de entorno:
  *   WEBHOOK_SECRET  — debe coincidir con la configurada en el servidor

@@ -137,7 +137,7 @@ Configurar en el Web Service:
 ### Verificar despliegue
 
 ```bash
-curl https://mytaskmyhabit-api.onrender.com/health
+curl https://mytaskmyhabit-production.up.railway.app/health
 # Debería devolver: {"status":"ok","db":"connected"}
 ```
 
