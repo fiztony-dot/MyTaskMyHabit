@@ -1,0 +1,15 @@
+name            = "mytaskmyhabit-worker"
+main            = "src/index.js"
+compatibility_date = "2025-01-01"
+
+# ── Variables no sensibles ────────────────────────────────────────────────────
+[vars]
+SUPABASE_URL        = ""          # ej. https://xxxx.supabase.co
+SENDGRID_FROM_EMAIL = ""          # ej. tareas@midominio.com (opcional)
+
+# ── Secrets — añadir con: npx wrangler secret put <NAME> ─────────────────────
+# JWT_SECRET                — clave HMAC para firmar/verificar tokens JWT
+# AUTH_USERS                — JSON: [{"username":"tony","password_hash":"..."}]
+# SUPABASE_SERVICE_ROLE_KEY — service-role key de Supabase (bypasa RLS)
+# WEBHOOK_SECRET            — token de autenticación del email webhook
+# SENDGRID_API_KEY          — API key de SendGrid (opcional, para notificaciones)
