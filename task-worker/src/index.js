@@ -1,3 +1,5 @@
+import bcrypt from 'bcryptjs'
+
 // ── CORS ──────────────────────────────────────────────────────────────────────
 
 const ALLOWED_ORIGINS = [
@@ -118,22 +120,179 @@ async function supabaseRequest(env, method, path, body) {
   }
 }
 
-// ── Stub handlers ─────────────────────────────────────────────────────────────
+// ── Auth / JWT helpers ────────────────────────────────────────────────────────
+
+// Parsea AUTH_USERS: "user:bcryptHash,user2:hash2" → [{ username, passwordHash }]
+// Port exacto de server/src/config.js parseUsers()
+function parseUsers(raw) {
+  return (raw || '')
+    .split(',')
+    .map((pair) => pair.trim())
+    .filter(Boolean)
+    .map((pair) => {
+      const sep = pair.indexOf(':')
+      if (sep === -1) return null
+      return { username: pair.slice(0, sep), passwordHash: pair.slice(sep + 1) }
+    })
+    .filter(Boolean)
+}
+
+// Codifica Uint8Array/ArrayBuffer a base64url (sin padding)
+function b64urlEncode(bytes) {
+  let binary = ''
+  const view = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes)
+  for (const b of view) binary += String.fromCharCode(b)
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+}
+
+// Firma un JWT HS256 compatible con jsonwebtoken
+async function signJWT(payload, secret) {
+  const headerB64  = b64urlEncode(new TextEncoder().encode(JSON.stringify({ alg: 'HS256', typ: 'JWT' })))
+  const payloadB64 = b64urlEncode(new TextEncoder().encode(JSON.stringify(payload)))
+  const signingInput = `${headerB64}.${payloadB64}`
+  const key = await crypto.subtle.importKey(
+    'raw', new TextEncoder().encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
+  )
+  const sigBytes = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(signingInput))
+  return `${signingInput}.${b64urlEncode(new Uint8Array(sigBytes))}`
+}
+
+// ── Webhook helpers (port literal de server/src/routes/webhooks.js) ────────────
+
+function extraerEmail(fromStr) {
+  if (!fromStr) return null
+  const match = fromStr.match(/<([^>]+)>/)
+  return match ? match[1].trim() : fromStr.trim()
+}
+
+function limpiarCuerpo(texto) {
+  if (!texto) return null
+  const lineas = texto.split('\n')
+  const resultado = []
+  for (const linea of lineas) {
+    const trim = linea.trim()
+    if (trim === '--' || trim === '—' || trim === '---') break
+    if (trim.startsWith('>')) continue
+    if (/^(On\s|El\s).+wrote\s*:/i.test(trim) || /^(On\s|El\s).+escribi[oó]\s*:/i.test(trim)) break
+    resultado.push(linea)
+  }
+  const limpio = resultado.join('\n').trim()
+  if (!limpio) return null
+  return limpio.length > 1000 ? limpio.substring(0, 997) + '...' : limpio
+}
+
+// ── Handlers ──────────────────────────────────────────────────────────────────
 
 async function healthCheck(_req, _env) {
   return json({ status: 'ok' })
 }
 
-async function handleLogin(_req, _env) {
-  return json({ ok: true })
+async function handleLogin(request, env) {
+  let body
+  try { body = await request.json() } catch { body = {} }
+  const { username, password } = body || {}
+
+  if (!username || !password) {
+    return json({ error: 'Se requieren username y password' }, 400)
+  }
+
+  const users = parseUsers(env.AUTH_USERS)
+  const match = users.find((u) => u.username === username)
+  if (!match) return json({ error: 'Usuario o contraseña incorrectos' }, 401)
+
+  const valid = await bcrypt.compare(password, match.passwordHash)
+  if (!valid) return json({ error: 'Usuario o contraseña incorrectos' }, 401)
+
+  const now = Math.floor(Date.now() / 1000)
+  const token = await signJWT(
+    { sub: username, iat: now, exp: now + 30 * 24 * 3600 },
+    env.JWT_SECRET
+  )
+  return json({ token, user: { username } })
 }
 
-async function handleMe(_req, _env) {
-  return json({ ok: true })
+async function handleMe(request, env) {
+  const auth = await requireAuth(request, env)
+  if (auth.error) return auth.error
+
+  const path = `usuarios?username=eq.${encodeURIComponent(auth.user.sub)}&select=id,username,nombre_visible`
+  const { data, error } = await supabaseRequest(env, 'GET', path)
+  if (error || !data || data.length === 0) {
+    return json({ error: 'Usuario no encontrado en la base de datos' }, 404)
+  }
+  const u = data[0]
+  return json({ user: { id: Number(u.id), username: u.username, nombreVisible: u.nombre_visible } })
 }
 
-async function handleWebhookEmail(_req, _env) {
-  return json({ ok: true })
+async function handleWebhookEmail(request, env) {
+  const url = new URL(request.url)
+  if (!env.WEBHOOK_SECRET || url.searchParams.get('secret') !== env.WEBHOOK_SECRET) {
+    return json({ error: 'Forbidden' }, 403)
+  }
+
+  try {
+    const formData = await request.formData()
+    const subject = formData.get('subject') || ''
+    const text    = formData.get('text')    || ''
+    const from    = formData.get('from')    || ''
+
+    const titulo          = (subject || 'Sin asunto').substring(0, 255)
+    const descripcion     = limpiarCuerpo(text)
+    const emailRemitente  = extraerEmail(from)
+
+    const { data, error } = await supabaseRequest(env, 'POST', 'tareas_table', {
+      titulo,
+      descripcion,
+      usuario_id:           1,
+      categoria_id:         null,
+      pendiente_clasificar: true,
+      prioridad:            'MEDIA',
+      esta_completada:      false,
+    })
+
+    if (error || !data || data.length === 0) {
+      console.error('[webhook/email] Error insertando tarea:', error)
+      return json({ ok: false, error: 'Internal error logged' })
+    }
+
+    const tareaId = data[0].id
+    console.log(`[webhook/email] Tarea id=${tareaId} creada: "${titulo}"`)
+
+    if (emailRemitente && env.SENDGRID_API_KEY && env.SENDGRID_FROM_EMAIL) {
+      try {
+        const emailText = [
+          'Tu tarea ha sido creada en MyTaskMyHabit:',
+          '',
+          `📋 ${titulo}`,
+          '',
+          'Está pendiente de clasificar. Ábrela en la app para asignarle fecha, categoría y prioridad.',
+          '',
+          '— MyTaskMyHabit',
+        ].join('\n')
+        await fetch('https://api.sendgrid.com/v3/mail/send', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${env.SENDGRID_API_KEY}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            personalizations: [{ to: [{ email: emailRemitente }] }],
+            from:    { email: env.SENDGRID_FROM_EMAIL },
+            subject: `✅ Tarea creada: ${titulo}`,
+            content: [{ type: 'text/plain', value: emailText }],
+          }),
+        })
+        console.log(`[webhook/email] Confirmación enviada a ${emailRemitente}`)
+      } catch (emailErr) {
+        console.error('[webhook/email] Error enviando confirmación:', emailErr.message)
+      }
+    } else {
+      console.log('[webhook/email] Confirmación omitida (SENDGRID_API_KEY o FROM_EMAIL no configurados)')
+    }
+
+    return json({ ok: true, tareaId })
+  } catch (err) {
+    console.error('[webhook/email] Error procesando webhook:', err)
+    return json({ ok: false, error: 'Internal error logged' })
+  }
 }
 
 async function handleGetCategorias(_req, _env) {

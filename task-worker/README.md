@@ -90,9 +90,17 @@ Siempre incluye `Prefer: return=representation` para obtener el recurso creado/a
 `data` es el array/objeto parseado; `error` es `null` en caso de éxito o
 `{ status, message }` en caso de fallo.
 
+## Dependencias
+
+| Paquete    | Uso                                              |
+|------------|--------------------------------------------------|
+| `bcryptjs` | Verificación de contraseñas en `handleLogin`     |
+| `wrangler` | Dev/deploy (devDependency)                       |
+
 ## Historial de iteraciones
 
 | Iteración | Cambios |
 |-----------|---------|
 | 1 — 2026-08-23 | Estructura base: wrangler.toml, package.json, src/index.js con router + CORS + stubs |
-| 2 — 2026-08-23 | Helpers compartidos: requireAuth, resolveUser, supabaseRequest |
+| 2 — 2026-08-23 | Helpers compartidos: requireAuth (HS256 Web Crypto), resolveUser, supabaseRequest |
+| 3 — 2026-08-23 | handleLogin (bcrypt+signJWT), handleMe (Supabase), handleWebhookEmail (formData+SendGrid v3 API) |
