@@ -295,20 +295,90 @@ async function handleWebhookEmail(request, env) {
   }
 }
 
-async function handleGetCategorias(_req, _env) {
-  return json([])
+async function handleGetCategorias(request, env) {
+  const auth = await requireAuth(request, env)
+  if (auth.error) return auth.error
+  const usuarioId = await resolveUser(auth.user.sub, env)
+  if (usuarioId === null) return json({ error: 'Usuario no encontrado en la base de datos' }, 404)
+
+  const path = `categorias_table?usuario_id=eq.${usuarioId}&select=id,titulo,icono,fecha_creacion,activa&order=fecha_creacion.asc`
+  const { data, error } = await supabaseRequest(env, 'GET', path)
+  if (error) return json({ error: error.message }, error.status || 500)
+  return json({ data })
 }
 
-async function handlePostCategoria(_req, _env) {
-  return json({ ok: true }, 201)
+async function handlePostCategoria(request, env) {
+  const auth = await requireAuth(request, env)
+  if (auth.error) return auth.error
+  const usuarioId = await resolveUser(auth.user.sub, env)
+  if (usuarioId === null) return json({ error: 'Usuario no encontrado en la base de datos' }, 404)
+
+  let body
+  try { body = await request.json() } catch { body = {} }
+  const { titulo, icono } = body || {}
+
+  if (!titulo || titulo.trim() === '') {
+    return json({ error: 'El campo titulo es obligatorio' }, 400)
+  }
+
+  const { data, error } = await supabaseRequest(env, 'POST', 'categorias_table', {
+    usuario_id: usuarioId,
+    titulo:     titulo.trim(),
+    icono:      icono || 'list',
+  })
+  if (error) return json({ error: error.message }, error.status || 500)
+  return json({ data: Array.isArray(data) ? data[0] : data }, 201)
 }
 
-async function handlePutCategoria(_req, _env, _id) {
-  return json({ ok: true })
+async function handlePutCategoria(request, env, catId) {
+  const id = parseInt(catId)
+  if (isNaN(id)) return json({ error: 'ID inválido' }, 400)
+
+  const auth = await requireAuth(request, env)
+  if (auth.error) return auth.error
+  const usuarioId = await resolveUser(auth.user.sub, env)
+  if (usuarioId === null) return json({ error: 'Usuario no encontrado en la base de datos' }, 404)
+
+  const { data: existing } = await supabaseRequest(
+    env, 'GET', `categorias_table?id=eq.${id}&usuario_id=eq.${usuarioId}&select=id`
+  )
+  if (!existing || existing.length === 0) return json({ error: 'Categoría no encontrada' }, 404)
+
+  let body
+  try { body = await request.json() } catch { body = {} }
+  const { titulo, icono, activa } = body || {}
+
+  const updates = {}
+  if (titulo !== undefined) updates.titulo = titulo.trim()
+  if (icono  !== undefined) updates.icono  = icono
+  if (activa !== undefined) updates.activa = activa
+
+  if (Object.keys(updates).length === 0) {
+    return json({ error: 'No se proporcionaron campos para actualizar' }, 400)
+  }
+
+  const { data, error } = await supabaseRequest(
+    env, 'PATCH', `categorias_table?id=eq.${id}&usuario_id=eq.${usuarioId}`, updates
+  )
+  if (error) return json({ error: error.message }, error.status || 500)
+  return json({ data: Array.isArray(data) ? data[0] : data })
 }
 
-async function handleDeleteCategoria(_req, _env, _id) {
-  return json({ ok: true })
+async function handleDeleteCategoria(request, env, catId) {
+  const id = parseInt(catId)
+  if (isNaN(id)) return json({ error: 'ID inválido' }, 400)
+
+  const auth = await requireAuth(request, env)
+  if (auth.error) return auth.error
+  const usuarioId = await resolveUser(auth.user.sub, env)
+  if (usuarioId === null) return json({ error: 'Usuario no encontrado en la base de datos' }, 404)
+
+  const { data, error } = await supabaseRequest(
+    env, 'DELETE', `categorias_table?id=eq.${id}&usuario_id=eq.${usuarioId}`
+  )
+  if (error) return json({ error: error.message }, error.status || 500)
+  if (!data || data.length === 0) return json({ error: 'Categoría no encontrada' }, 404)
+  return json({ data: { deleted: true, id } })
 }
 
 async function handleGetTareas(_req, _env) {
