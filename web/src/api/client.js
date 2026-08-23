@@ -1,6 +1,6 @@
 import axios from 'axios'
 
-const BASE_URL = 'https://mytaskmyhabit-production.up.railway.app'
+const BASE_URL = import.meta.env.VITE_BACKEND_URL || 'https://mytaskmyhabit-worker.fiztony.workers.dev'
 
 // AuthContext registra aquí su función logout para que el interceptor la llame en 401
 let onUnauthorized = null
