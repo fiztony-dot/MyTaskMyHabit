@@ -4,7 +4,7 @@ compatibility_date = "2025-01-01"
 
 # ── Variables no sensibles ────────────────────────────────────────────────────
 [vars]
-SUPABASE_URL        = ""          # ej. https://xxxx.supabase.co
+SUPABASE_URL        = "https://clpowitmhoibiuszetpg.supabase.co"
 SENDGRID_FROM_EMAIL = ""          # ej. tareas@midominio.com (opcional)
 
 # ── Secrets — añadir con: npx wrangler secret put <NAME> ─────────────────────

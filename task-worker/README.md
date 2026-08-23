@@ -3,6 +3,8 @@
 Cloudflare Worker que actúa como backend HTTP para MyTaskMyHabit.  
 Reemplaza el servidor Node/Express alojado en Railway.
 
+**URL de producción:** `https://mytaskmyhabit-worker.fiztony.workers.dev`
+
 ## Estructura
 
 ```
@@ -106,3 +108,4 @@ Siempre incluye `Prefer: return=representation` para obtener el recurso creado/a
 | 3 — 2026-08-23 | handleLogin (bcrypt+signJWT), handleMe (Supabase), handleWebhookEmail (formData+SendGrid v3 API) |
 | 4 — 2026-08-23 | handleGetCategorias, handlePostCategoria, handlePutCategoria, handleDeleteCategoria (port de categorias.js) |
 | 5 — 2026-08-23 | handleGetTareas (sort JS), handleGetTarea, handlePostTarea, handlePutTarea, handlePatchCompletar, handleDeleteTarea (port de tareas.js) |
+| 6 — 2026-08-23 | Deploy a producción: `wrangler deploy` → https://mytaskmyhabit-worker.fiztony.workers.dev |
