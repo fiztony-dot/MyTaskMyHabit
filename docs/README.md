@@ -25,9 +25,12 @@ Esta carpeta contiene toda la documentación del proyecto organizada por temas.
 ### 🗂️ Organización
 - [`ORGANIZACION_DOCUMENTACION.md`](ORGANIZACION_DOCUMENTACION.md) - Criterios y estructura de la documentación.
 
+### ☁️ Infraestructura / Backend
+- [`../task-worker/README.md`](../task-worker/README.md) - Cloudflare Worker (backend HTTP): endpoints, helpers, variables de entorno e historial de iteraciones.
+
 ---
 
-**Última actualización:** 2026-05-01
+**Última actualización:** 2026-08-23
 
 
 

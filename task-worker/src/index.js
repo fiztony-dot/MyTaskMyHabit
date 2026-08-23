@@ -29,6 +29,95 @@ function notFound() {
   return json({ error: 'Not Found' }, 404)
 }
 
+// Decodifica base64url → Uint8Array (sin padding ni chars URL-safe)
+function b64url(str) {
+  const padded = str + '==='.slice((str.length + 3) % 4)
+  const base64 = padded.replace(/-/g, '+').replace(/_/g, '/')
+  return Uint8Array.from(atob(base64), (c) => c.charCodeAt(0))
+}
+
+// ── requireAuth ───────────────────────────────────────────────────────────────
+// Extrae y verifica el JWT Bearer del header Authorization.
+// Devuelve { user: payload } si es válido o { error: Response } si no lo es.
+
+async function requireAuth(request, env) {
+  const authHeader = request.headers.get('Authorization') ?? ''
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : ''
+
+  if (!token) {
+    return { error: json({ error: 'Falta el token de autenticación' }, 401) }
+  }
+
+  try {
+    const parts = token.split('.')
+    if (parts.length !== 3) throw new Error('malformed')
+
+    const [headerB64, payloadB64, sigB64] = parts
+    const payload = JSON.parse(new TextDecoder().decode(b64url(payloadB64)))
+
+    if (payload.exp && payload.exp * 1000 < Date.now()) {
+      return { error: json({ error: 'Token inválido o expirado' }, 401) }
+    }
+
+    const keyBytes = new TextEncoder().encode(env.JWT_SECRET)
+    const key = await crypto.subtle.importKey(
+      'raw', keyBytes, { name: 'HMAC', hash: 'SHA-256' }, false, ['verify']
+    )
+    const signedData = new TextEncoder().encode(headerB64 + '.' + payloadB64)
+    const valid = await crypto.subtle.verify('HMAC', key, b64url(sigB64), signedData)
+
+    if (!valid) return { error: json({ error: 'Token inválido o expirado' }, 401) }
+
+    return { user: payload }
+  } catch {
+    return { error: json({ error: 'Token inválido o expirado' }, 401) }
+  }
+}
+
+// ── resolveUser ───────────────────────────────────────────────────────────────
+// Busca el usuario por username en Supabase y devuelve su id numérico o null.
+
+async function resolveUser(username, env) {
+  const url = `${env.SUPABASE_URL}/rest/v1/usuarios?username=eq.${encodeURIComponent(username)}&select=id`
+  const res = await fetch(url, {
+    headers: {
+      apikey:        env.SUPABASE_SERVICE_ROLE_KEY,
+      Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+    },
+  })
+  const rows = await res.json()
+  if (!Array.isArray(rows) || rows.length === 0) return null
+  return Number(rows[0].id)
+}
+
+// ── supabaseRequest ───────────────────────────────────────────────────────────
+// Realiza una petición autenticada a la REST API de Supabase.
+// Devuelve { data, error }.
+
+async function supabaseRequest(env, method, path, body) {
+  const url = `${env.SUPABASE_URL}/rest/v1/${path}`
+  const headers = {
+    apikey:           env.SUPABASE_SERVICE_ROLE_KEY,
+    Authorization:    `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+    'Content-Type':   'application/json',
+    Prefer:           'return=representation',
+  }
+  const init = { method, headers }
+  if (body !== undefined) init.body = JSON.stringify(body)
+
+  try {
+    const res = await fetch(url, init)
+    if (!res.ok) {
+      const text = await res.text()
+      return { data: null, error: { status: res.status, message: text } }
+    }
+    const data = await res.json()
+    return { data, error: null }
+  } catch (err) {
+    return { data: null, error: { status: 503, message: err.message } }
+  }
+}
+
 // ── Stub handlers ─────────────────────────────────────────────────────────────
 
 async function healthCheck(_req, _env) {
