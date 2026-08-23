@@ -2,6 +2,9 @@ name = "mytaskmyhabit-email-worker"
 main = "src/index.js"
 compatibility_date = "2024-01-01"
 
-# WEBHOOK_SECRET NO se define aquí — se configura como secret:
-#   npx wrangler secret put WEBHOOK_SECRET
-# y se introduce el valor cuando lo solicita el CLI.
+# ── Variables no sensibles ────────────────────────────────────────────────────
+[vars]
+BACKEND_URL = ""   # configurar en Dashboard → Workers → Settings → Variables
+
+# ── Secrets — añadir con: npx wrangler secret put <NAME> ─────────────────────
+# WEBHOOK_SECRET — token de autenticación del email webhook
