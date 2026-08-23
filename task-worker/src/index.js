@@ -182,6 +182,16 @@ function limpiarCuerpo(texto) {
   return limpio.length > 1000 ? limpio.substring(0, 997) + '...' : limpio
 }
 
+// ── Tareas helpers ───────────────────────────────────────────────────────────
+
+const TAREAS_SELECT = [
+  'id', 'titulo', 'descripcion', 'esta_completada', 'prioridad', 'fecha_creacion',
+  'fecha_limite', 'hora_limite', 'categoria_id', 'repeticion', 'pendiente_clasificar',
+  'repeticion_fin', 'repeticion_veces', 'repeticion_contador',
+].join(',')
+const PRIORIDADES = ['ALTA', 'MEDIA', 'BAJA']
+const ORDEN_PRIORIDAD = { ALTA: 1, MEDIA: 2, BAJA: 3 }
+
 // ── Handlers ──────────────────────────────────────────────────────────────────
 
 async function healthCheck(_req, _env) {
@@ -381,28 +391,185 @@ async function handleDeleteCategoria(request, env, catId) {
   return json({ data: { deleted: true, id } })
 }
 
-async function handleGetTareas(_req, _env) {
-  return json([])
+async function handleGetTareas(request, env) {
+  const auth = await requireAuth(request, env)
+  if (auth.error) return auth.error
+  const usuarioId = await resolveUser(auth.user.sub, env)
+  if (usuarioId === null) return json({ error: 'Usuario no encontrado en la base de datos' }, 404)
+
+  const url = new URL(request.url)
+  const pendientes = url.searchParams.get('pendientes') === 'true'
+
+  let path = `tareas_table?usuario_id=eq.${usuarioId}&select=${TAREAS_SELECT}`
+  if (pendientes) path += '&esta_completada=eq.false'
+
+  const { data, error } = await supabaseRequest(env, 'GET', path)
+  if (error) return json({ error: error.message }, error.status || 500)
+
+  const rows = (data || []).sort(
+    (a, b) =>
+      (ORDEN_PRIORIDAD[a.prioridad] ?? 9) - (ORDEN_PRIORIDAD[b.prioridad] ?? 9) ||
+      new Date(a.fecha_creacion) - new Date(b.fecha_creacion)
+  )
+  return json({ data: rows })
 }
 
-async function handleGetTarea(_req, _env, _id) {
-  return json({ ok: true })
+async function handleGetTarea(request, env, tareaId) {
+  const id = parseInt(tareaId)
+  if (isNaN(id)) return json({ error: 'ID inválido' }, 400)
+
+  const auth = await requireAuth(request, env)
+  if (auth.error) return auth.error
+  const usuarioId = await resolveUser(auth.user.sub, env)
+  if (usuarioId === null) return json({ error: 'Usuario no encontrado en la base de datos' }, 404)
+
+  const { data, error } = await supabaseRequest(
+    env, 'GET', `tareas_table?id=eq.${id}&usuario_id=eq.${usuarioId}&select=${TAREAS_SELECT}`
+  )
+  if (error) return json({ error: error.message }, error.status || 500)
+  if (!data || data.length === 0) return json({ error: 'Tarea no encontrada' }, 404)
+  return json({ data: data[0] })
 }
 
-async function handlePostTarea(_req, _env) {
-  return json({ ok: true }, 201)
+async function handlePostTarea(request, env) {
+  const auth = await requireAuth(request, env)
+  if (auth.error) return auth.error
+  const usuarioId = await resolveUser(auth.user.sub, env)
+  if (usuarioId === null) return json({ error: 'Usuario no encontrado en la base de datos' }, 404)
+
+  let body
+  try { body = await request.json() } catch { body = {} }
+  const {
+    titulo, descripcion, prioridad, fecha_limite, hora_limite,
+    categoria_id, repeticion, pendiente_clasificar,
+    repeticion_fin, repeticion_veces,
+  } = body || {}
+
+  if (!titulo || titulo.trim() === '') {
+    return json({ error: 'El campo titulo es obligatorio' }, 400)
+  }
+
+  const priori = prioridad ? String(prioridad).toUpperCase() : 'MEDIA'
+  if (!PRIORIDADES.includes(priori)) {
+    return json({ error: 'Prioridad inválida. Valores: ALTA, MEDIA, BAJA' }, 400)
+  }
+
+  if (categoria_id != null) {
+    const { data: catCheck } = await supabaseRequest(
+      env, 'GET', `categorias_table?id=eq.${categoria_id}&usuario_id=eq.${usuarioId}&select=id`
+    )
+    if (!catCheck || catCheck.length === 0) {
+      return json({ error: 'La categoría especificada no existe o no pertenece al usuario' }, 400)
+    }
+  }
+
+  const { data, error } = await supabaseRequest(env, 'POST', 'tareas_table', {
+    usuario_id:           usuarioId,
+    titulo:               titulo.trim(),
+    descripcion:          descripcion || null,
+    prioridad:            priori,
+    fecha_limite:         fecha_limite || null,
+    hora_limite:          hora_limite || null,
+    categoria_id:         categoria_id || null,
+    repeticion:           repeticion || 'Sin repetición',
+    pendiente_clasificar: pendiente_clasificar || false,
+    repeticion_fin:       repeticion_fin || null,
+    repeticion_veces:     repeticion_veces || null,
+  })
+  if (error) return json({ error: error.message }, error.status || 500)
+  return json({ data: Array.isArray(data) ? data[0] : data }, 201)
 }
 
-async function handlePutTarea(_req, _env, _id) {
-  return json({ ok: true })
+async function handlePutTarea(request, env, tareaId) {
+  const id = parseInt(tareaId)
+  if (isNaN(id)) return json({ error: 'ID inválido' }, 400)
+
+  const auth = await requireAuth(request, env)
+  if (auth.error) return auth.error
+  const usuarioId = await resolveUser(auth.user.sub, env)
+  if (usuarioId === null) return json({ error: 'Usuario no encontrado en la base de datos' }, 404)
+
+  const { data: existing } = await supabaseRequest(
+    env, 'GET', `tareas_table?id=eq.${id}&usuario_id=eq.${usuarioId}&select=id`
+  )
+  if (!existing || existing.length === 0) return json({ error: 'Tarea no encontrada' }, 404)
+
+  let body
+  try { body = await request.json() } catch { body = {} }
+
+  const allowedFields = [
+    'titulo', 'descripcion', 'prioridad', 'fecha_limite', 'hora_limite',
+    'categoria_id', 'repeticion', 'pendiente_clasificar', 'esta_completada',
+    'repeticion_fin', 'repeticion_veces', 'repeticion_contador',
+  ]
+  const updates = {}
+  for (const field of allowedFields) {
+    if ((body || {})[field] === undefined) continue
+    let val = body[field]
+    if (field === 'prioridad') {
+      val = String(val).toUpperCase()
+      if (!PRIORIDADES.includes(val)) return json({ error: 'Prioridad inválida' }, 400)
+    }
+    if (field === 'categoria_id' && val != null) {
+      const { data: catCheck } = await supabaseRequest(
+        env, 'GET', `categorias_table?id=eq.${val}&usuario_id=eq.${usuarioId}&select=id`
+      )
+      if (!catCheck || catCheck.length === 0) return json({ error: 'Categoría no encontrada' }, 400)
+    }
+    updates[field] = val
+  }
+
+  if (Object.keys(updates).length === 0) {
+    return json({ error: 'No se proporcionaron campos para actualizar' }, 400)
+  }
+
+  const { data, error } = await supabaseRequest(
+    env, 'PATCH', `tareas_table?id=eq.${id}&usuario_id=eq.${usuarioId}`, updates
+  )
+  if (error) return json({ error: error.message }, error.status || 500)
+  return json({ data: Array.isArray(data) ? data[0] : data })
 }
 
-async function handlePatchCompletar(_req, _env, _id) {
-  return json({ ok: true })
+async function handlePatchCompletar(request, env, tareaId) {
+  const id = parseInt(tareaId)
+  if (isNaN(id)) return json({ error: 'ID inválido' }, 400)
+
+  const auth = await requireAuth(request, env)
+  if (auth.error) return auth.error
+  const usuarioId = await resolveUser(auth.user.sub, env)
+  if (usuarioId === null) return json({ error: 'Usuario no encontrado en la base de datos' }, 404)
+
+  let body
+  try { body = await request.json() } catch { body = {} }
+  const { esta_completada } = body || {}
+
+  if (typeof esta_completada !== 'boolean') {
+    return json({ error: 'El campo esta_completada debe ser boolean' }, 400)
+  }
+
+  const { data, error } = await supabaseRequest(
+    env, 'PATCH', `tareas_table?id=eq.${id}&usuario_id=eq.${usuarioId}`, { esta_completada }
+  )
+  if (error) return json({ error: error.message }, error.status || 500)
+  if (!data || data.length === 0) return json({ error: 'Tarea no encontrada' }, 404)
+  return json({ data: Array.isArray(data) ? data[0] : data })
 }
 
-async function handleDeleteTarea(_req, _env, _id) {
-  return json({ ok: true })
+async function handleDeleteTarea(request, env, tareaId) {
+  const id = parseInt(tareaId)
+  if (isNaN(id)) return json({ error: 'ID inválido' }, 400)
+
+  const auth = await requireAuth(request, env)
+  if (auth.error) return auth.error
+  const usuarioId = await resolveUser(auth.user.sub, env)
+  if (usuarioId === null) return json({ error: 'Usuario no encontrado en la base de datos' }, 404)
+
+  const { data, error } = await supabaseRequest(
+    env, 'DELETE', `tareas_table?id=eq.${id}&usuario_id=eq.${usuarioId}`
+  )
+  if (error) return json({ error: error.message }, error.status || 500)
+  if (!data || data.length === 0) return json({ error: 'Tarea no encontrada' }, 404)
+  return json({ data: { deleted: true, id } })
 }
 
 // ── Router ────────────────────────────────────────────────────────────────────

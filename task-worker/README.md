@@ -10,7 +10,7 @@ task-worker/
 ├── wrangler.toml       # Configuración del Worker (vars + comentarios de secrets)
 ├── package.json
 └── src/
-    └── index.js        # Router ES-modules + helpers compartidos + handlers (categorías implementadas)
+    └── index.js        # Router ES-modules + helpers compartidos + todos los handlers implementados
 ```
 
 ## Comandos
@@ -105,3 +105,4 @@ Siempre incluye `Prefer: return=representation` para obtener el recurso creado/a
 | 2 — 2026-08-23 | Helpers compartidos: requireAuth (HS256 Web Crypto), resolveUser, supabaseRequest |
 | 3 — 2026-08-23 | handleLogin (bcrypt+signJWT), handleMe (Supabase), handleWebhookEmail (formData+SendGrid v3 API) |
 | 4 — 2026-08-23 | handleGetCategorias, handlePostCategoria, handlePutCategoria, handleDeleteCategoria (port de categorias.js) |
+| 5 — 2026-08-23 | handleGetTareas (sort JS), handleGetTarea, handlePostTarea, handlePutTarea, handlePatchCompletar, handleDeleteTarea (port de tareas.js) |
