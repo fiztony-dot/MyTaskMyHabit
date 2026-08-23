@@ -27,8 +27,8 @@ Esta carpeta contiene toda la documentación del proyecto organizada por temas.
 
 ### ☁️ Infraestructura / Backend
 - [`../task-worker/README.md`](../task-worker/README.md) - Cloudflare Worker (backend HTTP): endpoints, helpers, variables de entorno e historial de iteraciones.
-  - **URL Worker producción:** `https://mytaskmyhabit-worker.fiztony.workers.dev`
-  - **URL Express (Railway, actual):** `https://mytaskmyhabit-production.up.railway.app`
+  - **URL activa (Cloudflare Worker):** `https://mytaskmyhabit-worker.fiztony.workers.dev`
+  - **URL anterior (Express/Railway, deprecated):** `https://mytaskmyhabit-production.up.railway.app`
 
 ---
 

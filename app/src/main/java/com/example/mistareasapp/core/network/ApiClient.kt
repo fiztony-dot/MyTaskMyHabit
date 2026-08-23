@@ -18,7 +18,7 @@ object ApiClient {
 
     // URL base configurable — apunta al backend en Railway
     // En desarrollo local se puede cambiar a http://10.0.2.2:10000 (emulador)
-    const val BASE_URL = "https://mytaskmyhabit-production.up.railway.app"
+    const val BASE_URL = "https://mytaskmyhabit-worker.fiztony.workers.dev"
 
     private var cachedToken: String? = null
 
