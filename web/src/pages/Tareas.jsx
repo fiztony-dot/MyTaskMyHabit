@@ -138,7 +138,7 @@ export default function Tareas() {
       }
     })
     if (gruposPanel['__sin_cat']?.length > 0) {
-      result.push({ key: '__sin_cat', label: 'Sin categoría', color: '#9ca3af', icono: 'label_off', defaultOpen: true })
+      result.push({ key: '__sin_cat', label: 'Sin categoría', color: '#9ca3af', icono: 'inbox', defaultOpen: true })
     }
     return result
   }, [effectiveDisplayMode, gruposPanel, categorias])
