@@ -33,7 +33,7 @@ export function useFiltros(tareas, isLoading) {
 
   // Contadores siempre sobre no-completadas
   const contadores = useMemo(() => {
-    const c = { bandeja: 0, vencidas: 0, hoy: 0, semana: 0, resto: 0, cat: {} }
+    const c = { bandeja: 0, vencidas: 0, hoy: 0, semana: 0, resto: 0, cat: {}, sinCat: 0 }
     tareas.forEach((t) => {
       if (t.esta_completada) return
       if (t.pendiente_clasificar) { c.bandeja++; return }
@@ -41,6 +41,8 @@ export function useFiltros(tareas, isLoading) {
       c[bucket] = (c[bucket] ?? 0) + 1
       if (t.categoria_id != null) {
         c.cat[t.categoria_id] = (c.cat[t.categoria_id] ?? 0) + 1
+      } else {
+        c.sinCat++
       }
     })
     return c

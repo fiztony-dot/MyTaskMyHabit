@@ -99,6 +99,16 @@ export default function Sidebar({
             onClick={() => onToggleCategoria(cat.id)}
           />
         ))}
+        {contadores.sinCat > 0 && (
+          <SidebarItem
+            icono="inbox"
+            label="Sin categoría"
+            badge={contadores.sinCat}
+            activo={categorias.has(null)}
+            iconColor="#9ca3af"
+            onClick={() => onToggleCategoria(null)}
+          />
+        )}
       </SidebarSeccion>
 
       {/* ── Completadas ── */}
