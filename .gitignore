@@ -18,3 +18,5 @@ local.properties
 server/node_modules/
 server/.env
 server/scripts/*.sqlite
+
+.env
