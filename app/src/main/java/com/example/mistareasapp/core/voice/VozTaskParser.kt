@@ -20,6 +20,12 @@ private enum class FranjaDia {
     MANANA, TARDE, NOCHE
 }
 
+// Lista de meses usada para restringir el reconocimiento de fechas del tipo
+// "15 de mayo" y evitar falsos positivos con frases como "alerta de habitos".
+private const val MESES_REGEX =
+    "enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|setiembre|octubre|noviembre|diciembre"
+
+
 object VozTaskParser {
 
     fun parse(textoOriginal: String, ahora: LocalDateTime = LocalDateTime.now()): VozTaskData {
@@ -126,7 +132,14 @@ object VozTaskParser {
         }
 
         // 15 de mayo / el 15 de mayo / quince de mayo
-        val regexTexto = Regex("""\b(?:el\s+)?(\d{1,2}|[a-záéíóúñ]+(?:\s+y\s+[a-záéíóúñ]+)?)\s+de\s+([a-záéíóúñ]+)\b""")
+        // IMPORTANTE: el segundo grupo debe restringirse a nombres de mes reales.
+        // Antes usaba [a-záéíóúñ]+ genérico, lo que hacía match con CUALQUIER
+        // frase "palabra de palabra" (ej: "alerta de habitos"), recortando
+        // el título de la tarea de forma silenciosa. Ver PROYECTO_PWA.md.
+        val regexTexto = Regex(
+            """\b(?:el\s+)?(\d{1,2}|[a-záéíóúñ]+(?:\s+y\s+[a-záéíóúñ]+)?)\s+de\s+($MESES_REGEX)\b"""
+        )
+
         regexTexto.find(texto)?.let { match ->
             val diaRaw = normalizar(match.groupValues[1])
             val dia = diaRaw.toIntOrNull() ?: diaTextoANumero(diaRaw)
@@ -385,8 +398,9 @@ object VozTaskParser {
             """\bpor\s+la\s+(manana|tarde|noche)\b""",
             """\bde\s+la\s+(manana|tarde|noche)\b""",
             """\b(?:el\s+)?\d{1,2}[/-]\d{1,2}\b""",
-            """\b(?:el\s+)?(\d{1,2}|[a-záéíóúñ]+(?:\s+y\s+[a-záéíóúñ]+)?)\s+de\s+[a-záéíóúñ]+\b""",
+            """\b(?:el\s+)?(\d{1,2}|[a-záéíóúñ]+(?:\s+y\s+[a-záéíóúñ]+)?)\s+de\s+($MESES_REGEX)\b""",
             """\bel\s+\d{1,2}\b""",
+
             """\blunes\b|\bmartes\b|\bmiercoles\b|\bjueves\b|\bviernes\b|\bsabado\b|\bdomingo\b""",
             """\ben\s+\d+\s+(minuto|minutos|hora|horas)\b""",
             """\ba\s+las?\s+\d{1,2}(?::\d{2})?(?:\s*horas?)?\b""",
