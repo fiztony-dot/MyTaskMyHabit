@@ -155,9 +155,10 @@ class HabitosViewModel(private val habitoDao: HabitoDao) : ViewModel() {
             val pctHistorico = calcularPorcentajeHistorico(habito)
             val dva = diasVidaEfectivos(habito)
             val versionActiva = obtenerVersionActivaEn(habito.id, lunes)
+            val finAcumMes = minOf(domingo, LocalDate.now())
             val progresoMes = if (habito.frecuencia == FrecuenciaHabito.MENSUAL) {
                 val primerDiaMes = fecha.withDayOfMonth(1)
-                val historialMes = habitoDao.obtenerHistorialEntreFechas(habito.id, primerDiaMes, fecha)
+                val historialMes = habitoDao.obtenerHistorialEntreFechas(habito.id, primerDiaMes, finAcumMes)
                 if (habito.tipoObjetivo == TipoObjetivoHabito.CUANTITATIVO)
                     historialMes.sumOf { it.valorProgreso }
                 else
@@ -166,7 +167,7 @@ class HabitosViewModel(private val habitoDao: HabitoDao) : ViewModel() {
             val progresoMesDecimal = if (habito.frecuencia == FrecuenciaHabito.MENSUAL &&
                 habito.tipoObjetivo == TipoObjetivoHabito.LIMITE_MAXIMO) {
                 val primerDiaMes = fecha.withDayOfMonth(1)
-                habitoDao.obtenerHistorialEntreFechas(habito.id, primerDiaMes, fecha)
+                habitoDao.obtenerHistorialEntreFechas(habito.id, primerDiaMes, finAcumMes)
                     .sumOf { it.valorProgresoDecimal }
             } else 0.0
             HabitoConHistorialSemanal(habito, mapaSemana, progresoHoy, pctHistorico, dva, versionActiva, progresoMes, progresoMesDecimal)
