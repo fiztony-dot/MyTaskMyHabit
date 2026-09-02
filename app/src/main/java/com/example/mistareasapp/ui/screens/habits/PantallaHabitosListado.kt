@@ -155,9 +155,10 @@ fun HabitoListadoCard(item: HabitoConHistorialSemanal, hoy: LocalDate, viewModel
 
     // Texto de objetivo (usa versión vigente)
     val objetivo = objetivoVersionado
+    val lunesSemana = item.historialSemana.keys.minOrNull() ?: hoy
     val diasEnPeriodo = when (habito.frecuencia) {
         FrecuenciaHabito.SEMANAL -> 7
-        FrecuenciaHabito.MENSUAL -> hoy.lengthOfMonth()
+        FrecuenciaHabito.MENSUAL -> lunesSemana.lengthOfMonth()
         FrecuenciaHabito.DIARIA -> 1
     }
     val objetivoDiasPct: Int? = pctDiasVersionado?.let { pct ->
