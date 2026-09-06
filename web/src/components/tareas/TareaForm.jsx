@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { getIconColor } from '../../lib/iconColors'
+import TimePicker from './TimePicker'
 import '../../styles/tareas.css'
 
 const OPCIONES_REPETICION = [
@@ -56,6 +57,7 @@ export default function TareaForm({ tarea, categorias, onGuardar, onEliminar, on
   const [form, setForm] = useState(esEdicion ? tareaToForm(tarea) : FORM_VACIO)
   const [guardando, setGuardando] = useState(false)
   const [error, setError] = useState('')
+  const [showTimePicker, setShowTimePicker] = useState(false)
 
   useEffect(() => {
     setForm(tarea ? tareaToForm(tarea) : FORM_VACIO)
@@ -178,11 +180,27 @@ export default function TareaForm({ tarea, categorias, onGuardar, onEliminar, on
               <label className="m-label" htmlFor="tf-hora">
                 Hora límite{!form.fecha_limite && <span style={{ color: '#d1d5db' }}> (requiere fecha)</span>}
               </label>
-              <input
-                id="tf-hora" className="m-input" type="time"
-                value={form.hora_limite} onChange={set('hora_limite')}
+              <button
+                id="tf-hora"
+                type="button"
+                className="m-input m-time-btn"
                 disabled={!form.fecha_limite}
-              />
+                onClick={() => setShowTimePicker(true)}
+                aria-label="Seleccionar hora límite"
+              >
+                <span className="material-icons" style={{ color: form.hora_limite ? '#6366f1' : '#9ca3af' }}>schedule</span>
+                {form.hora_limite
+                  ? <span>{form.hora_limite}</span>
+                  : <span className="m-time-empty">Sin hora</span>
+                }
+              </button>
+              {showTimePicker && (
+                <TimePicker
+                  value={form.hora_limite}
+                  onChange={(val) => setForm((prev) => ({ ...prev, hora_limite: val }))}
+                  onClose={() => setShowTimePicker(false)}
+                />
+              )}
             </div>
           </div>
 
