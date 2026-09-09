@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.DpOffset
 // --- 7. Jetpack Compose: Runtime y Estado ---
 import androidx.compose.runtime.*
 import com.example.mistareasapp.core.ai.crearSpeechLauncher
+import com.example.mistareasapp.core.network.AuthManager
 
 // --- 8. Clases del Proyecto (Local) ---
 import com.example.mistareasapp.data.AppDatabase
@@ -432,6 +433,15 @@ fun MisTareasApp() {
                                             navController.navigate("configuracion")
                                         },
                                         leadingIcon = { Icon(Icons.Default.Settings, null) }
+                                    )
+                                    HorizontalDivider()
+                                    DropdownMenuItem(
+                                        text = { Text("Cerrar sesión") },
+                                        onClick = {
+                                            mostrarMenuPrincipal = false
+                                            scope.launch { AuthManager.clearSession(context) }
+                                        },
+                                        leadingIcon = { Icon(Icons.Default.Logout, null) }
                                     )
                                 }
                             }

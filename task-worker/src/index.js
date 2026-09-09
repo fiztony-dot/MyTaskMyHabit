@@ -216,7 +216,7 @@ async function handleLogin(request, env) {
 
   const now = Math.floor(Date.now() / 1000)
   const token = await signJWT(
-    { sub: username, iat: now, exp: now + 30 * 24 * 3600 },
+    { sub: username, iat: now, exp: now + 365 * 24 * 3600 },
     env.JWT_SECRET
   )
   return json({ token, user: { username } })
