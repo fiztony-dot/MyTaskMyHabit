@@ -25,17 +25,25 @@ class HabitoAlertaEvaluadorTest {
     @Test
     fun semanalEnRiesgoCuandoNoQuedanDiasSuficientes() {
         val habito = habito(FrecuenciaHabito.SEMANAL).copy(vecesPorDia = 5)
-        val historial = listOf(historial(LocalDate.of(2026, 9, 8)), historial(LocalDate.of(2026, 9, 9)))
+        val historial = listOf(
+            historial(LocalDate.of(2026, 9, 8)),
+            historial(LocalDate.of(2026, 9, 9)),
+            historial(LocalDate.of(2026, 9, 10))
+        )
         val resultado = HabitoAlertaEvaluador.evaluar(habito, ahora, null, historial)
         assertNotNull(resultado)
-        assertEquals(2, resultado?.cumplidos)
+        assertEquals(3, resultado?.cumplidos)
         assertEquals(2, resultado?.diasRestantes)
     }
 
     @Test
     fun mensualEnRiesgoYLimiteMaximoNoAplica() {
         val mensual = habito(FrecuenciaHabito.MENSUAL).copy(vecesPorDia = 5)
-        val historial = listOf(historial(LocalDate.of(2026, 9, 1)), historial(LocalDate.of(2026, 9, 2)))
+        val historial = listOf(
+            historial(LocalDate.of(2026, 9, 1)),
+            historial(LocalDate.of(2026, 9, 2)),
+            historial(LocalDate.of(2026, 9, 3))
+        )
         assertNotNull(HabitoAlertaEvaluador.evaluar(mensual, LocalDateTime.of(2026, 9, 29, 18, 0), null, historial))
         assertNull(HabitoAlertaEvaluador.evaluar(mensual.copy(tipoObjetivo = TipoObjetivoHabito.LIMITE_MAXIMO), ahora, null, historial))
     }

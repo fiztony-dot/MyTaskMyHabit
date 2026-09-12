@@ -65,7 +65,7 @@ object HabitoAlertaEvaluador {
         val diasRestantes = (ChronoUnit.DAYS.between(hoy, fin) + 1).toInt().coerceAtLeast(0)
         val objetivo = habito.objetivoPorcentajeDias?.let { ceil((fin.toEpochDay() - inicio.toEpochDay() + 1) * it / 100.0).toInt() }
             ?: (habito.objetivoValor ?: habito.vecesPorDia).coerceAtLeast(1)
-        return if (cumplidos + diasRestantes < objetivo) {
+        return if (cumplidos + diasRestantes <= objetivo) {
             HabitoAlertaResultado(tipo, cumplidos, objetivo, diasRestantes)
         } else null
     }
