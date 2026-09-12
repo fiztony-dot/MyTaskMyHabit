@@ -3,6 +3,7 @@ package com.example.mistareasapp.data.habits
 
 import androidx.room.Entity
 import androidx.room.PrimaryKey
+import androidx.room.ColumnInfo
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalTime
@@ -26,6 +27,8 @@ data class Habito(
     val objetivoRachaSemanas: Int = 4,
     val recordatoriosActivos: Boolean = false,
     val horaRecordatorio: LocalTime? = null,
+    @ColumnInfo(name = "alerta_activada") val alertaActivada: Boolean = false,
+    @ColumnInfo(name = "hora_alerta") val horaAlerta: LocalTime? = null,
     val icono: String = "favorite",
     val colorHex: String = "#FF0000",
     val activo: Boolean = true,

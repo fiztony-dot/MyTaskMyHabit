@@ -68,6 +68,8 @@ fun EditarHabitoScreen(
 
     var recordatoriosActivos by remember(habito.id) { mutableStateOf(habito.recordatoriosActivos) }
     var horaRecordatorio by remember(habito.id) { mutableStateOf(habito.horaRecordatorio ?: LocalTime.of(9, 0)) }
+    var alertaActivada by remember(habito.id) { mutableStateOf(habito.alertaActivada) }
+    var horaAlerta by remember(habito.id) { mutableStateOf(habito.horaAlerta ?: LocalTime.of(18, 0)) }
 
     var esCompuestoPorTareas by remember(habito.id) { mutableStateOf(habito.esCompuestoPorTareas) }
     var criterioCumplimiento by remember(habito.id) { mutableStateOf(habito.criterioCumplimientoTareas ?: CriterioCumplimientoTareas.TODAS) }
@@ -158,6 +160,8 @@ fun EditarHabitoScreen(
                     objetivoRachaSemanas = objetivoRachaSemanas.toIntOrNull() ?: 4,
                     recordatoriosActivos = recordatoriosActivos,
                     horaRecordatorio = if (recordatoriosActivos) horaRecordatorio else null,
+                    alertaActivada = alertaActivada,
+                    horaAlerta = if (alertaActivada) horaAlerta else null,
                     icono = categoriaSeleccionada?.icono ?: habito.icono,
                     colorHex = categoriaSeleccionada?.color ?: habito.colorHex,
                     objetivoPorcentajeDias = pctDias,
@@ -504,6 +508,24 @@ fun EditarHabitoScreen(
                 }
                 if (recordatoriosActivos) {
                     TimePickerField(hora = horaRecordatorio, onHoraSeleccionada = { horaRecordatorio = it })
+                }
+            }
+
+            SeccionFormulario("Alerta", "Aviso cuando el hábito todavía no está cumplido y entra en riesgo.") {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Notifications, null, tint = MaterialTheme.colorScheme.primary)
+                        Spacer(Modifier.width(12.dp))
+                        Text("Activar alerta", fontWeight = FontWeight.SemiBold)
+                    }
+                    Switch(checked = alertaActivada, onCheckedChange = { alertaActivada = it })
+                }
+                if (alertaActivada) {
+                    TimePickerField(hora = horaAlerta, onHoraSeleccionada = { horaAlerta = it })
                 }
             }
 

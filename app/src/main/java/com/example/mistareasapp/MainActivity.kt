@@ -17,6 +17,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import com.example.mistareasapp.core.backup.BackupScheduler
+import com.example.mistareasapp.core.notifications.habits.HabitoAlertaNavigation
+import com.example.mistareasapp.core.notifications.habits.HabitoAlertaScheduler
 import com.example.mistareasapp.ui.screens.SplashScreen
 import com.example.mistareasapp.ui.screens.auth.AuthGate
 import kotlinx.coroutines.delay
@@ -25,6 +27,8 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         BackupScheduler.registrar(this)
+        HabitoAlertaScheduler.registrar(this)
+        recibirAlertaHabito(intent)
 
         setContent {
             var mostrarSplash by remember { mutableStateOf(true) }
@@ -44,6 +48,22 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        recibirAlertaHabito(intent)
+    }
+
+    private fun recibirAlertaHabito(intent: Intent?) {
+        intent?.getLongExtra(EXTRA_HABITO_ALERTA_ID, -1L)?.takeIf { it >= 0L }?.let {
+            HabitoAlertaNavigation.setPending(it)
+        }
+    }
+
+    companion object {
+        const val EXTRA_HABITO_ALERTA_ID = "habito_alerta_id"
     }
 
     private fun checkNotificationPermission() {

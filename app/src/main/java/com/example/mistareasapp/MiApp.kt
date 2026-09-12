@@ -74,6 +74,7 @@ import com.example.mistareasapp.ui.screens.tasks.PantallaListaTareas
 import com.example.mistareasapp.ui.theme.MisTareasAppTheme
 import com.example.mistareasapp.viewmodel.Tasks.TareasViewModel
 import com.example.mistareasapp.core.notifications.tasks.NotificationHelper
+import com.example.mistareasapp.core.notifications.habits.HabitoAlertaNavigation
 import com.example.mistareasapp.ui.components.tasks.AccionesTopBarTareas
 import com.example.mistareasapp.ui.navigation.BarraNavegacion
 import com.example.mistareasapp.ui.navigation.BarraNavegacionHabitos
@@ -124,6 +125,11 @@ fun MisTareasApp() {
 
     // --- 2. NAVEGACIÓN ---
     val navController = rememberNavController()
+    LaunchedEffect(Unit) {
+        HabitoAlertaNavigation.consume()?.let { habitoId ->
+            navController.navigate("editar_habito/$habitoId")
+        }
+    }
     val listaTareas by viewModel.listaTareas.collectAsState(initial = emptyList())
     val filtroActual by viewModel.categoriaSeleccionada.collectAsState()
     val textoBusqueda by viewModel.textoBusqueda.collectAsStateWithLifecycle()

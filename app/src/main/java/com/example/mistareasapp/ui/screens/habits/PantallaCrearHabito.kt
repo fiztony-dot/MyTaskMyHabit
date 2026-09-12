@@ -116,6 +116,8 @@ fun CrearHabitoScreen(
 
     var recordatoriosActivos by remember { mutableStateOf(false) }
     var horaRecordatorio by remember { mutableStateOf(LocalTime.of(9, 0)) }
+    var alertaActivada by remember { mutableStateOf(false) }
+    var horaAlerta by remember { mutableStateOf(LocalTime.of(18, 0)) }
 
     var esCompuestoPorTareas by remember { mutableStateOf(false) }
     var criterioCumplimiento by remember { mutableStateOf(CriterioCumplimientoTareas.TODAS) }
@@ -213,6 +215,8 @@ fun CrearHabitoScreen(
                     objetivoRachaSemanas = objetivoRachaSemanas.toIntOrNull() ?: 4,
                     recordatoriosActivos = recordatoriosActivos,
                     horaRecordatorio = if (recordatoriosActivos) horaRecordatorio else null,
+                    alertaActivada = alertaActivada,
+                    horaAlerta = if (alertaActivada) horaAlerta else null,
                     icono = categoriaSeleccionada?.icono ?: "star",
                     colorHex = categoriaSeleccionada?.color ?: "#FF0000",
                     objetivoPorcentajeDias = pctDias,
@@ -491,6 +495,27 @@ fun CrearHabitoScreen(
                         hora = horaRecordatorio,
                         onHoraSeleccionada = { horaRecordatorio = it }
                     )
+                }
+            }
+
+            SeccionFormulario(
+                titulo = "Alerta",
+                descripcion = "Avisa cuando el hábito todavía no está cumplido y entra en riesgo."
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Notifications, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text("Activar alerta", fontWeight = FontWeight.SemiBold)
+                    }
+                    Switch(checked = alertaActivada, onCheckedChange = { alertaActivada = it })
+                }
+                if (alertaActivada) {
+                    TimePickerField(hora = horaAlerta, onHoraSeleccionada = { horaAlerta = it })
                 }
             }
 

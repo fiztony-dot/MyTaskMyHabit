@@ -39,6 +39,9 @@ interface HabitoDao {
     @Query("SELECT * FROM habitos_historial WHERE habitoId = :habitoId ORDER BY fecha ASC")
     fun obtenerHistorialCompleto(habitoId: Long): Flow<List<HabitoHistorial>>
 
+    @Query("SELECT * FROM habitos_historial WHERE habitoId = :habitoId ORDER BY fecha ASC")
+    suspend fun obtenerHistorialCompletoSincrono(habitoId: Long): List<HabitoHistorial>
+
     // Elimina el historial si se borra el hábito (Cascada manual si no se usa ForeignKey)
     @Query("DELETE FROM habitos_historial WHERE habitoId = :habitoId")
     suspend fun eliminarHistorialDeHabito(habitoId: Long)
@@ -88,6 +91,9 @@ interface HabitoDao {
 
     @Query("SELECT * FROM habitos WHERE activo = 1 ORDER BY orden ASC, id ASC")
     fun obtenerHabitosActivos(): Flow<List<Habito>>
+
+    @Query("SELECT * FROM habitos WHERE activo = 1 AND archivado = 0 AND alerta_activada = 1")
+    suspend fun obtenerHabitosConAlertaActiva(): List<Habito>
 
     @Query("UPDATE habitos SET orden = :orden WHERE id = :id")
     suspend fun actualizarOrdenHabito(id: Long, orden: Int)
