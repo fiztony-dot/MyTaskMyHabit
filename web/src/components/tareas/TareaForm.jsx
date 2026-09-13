@@ -57,7 +57,6 @@ export default function TareaForm({ tarea, categorias, onGuardar, onEliminar, on
   const [form, setForm] = useState(esEdicion ? tareaToForm(tarea) : FORM_VACIO)
   const [guardando, setGuardando] = useState(false)
   const [error, setError] = useState('')
-  const [showTimePicker, setShowTimePicker] = useState(false)
 
   useEffect(() => {
     setForm(tarea ? tareaToForm(tarea) : FORM_VACIO)
@@ -180,27 +179,12 @@ export default function TareaForm({ tarea, categorias, onGuardar, onEliminar, on
               <label className="m-label" htmlFor="tf-hora">
                 Hora límite{!form.fecha_limite && <span style={{ color: '#d1d5db' }}> (requiere fecha)</span>}
               </label>
-              <button
+              <TimePicker
                 id="tf-hora"
-                type="button"
-                className="m-input m-time-btn"
+                value={form.hora_limite}
+                onChange={(val) => setForm((prev) => ({ ...prev, hora_limite: val }))}
                 disabled={!form.fecha_limite}
-                onClick={() => setShowTimePicker(true)}
-                aria-label="Seleccionar hora límite"
-              >
-                <span className="material-icons" style={{ color: form.hora_limite ? '#6366f1' : '#9ca3af' }}>schedule</span>
-                {form.hora_limite
-                  ? <span>{form.hora_limite}</span>
-                  : <span className="m-time-empty">Sin hora</span>
-                }
-              </button>
-              {showTimePicker && (
-                <TimePicker
-                  value={form.hora_limite}
-                  onChange={(val) => setForm((prev) => ({ ...prev, hora_limite: val }))}
-                  onClose={() => setShowTimePicker(false)}
-                />
-              )}
+              />
             </div>
           </div>
 
