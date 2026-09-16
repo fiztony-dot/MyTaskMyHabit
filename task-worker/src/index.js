@@ -194,8 +194,12 @@ const ORDEN_PRIORIDAD = { ALTA: 1, MEDIA: 2, BAJA: 3 }
 
 // ── Handlers ──────────────────────────────────────────────────────────────────
 
-async function healthCheck(_req, _env) {
-  return json({ status: 'ok' })
+async function healthCheck(req, _env) {
+  const body = req.method === 'HEAD' ? null : JSON.stringify({ status: 'ok' })
+  return new Response(body, {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
+  })
 }
 
 async function handleLogin(request, env) {
@@ -581,7 +585,7 @@ async function dispatch(request, env) {
   const p = pathname.split('/').filter(Boolean)
 
   // Health
-  if (pathname === '/health' && method === 'GET') return healthCheck(request, env)
+  if (pathname === '/health' && (method === 'GET' || method === 'HEAD')) return healthCheck(request, env)
 
   // Auth
   if (pathname === '/auth/login' && method === 'POST') return handleLogin(request, env)
