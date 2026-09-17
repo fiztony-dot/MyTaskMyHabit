@@ -11,21 +11,43 @@ import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.example.mistareasapp.MainActivity
 import com.example.mistareasapp.data.AppDatabase
+import com.example.mistareasapp.data.habits.FrecuenciaHabito
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.time.DayOfWeek
 import java.time.LocalDateTime
 
 class HabitoAlertaWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
-    override suspend fun doWork(): Result {
-        return runCatching {
+    override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
+        runCatching {
             val ahora = LocalDateTime.now()
+            val hoy = ahora.toLocalDate()
             val dao = AppDatabase.getDatabase(applicationContext).habitoDao()
             dao.obtenerHabitosConAlertaActiva().forEach { habito ->
                 val hora = habito.horaAlerta ?: return@forEach
                 if (!HabitoAlertaEvaluador.estaEnVentanaDeQuinceMinutos(hora, ahora)) return@forEach
-                val historial = dao.obtenerHistorialCompletoSincrono(habito.id)
+
+                // Load only the historial needed for the evaluation window,
+                // not the full history (which could be thousands of rows per habit).
+                val historial = when (habito.frecuencia) {
+                    FrecuenciaHabito.SEMANAL -> {
+                        val inicio = hoy.with(DayOfWeek.MONDAY)
+                        dao.obtenerHistorialEntreFechas(habito.id, inicio, hoy)
+                    }
+                    FrecuenciaHabito.MENSUAL -> {
+                        val inicio = hoy.withDayOfMonth(1)
+                        dao.obtenerHistorialEntreFechas(habito.id, inicio, hoy)
+                    }
+                    FrecuenciaHabito.DIARIA -> {
+                        val entrada = dao.obtenerProgresoDiario(habito.id, hoy)
+                        if (entrada != null) listOf(entrada) else emptyList()
+                    }
+                }
+
                 val resultado = HabitoAlertaEvaluador.evaluar(
                     habito,
                     ahora,
-                    historial.lastOrNull { it.fecha == ahora.toLocalDate() },
+                    historial.lastOrNull { it.fecha == hoy },
                     historial
                 ) ?: return@forEach
                 mostrarNotificacion(habito.id, habito.nombre, resultado)
