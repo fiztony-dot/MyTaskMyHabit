@@ -180,8 +180,8 @@ export default function Tareas() {
   }
 
   async function handleGuardar(body, id) {
-    if (id) await editar(id, body)
-    else await crear(body)
+    if (id) return await editar(id, body)
+    return await crear(body)
   }
 
   function toggleSearch() {

@@ -55,10 +55,13 @@ import androidx.navigation.NavController
 import com.example.mistareasapp.data.tasks.Categoria
 import com.example.mistareasapp.data.tasks.Prioridad
 import com.example.mistareasapp.data.tasks.Tarea
+import com.example.mistareasapp.ui.components.tasks.AdjuntoPendiente
 import com.example.mistareasapp.ui.components.tasks.BotonSelectorDato
+import com.example.mistareasapp.ui.components.tasks.SeccionAdjuntos
 import com.example.mistareasapp.ui.components.tasks.SelectorPrioridad
 import com.example.mistareasapp.ui.components.tasks.obtenerColorIcono
 import com.example.mistareasapp.ui.components.tasks.obtenerIcono
+import androidx.compose.runtime.mutableStateListOf
 import com.example.mistareasapp.viewmodel.Tasks.TareasViewModel
 import kotlinx.coroutines.launch
 import java.time.Instant
@@ -103,6 +106,10 @@ fun PantallaCrearTarea(navController: NavController, viewModel: TareasViewModel 
     var repeticionVecesTexto by remember { mutableStateOf("") }
     var showDatePickerFin by remember { mutableStateOf(false) }
     val datePickerFinState = rememberDatePickerState()
+
+    // ADJUNTOS PENDIENTES (se suben tras crear la tarea)
+    val adjuntosPendientes = remember { mutableStateListOf<AdjuntoPendiente>() }
+    var guardandoAdjuntos by remember { mutableStateOf(false) }
 
     // DIÁLOGOS FECHA/HORA
     var showDatePicker by remember { mutableStateOf(false) }
@@ -151,10 +158,28 @@ fun PantallaCrearTarea(navController: NavController, viewModel: TareasViewModel 
                 repeticionFin = repeticionFin,
                 repeticionVeces = repeticionVecesTexto.trim().toIntOrNull(),
                 onBack = { navController.popBackStack() },
+                guardando = guardandoAdjuntos,
                 onSave = { nuevaTarea ->
                     scope.launch {
-                        viewModel.insertar(nuevaTarea, context)
-                        navController.popBackStack()
+                        if (adjuntosPendientes.isEmpty()) {
+                            // Sin adjuntos: flujo normal (fire-and-forget + recarga)
+                            viewModel.insertar(nuevaTarea, context)
+                            navController.popBackStack()
+                        } else {
+                            // Con adjuntos: crear tarea, obtener id, subir cada pendiente, recargar
+                            guardandoAdjuntos = true
+                            val nuevoId = viewModel.crearTareaYObtenerId(nuevaTarea, context)
+                            if (nuevoId != null) {
+                                for (p in adjuntosPendientes) {
+                                    try {
+                                        viewModel.subirAdjuntoTarea(nuevoId, p.bytes, p.nombre, p.mime)
+                                    } catch (_: Exception) { /* se refleja al recargar; no bloquea */ }
+                                }
+                                viewModel.refrescarDatos()
+                            }
+                            guardandoAdjuntos = false
+                            navController.popBackStack()
+                        }
                     }
                 }
             )
@@ -191,6 +216,9 @@ fun PantallaCrearTarea(navController: NavController, viewModel: TareasViewModel 
             SelectorPrioridad(
                 prioridadSeleccionada = prioridad,
                 onPrioridadCambiada = { prioridad = it })
+
+            // Adjuntos (modo creación: se acumulan y suben al guardar la tarea)
+            SeccionAdjuntos(tareaId = null, pendientes = adjuntosPendientes)
 
             // --- VENCIMIENTO Y REPETICIÓN ---
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -322,6 +350,7 @@ private fun CrearTareaTopBar(
     repeticionFin: LocalDate?,
     repeticionVeces: Int?,
     onBack: () -> Unit,
+    guardando: Boolean = false,
     onSave: (Tarea) -> Unit
 ) {
     TopAppBar(
@@ -333,7 +362,7 @@ private fun CrearTareaTopBar(
         },
         actions = {
             TextButton(
-                enabled = titulo.isNotBlank(),
+                enabled = titulo.isNotBlank() && !guardando,
                 onClick = {
                     val tituloFormateado = titulo.trim().replaceFirstChar {
                         if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString()
@@ -353,7 +382,7 @@ private fun CrearTareaTopBar(
                     onSave(nuevaTarea)
                 }
             ) {
-                Text("GUARDAR", fontWeight = FontWeight.ExtraBold)
+                Text(if (guardando) "GUARDANDO…" else "GUARDAR", fontWeight = FontWeight.ExtraBold)
             }
         }
     )

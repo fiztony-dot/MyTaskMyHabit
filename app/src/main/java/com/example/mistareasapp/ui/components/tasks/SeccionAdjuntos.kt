@@ -8,13 +8,13 @@ import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -42,11 +42,12 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -60,6 +61,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import coil.compose.AsyncImage
 import com.example.mistareasapp.core.network.AdjuntoDto
+import com.example.mistareasapp.core.network.AdjuntoOpener
 import com.example.mistareasapp.core.network.ApiException
 import com.example.mistareasapp.core.network.TareasApiRepository
 import kotlinx.coroutines.launch
@@ -69,6 +71,14 @@ private const val MAX_BYTES = 10L * 1024 * 1024 // 10 MB
 
 private val EXT_PERMITIDAS = setOf(
     "jpg", "jpeg", "png", "gif", "webp", "pdf", "doc", "docx", "xls", "xlsx", "txt"
+)
+
+/** Fichero seleccionado pendiente de subir (flujo de creación de tarea). */
+data class AdjuntoPendiente(
+    val bytes: ByteArray,
+    val nombre: String,
+    val mime: String,
+    val uri: Uri?  // para preview de imagen; null si no disponible
 )
 
 private fun mimePorExtension(nombre: String, fallback: String?): String {
@@ -105,7 +115,6 @@ private fun formatBytes(bytes: Long): String = when {
     else -> "%.1f MB".format(bytes / (1024.0 * 1024.0))
 }
 
-/** Lee nombre y tamaño de un content:// Uri. */
 private fun consultarMetadatos(context: Context, uri: Uri): Pair<String, Long> {
     var nombre = "fichero"
     var tamano = -1L
@@ -121,35 +130,42 @@ private fun consultarMetadatos(context: Context, uri: Uri): Pair<String, Long> {
 }
 
 /**
- * Sección de adjuntos para la pantalla de edición de una tarea.
- * Autocontenida: carga, sube (cámara/galería/ficheros) y elimina vía la API.
- * Notifica el nº total de adjuntos al padre mediante [onCountChange].
+ * Sección de adjuntos del formulario de tarea.
+ *
+ * - Modo EDICIÓN ([tareaId] != null): carga, sube y elimina contra la API al
+ *   instante; al pulsar un adjunto lo abre con el visor del sistema.
+ * - Modo CREACIÓN ([tareaId] == null): acumula ficheros en [pendientes] (lista
+ *   propiedad del padre). El padre, tras crear la tarea, sube esos pendientes.
  */
 @Composable
 fun SeccionAdjuntos(
-    tareaId: Int,
+    tareaId: Int?,
     modifier: Modifier = Modifier,
+    pendientes: SnapshotStateList<AdjuntoPendiente>? = null,
     onCountChange: (Int) -> Unit = {}
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val esCreacion = tareaId == null
 
     val adjuntos = remember { mutableStateListOf<AdjuntoDto>() }
-    var cargando by remember { mutableStateOf(true) }
+    var cargando by remember { mutableStateOf(!esCreacion) }
     var subiendo by remember { mutableStateOf(false) }
+    var abriendoId by remember { mutableStateOf<Long?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var mostrarMenu by remember { mutableStateOf(false) }
     var adjuntoAEliminar by remember { mutableStateOf<AdjuntoDto?>(null) }
-
-    // Uri temporal para la foto de cámara (creada antes de lanzar la cámara)
     var uriCamara by remember { mutableStateOf<Uri?>(null) }
 
-    fun refrescarCount() = onCountChange(adjuntos.size)
+    fun refrescarCount() {
+        onCountChange(if (esCreacion) (pendientes?.size ?: 0) else adjuntos.size)
+    }
 
     LaunchedEffect(tareaId) {
+        if (esCreacion) { cargando = false; refrescarCount(); return@LaunchedEffect }
         cargando = true
         try {
-            val lista = TareasApiRepository.obtenerAdjuntos(tareaId)
+            val lista = TareasApiRepository.obtenerAdjuntos(tareaId!!)
             adjuntos.clear()
             adjuntos.addAll(lista)
             refrescarCount()
@@ -160,13 +176,13 @@ fun SeccionAdjuntos(
         }
     }
 
-    // Sube bytes ya leídos (validación previa hecha por el llamador)
+    // Sube bytes a la tarea existente (modo edición)
     fun subir(bytes: ByteArray, nombre: String, mime: String) {
         scope.launch {
             subiendo = true
             error = null
             try {
-                val nuevo = TareasApiRepository.subirAdjunto(tareaId, bytes, nombre, mime)
+                val nuevo = TareasApiRepository.subirAdjunto(tareaId!!, bytes, nombre, mime)
                 adjuntos.add(nuevo)
                 refrescarCount()
             } catch (e: ApiException) {
@@ -175,7 +191,7 @@ fun SeccionAdjuntos(
                     400 -> "Tipo de fichero no permitido."
                     else -> "Error al subir: ${e.message}"
                 }
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 error = "Error al subir el fichero."
             } finally {
                 subiendo = false
@@ -183,41 +199,47 @@ fun SeccionAdjuntos(
         }
     }
 
-    // Procesa un Uri (galería/ficheros): valida, lee bytes y sube
-    fun procesarUri(uri: Uri) {
+    // Lee bytes de un Uri con validación. Devuelve triple(bytes, nombre, mime) o null (setea error).
+    fun leerYValidar(uri: Uri): Triple<ByteArray, String, String>? {
         val (nombre, tamano) = consultarMetadatos(context, uri)
         val ext = nombre.substringAfterLast('.', "").lowercase()
         val mimeCr = context.contentResolver.getType(uri)
         val mime = mimePorExtension(nombre, mimeCr)
         val esValido = EXT_PERMITIDAS.contains(ext) ||
             mime.startsWith("image/") || mime == "application/pdf" || mime == "text/plain"
-        if (!esValido) {
-            error = "Tipo de fichero no permitido."
-            return
-        }
+        if (!esValido) { error = "Tipo de fichero no permitido."; return null }
         if (tamano in 1..MAX_BYTES || tamano == -1L) {
             val bytes = try {
                 context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
             } catch (_: Exception) { null }
-            if (bytes == null) { error = "No se pudo leer el fichero."; return }
-            if (bytes.size > MAX_BYTES) { error = "El fichero supera el límite de 10MB."; return }
-            subir(bytes, nombre, mime)
+            if (bytes == null) { error = "No se pudo leer el fichero."; return null }
+            if (bytes.size > MAX_BYTES) { error = "El fichero supera el límite de 10MB."; return null }
+            return Triple(bytes, nombre, mime)
+        }
+        error = "El fichero supera el límite de 10MB."
+        return null
+    }
+
+    // Procesa un Uri seleccionado (galería/ficheros)
+    fun procesarUri(uri: Uri) {
+        error = null
+        val datos = leerYValidar(uri) ?: return
+        if (esCreacion) {
+            pendientes?.add(AdjuntoPendiente(datos.first, datos.second, datos.third, uri))
+            refrescarCount()
         } else {
-            error = "El fichero supera el límite de 10MB."
+            subir(datos.first, datos.second, datos.third)
         }
     }
 
-    // Launcher: seleccionar documento/imagen desde el explorador de ficheros
     val ficherosLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
     ) { uri -> uri?.let { procesarUri(it) } }
 
-    // Launcher: seleccionar imagen de la galería
     val galeriaLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.GetContent()
     ) { uri -> uri?.let { procesarUri(it) } }
 
-    // Launcher: tomar foto con la cámara → guarda en el Uri preparado
     val camaraLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.TakePicture()
     ) { exito ->
@@ -226,11 +248,18 @@ fun SeccionAdjuntos(
             val bytes = try {
                 context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
             } catch (_: Exception) { null }
-            if (bytes != null) {
-                if (bytes.size > MAX_BYTES) error = "La foto supera el límite de 10MB."
-                else subir(bytes, "foto_${System.currentTimeMillis()}.jpg", "image/jpeg")
-            } else {
+            if (bytes == null) {
                 error = "No se pudo leer la foto."
+            } else if (bytes.size > MAX_BYTES) {
+                error = "La foto supera el límite de 10MB."
+            } else {
+                val nombre = "foto_${System.currentTimeMillis()}.jpg"
+                if (esCreacion) {
+                    pendientes?.add(AdjuntoPendiente(bytes, nombre, "image/jpeg", uri))
+                    refrescarCount()
+                } else {
+                    subir(bytes, nombre, "image/jpeg")
+                }
             }
         }
     }
@@ -243,7 +272,6 @@ fun SeccionAdjuntos(
         camaraLauncher.launch(uri)
     }
 
-    // Permiso de cámara
     val permisoCamaraLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { concedido -> if (concedido) lanzarCamara() else error = "Permiso de cámara denegado." }
@@ -254,13 +282,19 @@ fun SeccionAdjuntos(
         if (ya) lanzarCamara() else permisoCamaraLauncher.launch(Manifest.permission.CAMERA)
     }
 
+    fun abrir(adj: AdjuntoDto) {
+        scope.launch {
+            abriendoId = adj.id
+            error = null
+            val err = AdjuntoOpener.abrir(context, adj)
+            if (err != null) error = err
+            abriendoId = null
+        }
+    }
+
     // ── UI ──
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(
-            "Adjuntos",
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.SemiBold
-        )
+        Text("Adjuntos", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
 
         when {
             cargando -> Row(verticalAlignment = Alignment.CenterVertically) {
@@ -268,13 +302,35 @@ fun SeccionAdjuntos(
                 Spacer(Modifier.width(8.dp))
                 Text("Cargando…", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
             }
+            esCreacion -> {
+                val lista = pendientes ?: emptyList()
+                if (lista.isEmpty()) {
+                    Text(
+                        "Añade ficheros; se subirán al crear la tarea.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.outline
+                    )
+                } else {
+                    lista.forEachIndexed { idx, p ->
+                        FilaPendiente(p = p, onQuitar = {
+                            pendientes?.removeAt(idx)
+                            refrescarCount()
+                        })
+                    }
+                }
+            }
             adjuntos.isEmpty() -> Text(
                 "Sin adjuntos todavía.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.outline
             )
             else -> adjuntos.forEach { adj ->
-                FilaAdjunto(adj = adj, onEliminar = { adjuntoAEliminar = adj })
+                FilaAdjunto(
+                    adj = adj,
+                    abriendo = abriendoId == adj.id,
+                    onAbrir = { abrir(adj) },
+                    onEliminar = { adjuntoAEliminar = adj }
+                )
             }
         }
 
@@ -298,14 +354,11 @@ fun SeccionAdjuntos(
         }
     }
 
-    // Menú de origen del adjunto
     if (mostrarMenu) {
         AlertDialog(
             onDismissRequest = { mostrarMenu = false },
             confirmButton = {},
-            dismissButton = {
-                TextButton(onClick = { mostrarMenu = false }) { Text("Cancelar") }
-            },
+            dismissButton = { TextButton(onClick = { mostrarMenu = false }) { Text("Cancelar") } },
             title = { Text("Añadir adjunto") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -332,7 +385,6 @@ fun SeccionAdjuntos(
         )
     }
 
-    // Confirmación de borrado
     adjuntoAEliminar?.let { adj ->
         AlertDialog(
             onDismissRequest = { adjuntoAEliminar = null },
@@ -343,7 +395,7 @@ fun SeccionAdjuntos(
                     scope.launch {
                         error = null
                         try {
-                            TareasApiRepository.eliminarAdjunto(tareaId, objetivo.id)
+                            TareasApiRepository.eliminarAdjunto(tareaId!!, objetivo.id)
                             adjuntos.remove(objetivo)
                             refrescarCount()
                         } catch (_: Exception) {
@@ -352,9 +404,7 @@ fun SeccionAdjuntos(
                     }
                 }) { Text("Eliminar") }
             },
-            dismissButton = {
-                TextButton(onClick = { adjuntoAEliminar = null }) { Text("Cancelar") }
-            },
+            dismissButton = { TextButton(onClick = { adjuntoAEliminar = null }) { Text("Cancelar") } },
             title = { Text("¿Eliminar adjunto?") },
             text = { Text("Se eliminará \"${adj.nombreFichero}\" de forma permanente.") }
         )
@@ -364,10 +414,7 @@ fun SeccionAdjuntos(
 @Composable
 private fun OpcionOrigen(icono: ImageVector, texto: String, onClick: () -> Unit) {
     TextButton(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Icon(icono, contentDescription = null, modifier = Modifier.size(20.dp))
             Spacer(Modifier.width(12.dp))
             Text(texto)
@@ -376,11 +423,17 @@ private fun OpcionOrigen(icono: ImageVector, texto: String, onClick: () -> Unit)
 }
 
 @Composable
-private fun FilaAdjunto(adj: AdjuntoDto, onEliminar: () -> Unit) {
+private fun FilaAdjunto(
+    adj: AdjuntoDto,
+    abriendo: Boolean,
+    onAbrir: () -> Unit,
+    onEliminar: () -> Unit
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f), RoundedCornerShape(8.dp))
+            .clickable(enabled = !abriendo, onClick = onAbrir)
             .padding(8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -410,24 +463,67 @@ private fun FilaAdjunto(adj: AdjuntoDto, onEliminar: () -> Unit) {
         }
         Spacer(Modifier.width(10.dp))
         Column(modifier = Modifier.weight(1f)) {
+            Text(adj.nombreFichero, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(
-                adj.nombreFichero,
-                style = MaterialTheme.typography.bodyMedium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            Text(
-                formatBytes(adj.tamanoBytes),
+                if (abriendo) "Abriendo…" else formatBytes(adj.tamanoBytes),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.outline
             )
         }
-        IconButton(onClick = onEliminar) {
-            Icon(
-                Icons.Default.Delete,
-                contentDescription = "Eliminar adjunto",
-                tint = MaterialTheme.colorScheme.error
+        if (abriendo) {
+            CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+        } else {
+            IconButton(onClick = onEliminar) {
+                Icon(Icons.Default.Delete, contentDescription = "Eliminar adjunto", tint = MaterialTheme.colorScheme.error)
+            }
+        }
+    }
+}
+
+@Composable
+private fun FilaPendiente(p: AdjuntoPendiente, onQuitar: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f), RoundedCornerShape(8.dp))
+            .padding(8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        if (p.mime.startsWith("image/") && p.uri != null) {
+            AsyncImage(
+                model = p.uri,
+                contentDescription = p.nombre,
+                modifier = Modifier
+                    .size(44.dp)
+                    .background(Color(0xFFEDEDED), RoundedCornerShape(6.dp)),
+                contentScale = ContentScale.Crop
             )
+        } else {
+            Box(
+                modifier = Modifier
+                    .size(44.dp)
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f), RoundedCornerShape(6.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    iconoPorMime(p.mime),
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+        }
+        Spacer(Modifier.width(10.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(p.nombre, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(
+                "${formatBytes(p.bytes.size.toLong())} · pendiente",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.outline
+            )
+        }
+        IconButton(onClick = onQuitar) {
+            Icon(Icons.Default.Delete, contentDescription = "Quitar", tint = MaterialTheme.colorScheme.error)
         }
     }
 }

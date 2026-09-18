@@ -172,6 +172,31 @@ class TareasViewModel : ViewModel() {
         }
     }
 
+    /**
+     * Crea la tarea y devuelve su id (o null si falla). Usado por el flujo de
+     * creación con adjuntos: primero se crea la tarea para tener el id, y luego
+     * se suben los adjuntos pendientes con [subirAdjuntoTarea].
+     * NO recarga la lista aquí — el llamador debe llamar a [refrescarDatos] tras
+     * subir los adjuntos, para que el contador de adjuntos aparezca correcto.
+     */
+    suspend fun crearTareaYObtenerId(tarea: Tarea, context: Context): Int? {
+        return try {
+            val nuevoId = TareasApiRepository.insertar(tarea).toInt()
+            if (tarea.fechaLimite != null) {
+                NotificationHelper.programarNotificacion(context, tarea.copy(id = nuevoId))
+            }
+            nuevoId
+        } catch (e: Exception) {
+            _errorRed.value = "Error al crear tarea: ${e.message}"
+            null
+        }
+    }
+
+    /** Sube un adjunto a una tarea. Lanza en caso de error (el llamador lo maneja). */
+    suspend fun subirAdjuntoTarea(tareaId: Int, bytes: ByteArray, nombre: String, mime: String) {
+        TareasApiRepository.subirAdjunto(tareaId, bytes, nombre, mime)
+    }
+
     fun actualizar(tarea: Tarea, context: Context) = viewModelScope.launch {
         try {
             TareasApiRepository.actualizar(tarea)

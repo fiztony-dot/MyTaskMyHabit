@@ -1,4 +1,6 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import {
+  useState, useEffect, useRef, useCallback, forwardRef, useImperativeHandle,
+} from 'react'
 import {
   getAdjuntos, subirAdjunto, eliminarAdjunto, validarFichero, ADJUNTO_ACCEPT,
 } from '../../api/adjuntos'
@@ -25,32 +27,62 @@ function formatBytes(bytes) {
 }
 
 /**
- * Sección de adjuntos dentro del formulario de edición de una tarea.
- * Solo se muestra en modo edición (requiere una tarea ya guardada con id).
- * Notifica cambios al padre vía onCountChange(nuevoTotal).
+ * Sección de adjuntos del formulario de tarea.
+ *
+ * - Modo EDICIÓN (tareaId presente): sube/elimina contra la API inmediatamente.
+ * - Modo CREACIÓN (tareaId == null): acumula ficheros en memoria (pendientes)
+ *   y los expone al padre vía ref.subirPendientes(nuevoId), que el padre invoca
+ *   tras crear la tarea. También expone ref.tienePendientes().
+ *
+ * Notifica el nº de adjuntos al padre vía onCountChange(nuevoTotal).
  */
-export default function AdjuntosSection({ tareaId, onCountChange }) {
+const AdjuntosSection = forwardRef(function AdjuntosSection({ tareaId, onCountChange }, ref) {
+  const esCreacion = tareaId == null
+
+  // Modo edición: adjuntos ya subidos (DTOs del servidor).
   const [adjuntos, setAdjuntos] = useState([])
-  const [cargando, setCargando] = useState(true)
+  // Modo creación: ficheros pendientes { file, previewUrl }.
+  const [pendientes, setPendientes] = useState([])
+
+  const [cargando, setCargando] = useState(!esCreacion)
   const [subiendo, setSubiendo] = useState(false)
   const [progreso, setProgreso] = useState(0)
   const [error, setError] = useState('')
   const [borrandoId, setBorrandoId] = useState(null)
   const inputRef = useRef(null)
 
-  const notificar = useCallback((lista) => {
-    if (onCountChange) onCountChange(lista.length)
+  const notificar = useCallback((n) => {
+    if (onCountChange) onCountChange(n)
   }, [onCountChange])
 
+  // Carga inicial (solo edición)
   useEffect(() => {
+    if (esCreacion) { setCargando(false); return }
     let vivo = true
     setCargando(true)
     getAdjuntos(tareaId)
-      .then((lista) => { if (vivo) { setAdjuntos(lista); notificar(lista) } })
+      .then((lista) => { if (vivo) { setAdjuntos(lista); notificar(lista.length) } })
       .catch(() => { if (vivo) setError('No se pudieron cargar los adjuntos.') })
       .finally(() => { if (vivo) setCargando(false) })
     return () => { vivo = false }
-  }, [tareaId, notificar])
+  }, [tareaId, esCreacion, notificar])
+
+  // Limpieza de object URLs de las previews pendientes al desmontar
+  useEffect(() => () => {
+    pendientes.forEach((p) => URL.revokeObjectURL(p.previewUrl))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Expone acciones al padre para el flujo de creación
+  useImperativeHandle(ref, () => ({
+    tienePendientes: () => pendientes.length > 0,
+    // Sube todos los pendientes a la tarea recién creada. Lanza si alguno falla.
+    subirPendientes: async (nuevoTareaId) => {
+      for (const p of pendientes) {
+        await subirAdjunto(nuevoTareaId, p.file)
+      }
+    },
+  }), [pendientes])
 
   async function handleSeleccion(e) {
     const file = e.target.files?.[0]
@@ -59,15 +91,27 @@ export default function AdjuntosSection({ tareaId, onCountChange }) {
 
     const errValidacion = validarFichero(file)
     if (errValidacion) { setError(errValidacion); return }
-
     setError('')
+
+    if (esCreacion) {
+      // Acumular en memoria; la subida ocurre al crear la tarea.
+      const previewUrl = URL.createObjectURL(file)
+      setPendientes((prev) => {
+        const lista = [...prev, { file, previewUrl }]
+        notificar(lista.length)
+        return lista
+      })
+      return
+    }
+
+    // Modo edición: subir ya.
     setSubiendo(true)
     setProgreso(0)
     try {
       const nuevo = await subirAdjunto(tareaId, file, setProgreso)
       setAdjuntos((prev) => {
         const lista = [...prev, nuevo]
-        notificar(lista)
+        notificar(lista.length)
         return lista
       })
     } catch (err) {
@@ -86,7 +130,7 @@ export default function AdjuntosSection({ tareaId, onCountChange }) {
       await eliminarAdjunto(tareaId, adj.id)
       setAdjuntos((prev) => {
         const lista = prev.filter((a) => a.id !== adj.id)
-        notificar(lista)
+        notificar(lista.length)
         return lista
       })
     } catch (err) {
@@ -96,14 +140,57 @@ export default function AdjuntosSection({ tareaId, onCountChange }) {
     }
   }
 
+  function handleQuitarPendiente(idx) {
+    setPendientes((prev) => {
+      const p = prev[idx]
+      if (p) URL.revokeObjectURL(p.previewUrl)
+      const lista = prev.filter((_, i) => i !== idx)
+      notificar(lista.length)
+      return lista
+    })
+  }
+
+  const listaVacia = esCreacion ? pendientes.length === 0 : adjuntos.length === 0
+
   return (
     <div className="m-field m-adjuntos">
       <label className="m-label">Adjuntos</label>
 
       {cargando ? (
         <p className="m-adj-empty">Cargando adjuntos…</p>
-      ) : adjuntos.length === 0 ? (
-        <p className="m-adj-empty">Sin adjuntos todavía.</p>
+      ) : listaVacia ? (
+        <p className="m-adj-empty">
+          {esCreacion ? 'Añade ficheros; se subirán al crear la tarea.' : 'Sin adjuntos todavía.'}
+        </p>
+      ) : esCreacion ? (
+        <ul className="m-adj-list">
+          {pendientes.map((p, idx) => (
+            <li key={idx} className="m-adj-item">
+              {esImagen(p.file.type) ? (
+                <span className="m-adj-thumb-link">
+                  <img src={p.previewUrl} alt={p.file.name} className="m-adj-thumb" />
+                </span>
+              ) : (
+                <span className="m-adj-icon-link">
+                  <span className="material-icons m-adj-icon">{iconoPorTipo(p.file.type)}</span>
+                </span>
+              )}
+              <div className="m-adj-info">
+                <span className="m-adj-nombre" title={p.file.name}>{p.file.name}</span>
+                <span className="m-adj-size">{formatBytes(p.file.size)} · pendiente</span>
+              </div>
+              <button
+                type="button"
+                className="m-adj-del"
+                onClick={() => handleQuitarPendiente(idx)}
+                aria-label={`Quitar ${p.file.name}`}
+                title="Quitar"
+              >
+                <span className="material-icons">delete</span>
+              </button>
+            </li>
+          ))}
+        </ul>
       ) : (
         <ul className="m-adj-list">
           {adjuntos.map((adj) => (
@@ -165,4 +252,6 @@ export default function AdjuntosSection({ tareaId, onCountChange }) {
       </button>
     </div>
   )
-}
+})
+
+export default AdjuntosSection

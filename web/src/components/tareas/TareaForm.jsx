@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { getIconColor } from '../../lib/iconColors'
 import TimePicker from './TimePicker'
 import AdjuntosSection from './AdjuntosSection'
@@ -58,6 +58,7 @@ export default function TareaForm({ tarea, categorias, onGuardar, onEliminar, on
   const [form, setForm] = useState(esEdicion ? tareaToForm(tarea) : FORM_VACIO)
   const [guardando, setGuardando] = useState(false)
   const [error, setError] = useState('')
+  const adjuntosRef = useRef(null)
 
   useEffect(() => {
     setForm(tarea ? tareaToForm(tarea) : FORM_VACIO)
@@ -79,7 +80,21 @@ export default function TareaForm({ tarea, categorias, onGuardar, onEliminar, on
       if (tarea?.pendiente_clasificar && body.categoria_id !== null) {
         body.pendiente_clasificar = false
       }
-      await onGuardar(body, tarea?.id)
+      const guardada = await onGuardar(body, tarea?.id)
+      // Creación: subir los adjuntos pendientes a la tarea recién creada
+      if (!esEdicion && adjuntosRef.current?.tienePendientes()) {
+        const nuevoId = guardada?.id
+        if (nuevoId != null) {
+          try {
+            await adjuntosRef.current.subirPendientes(nuevoId)
+          } catch {
+            // La tarea ya se creó; avisamos pero no bloqueamos el cierre
+            setError('La tarea se creó, pero algún adjunto no se pudo subir.')
+            setGuardando(false)
+            return
+          }
+        }
+      }
       onCerrar()
     } catch (err) {
       setError(err.response?.data?.error || 'Error al guardar la tarea.')
@@ -219,9 +234,7 @@ export default function TareaForm({ tarea, categorias, onGuardar, onEliminar, on
             </div>
           )}
 
-          {esEdicion && tarea?.id != null && (
-            <AdjuntosSection tareaId={tarea.id} />
-          )}
+          <AdjuntosSection ref={adjuntosRef} tareaId={esEdicion ? tarea?.id : null} />
 
           {error && <p style={{ color: '#ef4444', fontSize: '.8125rem', margin: '0 0 .75rem' }}>{error}</p>}
 
