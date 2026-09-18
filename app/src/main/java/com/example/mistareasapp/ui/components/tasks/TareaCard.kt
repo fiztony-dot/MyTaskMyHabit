@@ -5,6 +5,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.HelpOutline
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material3.*
@@ -130,6 +131,16 @@ fun TareaCard(
                                 contentDescription = "Tarea recurrente",
                                 modifier = Modifier.size(14.dp),
                                 tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
+                            )
+                        }
+
+                        if (tarea.adjuntosCount > 0) {
+                            Spacer(Modifier.width(6.dp))
+                            Icon(
+                                imageVector = Icons.Default.AttachFile,
+                                contentDescription = "Tiene adjuntos",
+                                modifier = Modifier.size(14.dp),
+                                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
                             )
                         }
                     }

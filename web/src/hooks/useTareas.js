@@ -32,7 +32,10 @@ export function useTareas() {
       )
     }, []),
     onUpdate: useCallback((actualizada) => {
-      setTareas((prev) => prev.map((t) => (t.id === actualizada.id ? actualizada : t)))
+      // Preservar adjuntos_count (solo lo aporta el endpoint de listado, no Realtime)
+      setTareas((prev) => prev.map((t) =>
+        t.id === actualizada.id ? { ...actualizada, adjuntos_count: t.adjuntos_count } : t
+      ))
     }, []),
     onDelete: useCallback((eliminada) => {
       setTareas((prev) => prev.filter((t) => t.id !== eliminada.id))
@@ -47,7 +50,9 @@ export function useTareas() {
     )
     try {
       const updated = await api.completarTarea(tarea.id, nueva)
-      setTareas((prev) => prev.map((t) => (t.id === updated.id ? updated : t)))
+      setTareas((prev) => prev.map((t) =>
+        t.id === updated.id ? { ...updated, adjuntos_count: t.adjuntos_count } : t
+      ))
     } catch {
       // Revertir si la petición falla
       setTareas((prev) => prev.map((t) => (t.id === tarea.id ? tarea : t)))
@@ -63,7 +68,9 @@ export function useTareas() {
 
   const editar = useCallback(async (id, body) => {
     const updated = await api.editarTarea(id, body)
-    setTareas((prev) => prev.map((t) => (t.id === id ? updated : t)))
+    setTareas((prev) => prev.map((t) =>
+      t.id === id ? { ...updated, adjuntos_count: t.adjuntos_count } : t
+    ))
     return updated
   }, [])
 

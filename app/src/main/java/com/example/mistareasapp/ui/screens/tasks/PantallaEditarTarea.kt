@@ -58,6 +58,7 @@ import com.example.mistareasapp.data.tasks.Prioridad
 import com.example.mistareasapp.data.tasks.Tarea
 import com.example.mistareasapp.ui.components.tasks.BotonSelectorDato
 import com.example.mistareasapp.ui.components.tasks.SelectorPrioridad
+import com.example.mistareasapp.ui.components.tasks.SeccionAdjuntos
 import com.example.mistareasapp.ui.components.tasks.obtenerColorIcono
 import com.example.mistareasapp.ui.components.tasks.obtenerIcono
 import com.example.mistareasapp.viewmodel.Tasks.TareasViewModel
@@ -363,6 +364,11 @@ fun PantallaEditarTarea(navController: NavController, tareaId: Int, viewModel: T
             SelectorPrioridad(
                 prioridadSeleccionada = prioridad,
                 onPrioridadCambiada = { prioridad = it })
+
+            // 3B. Adjuntos (solo con tarea guardada — requiere tareaId real)
+            if (tareaId > 0) {
+                SeccionAdjuntos(tareaId = tareaId)
+            }
 
             // 4. Estado completada
             /*Row(

@@ -58,7 +58,8 @@ data class TareaDto(
     @SerialName("pendiente_clasificar") val pendienteClasificar: Boolean = false,
     @SerialName("repeticion_fin") val repeticionFin: String? = null,
     @SerialName("repeticion_veces") val repeticionVeces: Int? = null,
-    @SerialName("repeticion_contador") val repeticionContador: Int = 0
+    @SerialName("repeticion_contador") val repeticionContador: Int = 0,
+    @SerialName("adjuntos_count") val adjuntosCount: Int = 0
 )
 
 @Serializable
@@ -93,6 +94,19 @@ data class TareaUpdateRequest(
 
 @Serializable
 data class CompletarRequest(@SerialName("esta_completada") val estaCompletada: Boolean)
+
+// --- Adjuntos ---
+
+@Serializable
+data class AdjuntoDto(
+    val id: Long,
+    @SerialName("tarea_id") val tareaId: Long = 0,
+    @SerialName("nombre_fichero") val nombreFichero: String,
+    @SerialName("tipo_mime") val tipoMime: String,
+    @SerialName("tamano_bytes") val tamanoBytes: Long = 0,
+    @SerialName("creado_en") val creadoEn: String? = null,
+    @SerialName("url_firmada") val urlFirmada: String
+)
 
 // --- Wrappers de respuesta ---
 

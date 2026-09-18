@@ -18,7 +18,8 @@ data class Tarea(
     val pendienteClasificar: Boolean = false,
     val repeticionFin: LocalDate? = null,
     val repeticionVeces: Int? = null,
-    val repeticionContador: Int = 0
+    val repeticionContador: Int = 0,
+    val adjuntosCount: Int = 0
 ) {
     fun toComparableDateTime(): LocalDateTime {
         val fecha = this.fechaLimite ?: LocalDate.MAX

@@ -112,8 +112,23 @@ object TareasApiRepository {
         pendienteClasificar = pendienteClasificar,
         repeticionFin = repeticionFin?.let { parseDate(it) },
         repeticionVeces = repeticionVeces,
-        repeticionContador = repeticionContador
+        repeticionContador = repeticionContador,
+        adjuntosCount = adjuntosCount
     )
+
+    // ═══════════════════════════════════════════
+    //             ADJUNTOS
+    // ═══════════════════════════════════════════
+
+    suspend fun obtenerAdjuntos(tareaId: Int): List<AdjuntoDto> =
+        TareasApiService.getAdjuntos(tareaId.toLong())
+
+    suspend fun subirAdjunto(
+        tareaId: Int, bytes: ByteArray, nombre: String, mime: String
+    ): AdjuntoDto = TareasApiService.subirAdjunto(tareaId.toLong(), bytes, nombre, mime)
+
+    suspend fun eliminarAdjunto(tareaId: Int, adjuntoId: Long) =
+        TareasApiService.eliminarAdjunto(tareaId.toLong(), adjuntoId)
 
     private fun Tarea.toCreateRequest(): TareaCreateRequest {
         // Resolver categoriaId desde el nombre de categoría

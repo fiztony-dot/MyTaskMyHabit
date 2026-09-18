@@ -42,7 +42,9 @@ object ApiClient {
 
         defaultRequest {
             url(BASE_URL)
-            contentType(ContentType.Application.Json)
+            // NO fijamos Content-Type aquí: ContentNegotiation lo pone en application/json
+            // al serializar cuerpos de objeto, y las subidas multipart necesitan su propio
+            // Content-Type (boundary). Fijarlo globalmente rompía la subida de adjuntos.
             cachedToken?.let { token ->
                 header(HttpHeaders.Authorization, "Bearer $token")
             }

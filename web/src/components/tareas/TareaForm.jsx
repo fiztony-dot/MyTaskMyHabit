@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { getIconColor } from '../../lib/iconColors'
 import TimePicker from './TimePicker'
+import AdjuntosSection from './AdjuntosSection'
 import '../../styles/tareas.css'
 
 const OPCIONES_REPETICION = [
@@ -216,6 +217,10 @@ export default function TareaForm({ tarea, categorias, onGuardar, onEliminar, on
                 />
               </div>
             </div>
+          )}
+
+          {esEdicion && tarea?.id != null && (
+            <AdjuntosSection tareaId={tarea.id} />
           )}
 
           {error && <p style={{ color: '#ef4444', fontSize: '.8125rem', margin: '0 0 .75rem' }}>{error}</p>}

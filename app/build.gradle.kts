@@ -137,6 +137,9 @@ dependencies {
     implementation("androidx.glance:glance-appwidget:1.1.0")
     implementation("androidx.glance:glance-material3:1.1.0")
 
+    // Coil: carga de imágenes (thumbnails de adjuntos vía URL firmada)
+    implementation("io.coil-kt:coil-compose:2.7.0")
+
 
 
 }

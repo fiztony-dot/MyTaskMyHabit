@@ -60,6 +60,20 @@ npm run deploy   # wrangler deploy — publicar en Cloudflare
 | PUT    | `/api/tareas/:id`             | handlePutTarea           | Sí   |
 | PATCH  | `/api/tareas/:id/completar`   | handlePatchCompletar     | Sí   |
 | DELETE | `/api/tareas/:id`             | handleDeleteTarea        | Sí   |
+| GET    | `/api/tareas/:id/adjuntos`    | handleGetAdjuntos        | Sí   |
+| POST   | `/api/tareas/:id/adjuntos`    | handlePostAdjunto        | Sí   |
+| DELETE | `/api/tareas/:id/adjuntos/:adjuntoId` | handleDeleteAdjunto | Sí   |
+
+## Adjuntos (Fase 1)
+
+- Bucket privado de Supabase Storage: `tarea-adjuntos` (se autocrea en el primer POST vía `ensureAdjuntosBucket`).
+- Paths: `{usuario_id}/{tarea_id}/{timestamp}_{nombre_saneado}`.
+- Límite: 10 MB. Tipos: jpg/png/gif/webp, pdf/doc/docx/xls/xlsx/txt.
+- `POST` recibe `multipart/form-data` con campo `file`. Sube a Storage, inserta en `tarea_adjuntos`, devuelve el adjunto con `url_firmada` (válida 1h).
+- `GET` devuelve la lista con `url_firmada` fresca por adjunto.
+- `DELETE` borra primero de Storage y luego la fila.
+- `handleGetTareas` anota cada tarea con `adjuntos_count` (indicador de lista).
+- Migración SQL: `server/migrations/005_create_tarea_adjuntos.sql` (aplicar en Supabase — el Worker no ejecuta migraciones).
 
 ## CORS
 
@@ -109,3 +123,4 @@ Siempre incluye `Prefer: return=representation` para obtener el recurso creado/a
 | 4 — 2026-08-23 | handleGetCategorias, handlePostCategoria, handlePutCategoria, handleDeleteCategoria (port de categorias.js) |
 | 5 — 2026-08-23 | handleGetTareas (sort JS), handleGetTarea, handlePostTarea, handlePutTarea, handlePatchCompletar, handleDeleteTarea (port de tareas.js) |
 | 6 — 2026-08-23 | Deploy a producción: `wrangler deploy` → https://mytaskmyhabit-worker.fiztony.workers.dev |
+| 7 — 2026-09-16 | Adjuntos en tareas (Fase 1): endpoints GET/POST/DELETE `/api/tareas/:id/adjuntos`, helpers de Storage (upload/delete/signedUrl/ensureBucket), validación tamaño+tipo, `adjuntos_count` en listado. |

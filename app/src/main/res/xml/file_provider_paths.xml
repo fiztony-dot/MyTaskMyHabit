@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths>
     <cache-path name="pdf_cache" path="." />
+    <!-- Fotos capturadas con la cámara para adjuntar a tareas -->
+    <cache-path name="adjuntos_cache" path="adjuntos/" />
+    <external-cache-path name="adjuntos_ext_cache" path="adjuntos/" />
 </paths>

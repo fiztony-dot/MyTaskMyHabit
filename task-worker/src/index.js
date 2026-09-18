@@ -192,6 +192,161 @@ const TAREAS_SELECT = [
 const PRIORIDADES = ['ALTA', 'MEDIA', 'BAJA']
 const ORDEN_PRIORIDAD = { ALTA: 1, MEDIA: 2, BAJA: 3 }
 
+// ── Adjuntos (attachments) ─────────────────────────────────────────────────────
+
+const ADJUNTOS_BUCKET = 'tarea-adjuntos'
+const ADJUNTO_MAX_BYTES = 10 * 1024 * 1024 // 10 MB
+const ADJUNTO_SIGNED_URL_TTL = 3600 // 1 hora (segundos)
+
+// Tipos MIME permitidos. Imágenes: jpg/png/gif/webp. Documentos: pdf/doc/docx/xls/xlsx/txt.
+const ADJUNTO_MIME_PERMITIDOS = new Set([
+  'image/jpeg',
+  'image/png',
+  'image/gif',
+  'image/webp',
+  'application/pdf',
+  'application/msword',                                                       // .doc
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',  // .docx
+  'application/vnd.ms-excel',                                                 // .xls
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',        // .xlsx
+  'text/plain',                                                               // .txt
+])
+
+// Extensión → MIME de respaldo, para clientes que no envían Content-Type fiable.
+const ADJUNTO_EXT_MIME = {
+  jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', gif: 'image/gif', webp: 'image/webp',
+  pdf: 'application/pdf', txt: 'text/plain',
+  doc: 'application/msword',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  xls: 'application/vnd.ms-excel',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+}
+const ADJUNTOS_SELECT =
+  'id,tarea_id,usuario_id,nombre_fichero,tipo_mime,tamaño_bytes,storage_path,url_publica,creado_en'
+
+// Resuelve el MIME real combinando el declarado por el cliente y la extensión del nombre.
+function resolverMime(declarado, nombre) {
+  if (declarado && ADJUNTO_MIME_PERMITIDOS.has(declarado)) return declarado
+  const ext = (nombre.split('.').pop() || '').toLowerCase()
+  return ADJUNTO_EXT_MIME[ext] || declarado || 'application/octet-stream'
+}
+
+// Limpia el nombre de fichero para usarlo en un path de Storage (sin separadores ni chars raros).
+function sanitizarNombre(nombre) {
+  const base = (nombre || 'fichero').split(/[\\/]/).pop()
+  const limpio = base.replace(/[^\w.\-() ]/g, '_').trim()
+  return limpio || 'fichero'
+}
+
+// Crea el bucket privado si no existe (idempotente). No lanza si ya existe.
+async function ensureAdjuntosBucket(env) {
+  const res = await fetch(`${env.SUPABASE_URL}/storage/v1/bucket`, {
+    method: 'POST',
+    headers: {
+      apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+      Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      id: ADJUNTOS_BUCKET,
+      name: ADJUNTOS_BUCKET,
+      public: false,
+      file_size_limit: ADJUNTO_MAX_BYTES,
+    }),
+  })
+  // 200/201 = creado; 409 = ya existía. Ambos son OK.
+  if (!res.ok && res.status !== 409) {
+    const text = await res.text()
+    // 400 con "already exists" en algunas versiones — tratar como OK
+    if (!/exist/i.test(text)) {
+      console.error('[adjuntos] No se pudo crear el bucket:', res.status, text)
+    }
+  }
+}
+
+// Sube bytes a Storage. Devuelve { error } (null si OK).
+async function storageUpload(env, path, bytes, contentType) {
+  const url = `${env.SUPABASE_URL}/storage/v1/object/${ADJUNTOS_BUCKET}/${path}`
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+      Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+      'Content-Type': contentType,
+      'x-upsert': 'true',
+    },
+    body: bytes,
+  })
+  if (!res.ok) {
+    const text = await res.text()
+    return { error: { status: res.status, message: text } }
+  }
+  return { error: null }
+}
+
+// Borra un objeto de Storage. Devuelve { error } (null si OK, ignora 404).
+async function storageDelete(env, path) {
+  const url = `${env.SUPABASE_URL}/storage/v1/object/${ADJUNTOS_BUCKET}/${path}`
+  const res = await fetch(url, {
+    method: 'DELETE',
+    headers: {
+      apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+      Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+    },
+  })
+  if (!res.ok && res.status !== 404) {
+    const text = await res.text()
+    return { error: { status: res.status, message: text } }
+  }
+  return { error: null }
+}
+
+// Genera una URL firmada (válida ADJUNTO_SIGNED_URL_TTL segundos) para un objeto.
+// Devuelve la URL absoluta o null si falla.
+async function storageSignedUrl(env, path) {
+  const url = `${env.SUPABASE_URL}/storage/v1/object/sign/${ADJUNTOS_BUCKET}/${path}`
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+      Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ expiresIn: ADJUNTO_SIGNED_URL_TTL }),
+  })
+  if (!res.ok) {
+    console.error('[adjuntos] Error firmando URL:', res.status, await res.text())
+    return null
+  }
+  const body = await res.json()
+  // signedURL es relativa: "/object/sign/<bucket>/<path>?token=..."
+  const signed = body.signedURL || body.signedUrl
+  if (!signed) return null
+  return `${env.SUPABASE_URL}/storage/v1${signed.startsWith('/') ? '' : '/'}${signed}`
+}
+
+// Verifica que la tarea pertenece al usuario. Devuelve true/false.
+async function tareaPerteneceAUsuario(env, tareaId, usuarioId) {
+  const { data } = await supabaseRequest(
+    env, 'GET', `tareas_table?id=eq.${tareaId}&usuario_id=eq.${usuarioId}&select=id`
+  )
+  return Array.isArray(data) && data.length > 0
+}
+
+// Serializa una fila de adjunto añadiendo la URL firmada fresca.
+async function adjuntoToDto(env, row) {
+  const signed = await storageSignedUrl(env, row.storage_path)
+  return {
+    id: Number(row.id),
+    tarea_id: Number(row.tarea_id),
+    nombre_fichero: row.nombre_fichero,
+    tipo_mime: row.tipo_mime,
+    tamano_bytes: Number(row.tamaño_bytes),
+    creado_en: row.creado_en,
+    url_firmada: signed || row.url_publica,
+  }
+}
+
 // ── Handlers ──────────────────────────────────────────────────────────────────
 
 async function healthCheck(req, _env) {
@@ -415,6 +570,22 @@ async function handleGetTareas(request, env) {
       (ORDEN_PRIORIDAD[a.prioridad] ?? 9) - (ORDEN_PRIORIDAD[b.prioridad] ?? 9) ||
       new Date(a.fecha_creacion) - new Date(b.fecha_creacion)
   )
+
+  // Anotar cada tarea con su nº de adjuntos (una sola consulta agregada).
+  // Si la tabla aún no existe (migración no aplicada), se ignora silenciosamente.
+  try {
+    const { data: adj } = await supabaseRequest(
+      env, 'GET', `tarea_adjuntos?usuario_id=eq.${usuarioId}&select=tarea_id`
+    )
+    if (Array.isArray(adj)) {
+      const counts = {}
+      for (const a of adj) counts[a.tarea_id] = (counts[a.tarea_id] || 0) + 1
+      for (const r of rows) r.adjuntos_count = counts[r.id] || 0
+    }
+  } catch {
+    /* tabla inexistente o error transitorio — no bloquea la lista */
+  }
+
   return json({ data: rows })
 }
 
@@ -576,6 +747,143 @@ async function handleDeleteTarea(request, env, tareaId) {
   return json({ data: { deleted: true, id } })
 }
 
+// ── Handlers de adjuntos ────────────────────────────────────────────────────────
+
+async function handleGetAdjuntos(request, env, tareaIdRaw) {
+  const tareaId = parseInt(tareaIdRaw)
+  if (isNaN(tareaId)) return json({ error: 'ID inválido' }, 400)
+
+  const auth = await requireAuth(request, env)
+  if (auth.error) return auth.error
+  const usuarioId = await resolveUser(auth.user.sub, env)
+  if (usuarioId === null) return json({ error: 'Usuario no encontrado en la base de datos' }, 404)
+
+  if (!(await tareaPerteneceAUsuario(env, tareaId, usuarioId))) {
+    return json({ error: 'Tarea no encontrada' }, 404)
+  }
+
+  const path = `tarea_adjuntos?tarea_id=eq.${tareaId}&usuario_id=eq.${usuarioId}&select=${ADJUNTOS_SELECT}&order=creado_en.asc`
+  const { data, error } = await supabaseRequest(env, 'GET', path)
+  if (error) return json({ error: error.message }, error.status || 500)
+
+  const dtos = await Promise.all((data || []).map((row) => adjuntoToDto(env, row)))
+  return json({ data: dtos })
+}
+
+async function handlePostAdjunto(request, env, tareaIdRaw) {
+  const tareaId = parseInt(tareaIdRaw)
+  if (isNaN(tareaId)) return json({ error: 'ID inválido' }, 400)
+
+  const auth = await requireAuth(request, env)
+  if (auth.error) return auth.error
+  const usuarioId = await resolveUser(auth.user.sub, env)
+  if (usuarioId === null) return json({ error: 'Usuario no encontrado en la base de datos' }, 404)
+
+  if (!(await tareaPerteneceAUsuario(env, tareaId, usuarioId))) {
+    return json({ error: 'Tarea no encontrada' }, 404)
+  }
+
+  let formData
+  try {
+    formData = await request.formData()
+  } catch {
+    return json({ error: 'Se esperaba multipart/form-data' }, 400)
+  }
+
+  const file = formData.get('file') || formData.get('adjunto') || formData.get('archivo')
+  if (!file || typeof file === 'string') {
+    return json({ error: 'Falta el fichero (campo "file")' }, 400)
+  }
+
+  const nombreOriginal = file.name || 'fichero'
+  const mime = resolverMime(file.type, nombreOriginal)
+
+  if (!ADJUNTO_MIME_PERMITIDOS.has(mime)) {
+    return json(
+      { error: 'Tipo de fichero no permitido. Se aceptan imágenes (jpg, png, gif, webp) y documentos (pdf, doc, docx, xls, xlsx, txt).' },
+      400
+    )
+  }
+
+  const bytes = new Uint8Array(await file.arrayBuffer())
+  if (bytes.byteLength === 0) {
+    return json({ error: 'El fichero está vacío' }, 400)
+  }
+  if (bytes.byteLength > ADJUNTO_MAX_BYTES) {
+    return json({ error: 'El fichero supera el límite de 10MB' }, 413)
+  }
+
+  // Asegurar bucket (idempotente) y subir. Path: {usuario_id}/{tarea_id}/{timestamp}_{nombre}
+  await ensureAdjuntosBucket(env)
+  const nombreLimpio = sanitizarNombre(nombreOriginal)
+  const storagePath = `${usuarioId}/${tareaId}/${Date.now()}_${nombreLimpio}`
+
+  const { error: upErr } = await storageUpload(env, storagePath, bytes, mime)
+  if (upErr) {
+    console.error('[adjuntos] Error subiendo a Storage:', upErr)
+    return json({ error: 'No se pudo subir el fichero al almacenamiento' }, upErr.status || 500)
+  }
+
+  // URL pública base (aunque el bucket sea privado; se sirve vía URL firmada).
+  const urlPublica = `${env.SUPABASE_URL}/storage/v1/object/${ADJUNTOS_BUCKET}/${storagePath}`
+
+  const { data, error } = await supabaseRequest(env, 'POST', 'tarea_adjuntos', {
+    tarea_id:       tareaId,
+    usuario_id:     usuarioId,
+    nombre_fichero: nombreOriginal.substring(0, 255),
+    tipo_mime:      mime,
+    tamaño_bytes:   bytes.byteLength,
+    storage_path:   storagePath,
+    url_publica:    urlPublica,
+  })
+
+  if (error || !data || data.length === 0) {
+    // Rollback del fichero subido si la fila no se pudo insertar
+    await storageDelete(env, storagePath)
+    console.error('[adjuntos] Error insertando fila:', error)
+    return json({ error: 'No se pudo registrar el adjunto' }, error?.status || 500)
+  }
+
+  const dto = await adjuntoToDto(env, data[0])
+  return json({ data: dto }, 201)
+}
+
+async function handleDeleteAdjunto(request, env, tareaIdRaw, adjuntoIdRaw) {
+  const tareaId = parseInt(tareaIdRaw)
+  const adjuntoId = parseInt(adjuntoIdRaw)
+  if (isNaN(tareaId) || isNaN(adjuntoId)) return json({ error: 'ID inválido' }, 400)
+
+  const auth = await requireAuth(request, env)
+  if (auth.error) return auth.error
+  const usuarioId = await resolveUser(auth.user.sub, env)
+  if (usuarioId === null) return json({ error: 'Usuario no encontrado en la base de datos' }, 404)
+
+  // Buscar el adjunto validando pertenencia (usuario + tarea)
+  const { data: filas, error: getErr } = await supabaseRequest(
+    env, 'GET',
+    `tarea_adjuntos?id=eq.${adjuntoId}&tarea_id=eq.${tareaId}&usuario_id=eq.${usuarioId}&select=id,storage_path`
+  )
+  if (getErr) return json({ error: getErr.message }, getErr.status || 500)
+  if (!filas || filas.length === 0) return json({ error: 'Adjunto no encontrado' }, 404)
+
+  const storagePath = filas[0].storage_path
+
+  // Borrar primero de Storage (si falla, no borramos la fila para no dejar huérfanos invisibles)
+  const { error: delStorageErr } = await storageDelete(env, storagePath)
+  if (delStorageErr) {
+    console.error('[adjuntos] Error borrando de Storage:', delStorageErr)
+    return json({ error: 'No se pudo eliminar el fichero del almacenamiento' }, delStorageErr.status || 500)
+  }
+
+  const { data, error } = await supabaseRequest(
+    env, 'DELETE',
+    `tarea_adjuntos?id=eq.${adjuntoId}&tarea_id=eq.${tareaId}&usuario_id=eq.${usuarioId}`
+  )
+  if (error) return json({ error: error.message }, error.status || 500)
+  if (!data || data.length === 0) return json({ error: 'Adjunto no encontrado' }, 404)
+  return json({ data: { deleted: true, id: adjuntoId } })
+}
+
 // ── Router ────────────────────────────────────────────────────────────────────
 
 async function dispatch(request, env) {
@@ -608,6 +916,15 @@ async function dispatch(request, env) {
   if (p[0]==='api' && p[1]==='tareas' && p[2]) {
     if (p[3]==='completar' && p.length===4 && method==='PATCH')
       return handlePatchCompletar(request, env, p[2])
+    // Adjuntos: /api/tareas/:id/adjuntos  y  /api/tareas/:id/adjuntos/:adjuntoId
+    if (p[3]==='adjuntos') {
+      if (p.length===4) {
+        if (method === 'GET')  return handleGetAdjuntos(request, env, p[2])
+        if (method === 'POST') return handlePostAdjunto(request, env, p[2])
+      }
+      if (p.length===5 && method === 'DELETE')
+        return handleDeleteAdjunto(request, env, p[2], p[4])
+    }
     if (p.length===3) {
       if (method === 'GET')    return handleGetTarea(request, env, p[2])
       if (method === 'PUT')    return handlePutTarea(request, env, p[2])

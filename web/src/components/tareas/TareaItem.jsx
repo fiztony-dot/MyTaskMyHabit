@@ -71,11 +71,21 @@ export default function TareaItem({ tarea, catData, onEdit, onToggle, fadingOut 
         </div>
       </div>
 
-      {tarea.repeticion && (
+      {(tarea.repeticion || tarea.adjuntos_count > 0) && (
         <div className="ti-right">
-          <span className="material-icons ti-rep-icon" title="Tarea repetitiva">
-            repeat
-          </span>
+          {tarea.adjuntos_count > 0 && (
+            <span
+              className="material-icons ti-adj-icon"
+              title={`${tarea.adjuntos_count} adjunto${tarea.adjuntos_count > 1 ? 's' : ''}`}
+            >
+              attach_file
+            </span>
+          )}
+          {tarea.repeticion && (
+            <span className="material-icons ti-rep-icon" title="Tarea repetitiva">
+              repeat
+            </span>
+          )}
         </div>
       )}
     </div>
