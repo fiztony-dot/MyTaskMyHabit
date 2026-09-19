@@ -27,7 +27,8 @@ Esta carpeta contiene toda la documentación del proyecto organizada por temas.
 
 ### ☁️ Infraestructura / Backend
 - [`../task-worker/README.md`](../task-worker/README.md) - Cloudflare Worker (backend HTTP): endpoints, helpers, variables de entorno e historial de iteraciones.
-  - **URL activa (Cloudflare Worker):** `https://mytaskmyhabit-worker.fiztony.workers.dev`
+  - **URL activa (Cloudflare Worker, dominio propio):** `https://api.myafiappdomain.com`
+  - **URL anterior (workers.dev, deprecated):** `https://mytaskmyhabit-worker.fiztony.workers.dev`
   - **URL anterior (Express/Railway, deprecated):** `https://mytaskmyhabit-production.up.railway.app`
 
 ---

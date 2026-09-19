@@ -3,7 +3,7 @@
 Cloudflare Worker que actúa como backend HTTP para MyTaskMyHabit.  
 Reemplaza el servidor Node/Express alojado en Railway.
 
-**URL de producción:** `https://mytaskmyhabit-worker.fiztony.workers.dev`
+**URL de producción:** `https://api.myafiappdomain.com` (dominio propio; antes `https://mytaskmyhabit-worker.fiztony.workers.dev`)
 
 ## Estructura
 

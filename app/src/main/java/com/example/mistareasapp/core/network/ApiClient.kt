@@ -16,9 +16,9 @@ import kotlinx.serialization.json.Json
  */
 object ApiClient {
 
-    // URL base configurable — apunta al backend en Railway
+    // URL base configurable — apunta al Worker de Cloudflare (dominio propio)
     // En desarrollo local se puede cambiar a http://10.0.2.2:10000 (emulador)
-    const val BASE_URL = "https://mytaskmyhabit-worker.fiztony.workers.dev"
+    const val BASE_URL = "https://api.myafiappdomain.com"
 
     private var cachedToken: String? = null
 

@@ -62,12 +62,10 @@ export default {
     // el fetch, incluso si la respuesta de Render tarda (free tier duerme).
     ctx.waitUntil((async () => {
       try {
-        if (!env.BACKEND_URL) {
-          console.error('[email-worker] ERROR: BACKEND_URL no configurada');
-          return;
-        }
-
-        const BACKEND_URL = env.BACKEND_URL;
+        // BACKEND_URL: endpoint del webhook de email en el Worker principal.
+        // Se puede sobreescribir con la var de entorno BACKEND_URL (Dashboard);
+        // por defecto apunta al dominio propio del backend.
+        const BACKEND_URL = env.BACKEND_URL || 'https://api.myafiappdomain.com/webhooks/email';
         console.log(`[email-worker] START from=${message.from} to=${message.to} size=${message.rawSize}`);
 
         // 1. Verificar que el secret está configurado
