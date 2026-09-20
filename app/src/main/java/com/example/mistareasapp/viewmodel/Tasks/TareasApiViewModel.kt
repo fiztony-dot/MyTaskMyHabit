@@ -168,6 +168,7 @@ class TareasViewModel : ViewModel() {
             }
             cargarDatos()
         } catch (e: Exception) {
+            Log.e("TareasApiVM", "Error al crear tarea", e)
             _errorRed.value = "Error al crear tarea: ${e.message}"
         }
     }
@@ -206,6 +207,7 @@ class TareasViewModel : ViewModel() {
             }
             cargarDatos()
         } catch (e: Exception) {
+            Log.e("TareasApiVM", "Error al actualizar tarea", e)
             _errorRed.value = "Error al actualizar: ${e.message}"
         }
     }
@@ -215,6 +217,7 @@ class TareasViewModel : ViewModel() {
             TareasApiRepository.eliminar(tarea)
             cargarDatos()
         } catch (e: Exception) {
+            Log.e("TareasApiVM", "Error al eliminar tarea", e)
             _errorRed.value = "Error al eliminar: ${e.message}"
         }
     }

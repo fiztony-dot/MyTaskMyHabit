@@ -19,6 +19,7 @@ object TareasApiService {
 
     suspend fun login(username: String, password: String): LoginResponse {
         val response = client.post("/auth/login") {
+            contentType(ContentType.Application.Json)
             setBody(LoginRequest(username, password))
         }
         if (response.status == HttpStatusCode.Unauthorized) {
@@ -50,6 +51,7 @@ object TareasApiService {
 
     suspend fun createCategoria(titulo: String, icono: String = "list"): CategoriaDto {
         val response = client.post("/api/categorias") {
+            contentType(ContentType.Application.Json)
             setBody(CategoriaCreateRequest(titulo, icono))
         }
         checkResponse(response.status)
@@ -58,6 +60,7 @@ object TareasApiService {
 
     suspend fun updateCategoria(id: Long, titulo: String?, icono: String?, activa: Boolean?): CategoriaDto {
         val response = client.put("/api/categorias/$id") {
+            contentType(ContentType.Application.Json)
             setBody(CategoriaUpdateRequest(titulo, icono, activa))
         }
         checkResponse(response.status)
@@ -89,6 +92,7 @@ object TareasApiService {
 
     suspend fun createTarea(request: TareaCreateRequest): TareaDto {
         val response = client.post("/api/tareas") {
+            contentType(ContentType.Application.Json)
             setBody(request)
         }
         if (response.status != HttpStatusCode.Created && !response.status.isSuccess()) {
@@ -99,6 +103,7 @@ object TareasApiService {
 
     suspend fun updateTarea(id: Long, request: TareaUpdateRequest): TareaDto {
         val response = client.put("/api/tareas/$id") {
+            contentType(ContentType.Application.Json)
             setBody(request)
         }
         checkResponse(response.status)
@@ -107,6 +112,7 @@ object TareasApiService {
 
     suspend fun completarTarea(id: Long, completada: Boolean): TareaDto {
         val response = client.patch("/api/tareas/$id/completar") {
+            contentType(ContentType.Application.Json)
             setBody(CompletarRequest(completada))
         }
         checkResponse(response.status)

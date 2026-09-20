@@ -34,6 +34,7 @@ import com.example.mistareasapp.viewmodel.Tasks.MapasDeTareas
 import com.example.mistareasapp.viewmodel.Tasks.TareasViewModel
 import com.example.mistareasapp.viewmodel.Tasks.TipoVista
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.unit.dp
 import com.example.mistareasapp.ui.components.tasks.BarraFiltros
 import com.example.mistareasapp.ui.navigation.Rutas
@@ -55,6 +56,15 @@ fun PantallaListaTareas(
 
     val vistaCategorias by viewModel.tareasPorCategoria.collectAsStateWithLifecycle()
     val context = LocalContext.current
+
+    // Muestra los errores de red/escritura (antes se tragaban silenciosamente)
+    val errorRed by viewModel.errorRed.collectAsStateWithLifecycle()
+    LaunchedEffect(errorRed) {
+        errorRed?.let {
+            android.widget.Toast.makeText(context, it, android.widget.Toast.LENGTH_LONG).show()
+            viewModel.limpiarError()
+        }
+    }
 
     // 🔥 ESTADO PARA EL DIÁLOGO DE CONFIRMACIÓN (Faltaba esto)
     val ordenCategorias by viewModel.ordenCategorias.collectAsStateWithLifecycle()
