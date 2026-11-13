@@ -444,6 +444,66 @@ MyTaskMyHabit/
 └── ...                     # Ficheros del proyecto Android (gradle, etc.)
 ```
 
+## Seguridad — RLS en Supabase (Iteración S1)
+
+### Inventario de tablas y usos de anon key
+
+**Tablas en `public`:** `migration_log`, `usuarios`, `categorias_table`, `tareas_table`, `tarea_adjuntos`
+
+**Verificación de accesos:**
+- **Worker:** usa exclusivamente `SUPABASE_SERVICE_ROLE_KEY` en todas las llamadas a la REST API de Supabase y Storage. Nunca la anon key.
+- **Android:** solo habla con el Worker (`https://api.myafiappdomain.com`). No contacta con Supabase directamente.
+- **PWA:** `VITE_SUPABASE_ANON_KEY` se usa SOLO en `src/lib/supabase.js` para crear el cliente Supabase. Este cliente se usa SOLO en `src/hooks/useRealtimeTareas.js` para la suscripción a `postgres_changes`. Ningún otro archivo de la PWA usa el cliente supabase.
+- **Storage bucket `tarea-adjuntos`:** privado, solo accesible via URLs firmadas generadas por el Worker con la service_role key.
+
+### Realtime seguro — cómo funciona
+
+1. **Worker:** nuevo endpoint `GET /auth/realtime-token` (autenticado con JWT propio) que genera un JWT de Supabase (HS256, 1 hora) firmado con `SUPABASE_JWT_SECRET`. Claims: `role: "authenticated"`, `sub: String(usuario_id)`, `aud: "authenticated"`. El secreto se configura como secret del Worker (`wrangler secret put SUPABASE_JWT_SECRET`).
+
+2. **PWA:** `useRealtimeTareas.js` llama a `/auth/realtime-token` antes de suscribirse. Inyecta el token con `supabase.realtime.setAuth(token)`. Programa la renovación automática 5 minutos antes de la expiración.
+
+3. **RLS policy en `tareas_table`:** `CREATE POLICY "realtime_select_own" ... USING (usuario_id::text = (auth.jwt() ->> 'sub'))` — solo el `authenticated` con `sub` = su propio `usuario_id` puede hacer SELECT.
+
+### Secreto a configurar antes de aplicar RLS
+
+```bash
+# Desde task-worker/
+npx wrangler secret put SUPABASE_JWT_SECRET
+# Valor: Supabase Dashboard → Settings → API → JWT Settings → Legacy JWT Secret
+```
+
+### Orden de despliegue
+
+1. Configurar `SUPABASE_JWT_SECRET` en el Worker (`wrangler secret put SUPABASE_JWT_SECRET` desde `task-worker/`)
+2. Desplegar Worker (`npx wrangler deploy` desde `task-worker/`) — ya incluye el endpoint `/auth/realtime-token`
+3. Push a master → Cloudflare Pages despliega automáticamente la PWA con el `useRealtimeTareas.js` actualizado
+4. Verificar que la PWA sigue recibiendo Realtime (punto verde en el sidebar)
+5. **Solo entonces** aplicar `server/migrations/006_enable_rls.sql` en el SQL Editor de Supabase
+6. Verificar: PWA (listar/crear/editar/completar/borrar/adjuntos), Android (ídem), email → tarea
+
+### Verificación post-RLS
+
+Comprobar que una petición directa con la anon key devuelve vacío o error:
+```bash
+curl "https://clpowitmhoibiuszetpg.supabase.co/rest/v1/tareas_table?select=id" \
+  -H "apikey: <VITE_SUPABASE_ANON_KEY>" \
+  -H "Authorization: Bearer <VITE_SUPABASE_ANON_KEY>"
+# Resultado esperado: [] (array vacío, no datos)
+```
+
+### Rollback (si algo falla después de aplicar RLS)
+
+Ejecutar en el SQL Editor de Supabase:
+```sql
+ALTER TABLE usuarios         DISABLE ROW LEVEL SECURITY;
+ALTER TABLE categorias_table DISABLE ROW LEVEL SECURITY;
+ALTER TABLE tareas_table     DISABLE ROW LEVEL SECURITY;
+ALTER TABLE tarea_adjuntos   DISABLE ROW LEVEL SECURITY;
+ALTER TABLE migration_log    DISABLE ROW LEVEL SECURITY;
+```
+
+---
+
 ## Historial de iteraciones
 
 | # | Título | Fecha | Resumen |
@@ -473,3 +533,4 @@ MyTaskMyHabit/
 | A3 | Backend a dominio propio (`api.myafiappdomain.com`) | Septiembre 2026 | El Worker principal pasa a servirse en el dominio propio **`https://api.myafiappdomain.com`** (antes `mytaskmyhabit-worker.fiztony.workers.dev`). Actualizada la URL en: `ApiClient.BASE_URL` (Android), fallback de `client.js` (PWA) y `VITE_BACKEND_URL` de `web/.env.example`, y `BACKEND_URL` por defecto del `email-worker/src/index.js` (`.../webhooks/email`). Verificado `GET /health` → 200. CORS del Worker sin cambios (la PWA sigue en `mytaskmyhabitpwa.pages.dev`, que permanece en la whitelist). Android assembleDebug BUILD SUCCESSFUL + installDebug; PWA `npm run build` OK; email-worker redeploy con `wrangler deploy`. Docs (`task-worker/README.md`, `docs/README.md`) actualizadas. |
 | A2 | Adjuntos: abrir en Android + adjuntar al crear (Android y PWA) | Septiembre 2026 | **Android abrir adjunto:** `AdjuntoOpener.kt` descarga la URL firmada a caché, la expone con `FileProvider` y lanza `ACTION_VIEW` con el MIME (imágenes y documentos); spinner por fila y Toast si no hay visor. **PWA adjuntar al crear:** `AdjuntosSection` → `forwardRef` con modo creación (ficheros pendientes en memoria + preview local); `TareaForm` los sube tras crear la tarea (`handleGuardar` devuelve la tarea con su id). **Android adjuntar al crear:** `SeccionAdjuntos` con `tareaId: Int?` + lista `pendientes` propiedad del padre; `PantallaCrearTarea` crea la tarea (`crearTareaYObtenerId`), sube cada pendiente y refresca; botón "GUARDANDO…". Build PWA OK y assembleDebug BUILD SUCCESSFUL; installDebug en dispositivo (sin uninstall). |
 | A1 | Adjuntos en tareas (Fase 1): Android + PWA | Septiembre 2026 | **BD:** migración `005_create_tarea_adjuntos.sql` (tabla `tarea_adjuntos`, FK CASCADE, índice). **Storage:** bucket privado `tarea-adjuntos` autocreado por el Worker (URLs firmadas 1h, sin público permanente). **Worker:** endpoints GET/POST/DELETE `/api/tareas/:id/adjuntos[/:adjuntoId]` con validación tamaño (10MB) + tipo (jpg/png/gif/webp, pdf/doc/docx/xls/xlsx/txt), subida a Storage con rollback, y `adjuntos_count` en el listado de tareas. Desplegado a producción. **PWA:** `api/adjuntos.js` + `AdjuntosSection.jsx` en `TareaForm` (edición): lista con thumbnail/icono por tipo, subir con progreso, eliminar con confirmación, errores de tamaño/tipo; badge `attach_file` en `TareaItem`. Build OK (171 módulos). **Android:** `SeccionAdjuntos.kt` en `PantallaEditarTarea` con cámara/galería/ficheros (permiso CAMERA + FileProvider), thumbnails con Coil, progreso, confirmación y validaciones; icono `AttachFile` en `TareaCard`; se retiró el Content-Type JSON global de Ktor para permitir multipart. assembleDebug BUILD SUCCESSFUL + installDebug en dispositivo (sin uninstall). **Paso manual pendiente:** aplicar `005_...sql` en el SQL Editor de Supabase (el Worker no corre migraciones). Fase 2 (adjuntos por email) fuera de alcance. |
+| S1 | Activar RLS en Supabase (seguridad) | Noviembre 2026 | **Worker:** nuevo endpoint `GET /auth/realtime-token` (autenticado con JWT propio): genera JWT de Supabase HS256 (1 hora) firmado con `SUPABASE_JWT_SECRET`, claims `role=authenticated`, `sub=String(usuario_id)`, `aud=authenticated`. Secreto gestionado como Worker secret. **PWA:** `api/realtimeToken.js` (nuevo). `useRealtimeTareas.js` reescrito: obtiene el token antes de suscribirse, llama a `supabase.realtime.setAuth(token)`, programa renovación automática 5 min antes de expirar con reintento en 60 s si falla. `wrangler.toml` actualizado con instrucciones de `SUPABASE_JWT_SECRET`. **SQL:** `server/migrations/006_enable_rls.sql` creado (NO ejecutado): activa RLS en las 5 tablas de public, REVOKE ALL de anon en todas, REVOKE INSERT/UPDATE/DELETE de authenticated en tareas_table, política `realtime_select_own` (SELECT para authenticated donde `usuario_id::text = auth.jwt()->>sub`). **Despliegue:** Worker redesplegado (`wrangler deploy`), PWA compilada (`npm run build` OK, 172 módulos). **Pasos manuales pendientes:** (1) configurar `SUPABASE_JWT_SECRET` en el Worker; (2) verificar Realtime con token nuevo; (3) aplicar `006_enable_rls.sql` en SQL Editor de Supabase. Orden de despliegue, verificación post-RLS y rollback documentados en sección "Seguridad — RLS en Supabase". |

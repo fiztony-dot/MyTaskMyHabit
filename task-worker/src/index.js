@@ -381,6 +381,33 @@ async function handleLogin(request, env) {
   return json({ token, user: { username } })
 }
 
+async function handleRealtimeToken(request, env) {
+  const auth = await requireAuth(request, env)
+  if (auth.error) return auth.error
+
+  const usuarioId = await resolveUser(auth.user.sub, env)
+  if (usuarioId === null) return json({ error: 'Usuario no encontrado en la base de datos' }, 404)
+
+  if (!env.SUPABASE_JWT_SECRET) {
+    return json({ error: 'SUPABASE_JWT_SECRET no configurado en el Worker' }, 500)
+  }
+
+  const now = Math.floor(Date.now() / 1000)
+  const exp = now + 3600 // 1 hora
+  const token = await signJWT(
+    {
+      role: 'authenticated',
+      sub: String(usuarioId),
+      aud: 'authenticated',
+      iat: now,
+      exp,
+    },
+    env.SUPABASE_JWT_SECRET
+  )
+
+  return json({ token, expiresAt: exp })
+}
+
 async function handleMe(request, env) {
   const auth = await requireAuth(request, env)
   if (auth.error) return auth.error
@@ -896,8 +923,9 @@ async function dispatch(request, env) {
   if (pathname === '/health' && (method === 'GET' || method === 'HEAD')) return healthCheck(request, env)
 
   // Auth
-  if (pathname === '/auth/login' && method === 'POST') return handleLogin(request, env)
-  if (pathname === '/auth/me'    && method === 'GET')  return handleMe(request, env)
+  if (pathname === '/auth/login'           && method === 'POST') return handleLogin(request, env)
+  if (pathname === '/auth/me'              && method === 'GET')  return handleMe(request, env)
+  if (pathname === '/auth/realtime-token'  && method === 'GET')  return handleRealtimeToken(request, env)
 
   // Webhooks
   if (pathname === '/webhooks/email' && method === 'POST') return handleWebhookEmail(request, env)

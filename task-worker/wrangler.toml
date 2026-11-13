@@ -11,5 +11,8 @@ SENDGRID_FROM_EMAIL = ""          # ej. tareas@midominio.com (opcional)
 # JWT_SECRET                — clave HMAC para firmar/verificar tokens JWT
 # AUTH_USERS                — JSON: [{"username":"tony","password_hash":"..."}]
 # SUPABASE_SERVICE_ROLE_KEY — service-role key de Supabase (bypasa RLS)
+# SUPABASE_JWT_SECRET       — Legacy JWT Secret de Supabase (Settings → API → JWT Settings)
+#                             Se usa para firmar tokens de Realtime (GET /auth/realtime-token)
+#                             Configurar con: npx wrangler secret put SUPABASE_JWT_SECRET
 # WEBHOOK_SECRET            — token de autenticación del email webhook
 # SENDGRID_API_KEY          — API key de SendGrid (opcional, para notificaciones)
