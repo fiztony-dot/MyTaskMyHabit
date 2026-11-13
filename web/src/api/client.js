@@ -25,8 +25,13 @@ client.interceptors.response.use(
   (response) => response,
   (error) => {
     // error.response es undefined en errores de red/timeout — no interpretar como 401
-    const isLoginEndpoint = error.config?.url?.includes('/auth/login')
-    if (error.response?.status === 401 && !isLoginEndpoint) {
+    // /auth/login y /auth/realtime-token no deben disparar logout en 401:
+    // el primero porque el 401 es "credenciales incorrectas", no sesión caducada;
+    // el segundo porque Realtime es secundario y su fallo no debe expulsar al usuario.
+    const isAuthEndpoint =
+      error.config?.url?.includes('/auth/login') ||
+      error.config?.url?.includes('/auth/realtime-token')
+    if (error.response?.status === 401 && !isAuthEndpoint) {
       if (onUnauthorized) {
         onUnauthorized()
       } else {

@@ -382,30 +382,37 @@ async function handleLogin(request, env) {
 }
 
 async function handleRealtimeToken(request, env) {
+  // requireAuth devuelve { user } si el JWT es válido o { error: Response(401) } si no.
+  // Cualquier fallo de auth retorna 401, nunca 500.
   const auth = await requireAuth(request, env)
   if (auth.error) return auth.error
 
-  const usuarioId = await resolveUser(auth.user.sub, env)
-  if (usuarioId === null) return json({ error: 'Usuario no encontrado en la base de datos' }, 404)
+  try {
+    const usuarioId = await resolveUser(auth.user.sub, env)
+    if (usuarioId === null) return json({ error: 'Usuario no encontrado en la base de datos' }, 404)
 
-  if (!env.SUPABASE_JWT_SECRET) {
-    return json({ error: 'SUPABASE_JWT_SECRET no configurado en el Worker' }, 500)
+    if (!env.SUPABASE_JWT_SECRET) {
+      return json({ error: 'SUPABASE_JWT_SECRET no configurado en el Worker' }, 500)
+    }
+
+    const now = Math.floor(Date.now() / 1000)
+    const exp = now + 3600 // 1 hora
+    const token = await signJWT(
+      {
+        role: 'authenticated',
+        sub: String(usuarioId),
+        aud: 'authenticated',
+        iat: now,
+        exp,
+      },
+      env.SUPABASE_JWT_SECRET
+    )
+
+    return json({ token, expiresAt: exp })
+  } catch (err) {
+    console.error('[realtime-token] Error generando token:', err)
+    return json({ error: 'Error interno generando el token de Realtime' }, 500)
   }
-
-  const now = Math.floor(Date.now() / 1000)
-  const exp = now + 3600 // 1 hora
-  const token = await signJWT(
-    {
-      role: 'authenticated',
-      sub: String(usuarioId),
-      aud: 'authenticated',
-      iat: now,
-      exp,
-    },
-    env.SUPABASE_JWT_SECRET
-  )
-
-  return json({ token, expiresAt: exp })
 }
 
 async function handleMe(request, env) {

@@ -42,6 +42,22 @@ export function useTareas() {
     }, []),
   })
 
+  // Polling fallback cuando Realtime no está conectado: refetch cada 30 s
+  useEffect(() => {
+    if (realtimeConectado) return
+    const id = setInterval(cargar, 30_000)
+    return () => clearInterval(id)
+  }, [realtimeConectado, cargar])
+
+  // Refetch al recuperar el foco de la pestaña (solo sin Realtime activo)
+  useEffect(() => {
+    function onFocus() {
+      if (!realtimeConectado) cargar()
+    }
+    window.addEventListener('focus', onFocus)
+    return () => window.removeEventListener('focus', onFocus)
+  }, [realtimeConectado, cargar])
+
   // Actualización optimista: flip inmediato, revert si falla
   const toggleCompletada = useCallback(async (tarea) => {
     const nueva = !tarea.esta_completada
