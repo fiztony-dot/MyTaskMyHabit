@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { NO_FILL, NO_FILL_FORM } from '../lib/noFill'
 import '../styles/categorias.css'
 
 const FORM_VACIO = { titulo: '', icono: '', activa: true }
@@ -64,7 +65,7 @@ export default function CategoriaForm({ categoria, onGuardar, onCerrar }) {
           <button className="cf-close" onClick={onCerrar} aria-label="Cerrar">✕</button>
         </div>
 
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} {...NO_FILL_FORM}>
           <div className="cf-field">
             <label className="cf-label" htmlFor="cat-titulo">Nombre *</label>
             <input
@@ -76,6 +77,7 @@ export default function CategoriaForm({ categoria, onGuardar, onCerrar }) {
               required
               autoFocus
               placeholder="Nombre de la categoría"
+              {...NO_FILL}
             />
           </div>
 
@@ -88,6 +90,7 @@ export default function CategoriaForm({ categoria, onGuardar, onCerrar }) {
               value={form.icono}
               onChange={set('icono')}
               placeholder="p. ej. work, home, list, favorite…"
+              {...NO_FILL}
             />
           </div>
 

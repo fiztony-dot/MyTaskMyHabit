@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react'
+import { NO_FILL } from '../../lib/noFill'
 import '../../styles/tareas.css'
 
 export default function BuscadorTareas({ valor, onChange }) {
@@ -24,6 +25,7 @@ export default function BuscadorTareas({ valor, onChange }) {
           onChange={(e) => onChange(e.target.value)}
           placeholder="Buscar por título…"
           aria-label="Buscar tareas"
+          {...NO_FILL}
         />
         {valor && (
           <button

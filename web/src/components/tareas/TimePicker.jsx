@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { NO_FILL } from '../../lib/noFill'
 
 const ATAJOS = ['09:00', '12:00', '14:00', '18:00', '20:00']
 const MINUTOS = ['00', '15', '30', '45']
@@ -128,7 +129,7 @@ export default function TimePicker({ id, value, onChange, disabled }) {
           value={draft}
           placeholder="Sin hora"
           disabled={disabled}
-          autoComplete="off"
+          {...NO_FILL}
           inputMode="numeric"
           onChange={handleInputChange}
           onFocus={() => { if (!disabled) setOpen(true) }}

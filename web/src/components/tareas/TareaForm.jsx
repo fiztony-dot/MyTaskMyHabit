@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { getIconColor } from '../../lib/iconColors'
+import { NO_FILL, NO_FILL_FORM } from '../../lib/noFill'
 import TimePicker from './TimePicker'
 import AdjuntosSection from './AdjuntosSection'
 import '../../styles/tareas.css'
@@ -134,13 +135,14 @@ export default function TareaForm({ tarea, categorias, onGuardar, onEliminar, on
           <button className="m-close" onClick={onCerrar} aria-label="Cerrar">✕</button>
         </div>
 
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} {...NO_FILL_FORM}>
           <div className="m-field">
             <label className="m-label" htmlFor="tf-titulo">Título *</label>
             <input
               id="tf-titulo" className="m-input" type="text"
               value={form.titulo} onChange={set('titulo')}
               required autoFocus placeholder="¿Qué hay que hacer?"
+              {...NO_FILL}
             />
           </div>
 
@@ -150,13 +152,14 @@ export default function TareaForm({ tarea, categorias, onGuardar, onEliminar, on
               id="tf-desc" className="m-textarea"
               value={form.descripcion} onChange={set('descripcion')}
               placeholder="Detalles opcionales…"
+              {...NO_FILL}
             />
           </div>
 
           <div className="m-row">
             <div className="m-field">
               <label className="m-label" htmlFor="tf-prio">Prioridad</label>
-              <select id="tf-prio" className="m-select" value={form.prioridad} onChange={set('prioridad')}>
+              <select id="tf-prio" className="m-select" value={form.prioridad} onChange={set('prioridad')} {...NO_FILL}>
                 <option value="ALTA">🔴 Alta</option>
                 <option value="MEDIA">🟡 Media</option>
                 <option value="BAJA">🟢 Baja</option>
@@ -165,7 +168,7 @@ export default function TareaForm({ tarea, categorias, onGuardar, onEliminar, on
             <div className="m-field">
               <label className="m-label" htmlFor="tf-cat">Categoría</label>
               <div className="m-cat-wrap">
-                <select id="tf-cat" className="m-select" value={form.categoria_id} onChange={set('categoria_id')}>
+                <select id="tf-cat" className="m-select" value={form.categoria_id} onChange={set('categoria_id')} {...NO_FILL}>
                   <option value="">Sin categoría</option>
                   {categoriasActivas.map((c) => (
                     <option key={c.id} value={String(c.id)}>{c.titulo}</option>
@@ -189,6 +192,7 @@ export default function TareaForm({ tarea, categorias, onGuardar, onEliminar, on
               <input
                 id="tf-fecha" className="m-input" type="date"
                 value={form.fecha_limite} onChange={set('fecha_limite')}
+                {...NO_FILL}
               />
             </div>
             <div className="m-field">
@@ -206,7 +210,7 @@ export default function TareaForm({ tarea, categorias, onGuardar, onEliminar, on
 
           <div className="m-field">
             <label className="m-label" htmlFor="tf-rep">Repetición</label>
-            <select id="tf-rep" className="m-select" value={form.repeticion} onChange={set('repeticion')}>
+            <select id="tf-rep" className="m-select" value={form.repeticion} onChange={set('repeticion')} {...NO_FILL}>
               {OPCIONES_REPETICION.map((op) => (
                 <option key={op} value={op}>{op}</option>
               ))}
@@ -220,6 +224,7 @@ export default function TareaForm({ tarea, categorias, onGuardar, onEliminar, on
                 <input
                   id="tf-rep-fin" className="m-input" type="date"
                   value={form.repeticion_fin} onChange={set('repeticion_fin')}
+                  {...NO_FILL}
                 />
               </div>
               <div className="m-field">
@@ -229,6 +234,7 @@ export default function TareaForm({ tarea, categorias, onGuardar, onEliminar, on
                   min="1" max="999"
                   value={form.repeticion_veces} onChange={set('repeticion_veces')}
                   placeholder="Sin límite"
+                  {...NO_FILL}
                 />
               </div>
             </div>
