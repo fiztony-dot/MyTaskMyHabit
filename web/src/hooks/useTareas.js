@@ -2,11 +2,39 @@ import { useState, useEffect, useCallback } from 'react'
 import * as api from '../api/tareas'
 import { useRealtimeTareas } from './useRealtimeTareas'
 
+// Merge incoming data preserving object identity for unchanged items.
+// Returns the same array reference if nothing changed (prevents re-renders).
+function mergeTareas(prev, next) {
+  const prevMap = new Map(prev.map(t => [t.id, t]))
+
+  let changed = prev.length !== next.length
+  const result = next.map(t => {
+    const existing = prevMap.get(t.id)
+    if (!existing) { changed = true; return t }
+    // updated_at is the canonical change signal from Supabase/Postgres
+    const same = existing.updated_at != null && existing.updated_at === t.updated_at
+    if (same) return existing  // same reference → no re-render for this item
+    changed = true
+    return { ...t, adjuntos_count: existing.adjuntos_count }
+  })
+
+  return changed ? result : prev  // unchanged array → same reference
+}
+
+// Skip silent fetch if the user is actively typing or a modal dialog is open.
+function usuarioInteractuando() {
+  const el = document.activeElement
+  if (el && ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName)) return true
+  if (document.querySelector('[role="dialog"]')) return true
+  return false
+}
+
 export function useTareas() {
   const [tareas, setTareas] = useState([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState(null)
 
+  // Full load — shows spinner; used only on mount and manual refresh
   const cargar = useCallback(async () => {
     setIsLoading(true)
     setError(null)
@@ -20,11 +48,19 @@ export function useTareas() {
     }
   }, [])
 
+  // Silent background refresh — no spinner, no empty list, deduplicates unchanged items
+  const refetchSilencioso = useCallback(() => {
+    if (usuarioInteractuando()) return
+    api.getTareas()
+      .then(data => setTareas(prev => mergeTareas(prev, data)))
+      .catch(() => {})  // fail silently — polling will retry next cycle
+  }, [])
+
   useEffect(() => {
     cargar()
   }, [cargar])
 
-  // Supabase Realtime — actualiza el estado local al recibir eventos de BD
+  // Supabase Realtime — apply individual events without re-fetching
   const { conectado: realtimeConectado } = useRealtimeTareas({
     onInsert: useCallback((nueva) => {
       setTareas((prev) =>
@@ -32,7 +68,6 @@ export function useTareas() {
       )
     }, []),
     onUpdate: useCallback((actualizada) => {
-      // Preservar adjuntos_count (solo lo aporta el endpoint de listado, no Realtime)
       setTareas((prev) => prev.map((t) =>
         t.id === actualizada.id ? { ...actualizada, adjuntos_count: t.adjuntos_count } : t
       ))
@@ -42,23 +77,41 @@ export function useTareas() {
     }, []),
   })
 
-  // Polling fallback cuando Realtime no está conectado: refetch cada 30 s
+  // Polling fallback when Realtime is not connected.
+  // Pauses when the tab is hidden, resumes (with an immediate fetch) on show.
   useEffect(() => {
     if (realtimeConectado) return
-    const id = setInterval(cargar, 30_000)
-    return () => clearInterval(id)
-  }, [realtimeConectado, cargar])
 
-  // Refetch al recuperar el foco de la pestaña (solo sin Realtime activo)
-  useEffect(() => {
-    function onFocus() {
-      if (!realtimeConectado) cargar()
+    let intervalId = null
+
+    function iniciarIntervalo() {
+      if (!document.hidden && intervalId === null) {
+        intervalId = setInterval(refetchSilencioso, 30_000)
+      }
     }
-    window.addEventListener('focus', onFocus)
-    return () => window.removeEventListener('focus', onFocus)
-  }, [realtimeConectado, cargar])
 
-  // Actualización optimista: flip inmediato, revert si falla
+    function handleVisibility() {
+      if (document.hidden) {
+        clearInterval(intervalId)
+        intervalId = null
+      } else {
+        // Tab became visible — fetch now, then start interval
+        refetchSilencioso()
+        iniciarIntervalo()
+      }
+    }
+
+    iniciarIntervalo()
+    document.addEventListener('visibilitychange', handleVisibility)
+
+    return () => {
+      clearInterval(intervalId)
+      document.removeEventListener('visibilitychange', handleVisibility)
+    }
+  }, [realtimeConectado, refetchSilencioso])
+
+  // ── Mutations ────────────────────────────────────────────────────────────────
+
   const toggleCompletada = useCallback(async (tarea) => {
     const nueva = !tarea.esta_completada
     setTareas((prev) =>
@@ -70,14 +123,12 @@ export function useTareas() {
         t.id === updated.id ? { ...updated, adjuntos_count: t.adjuntos_count } : t
       ))
     } catch {
-      // Revertir si la petición falla
       setTareas((prev) => prev.map((t) => (t.id === tarea.id ? tarea : t)))
     }
   }, [])
 
   const crear = useCallback(async (body) => {
     const nueva = await api.crearTarea(body)
-    // Realtime puede haber llegado antes que el POST: evitar duplicado
     setTareas((prev) => prev.some((t) => t.id === nueva.id) ? prev : [...prev, nueva])
     return nueva
   }, [])
