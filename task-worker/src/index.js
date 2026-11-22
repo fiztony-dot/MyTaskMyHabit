@@ -334,25 +334,45 @@ async function sendWebPush(env, subscription, payload) {
 
 // Envía una notificación push a todas las suscripciones de un usuario.
 // Elimina automáticamente las suscripciones expiradas (410 Gone).
+// Devuelve { enviadas, intentadas } para que el caller pueda actuar según el resultado.
 async function sendPushToUser(env, usuarioId, payload) {
   const { data: subs, error } = await supabaseRequest(
     env, 'GET', `push_subscriptions?usuario_id=eq.${usuarioId}&select=id,endpoint,p256dh,auth`
   )
-  if (error || !subs || subs.length === 0) return
+  if (error || !subs || subs.length === 0) return { enviadas: 0, intentadas: 0 }
 
+  let enviadas = 0
   for (const sub of subs) {
     const result = await sendWebPush(env, sub, payload)
     if (result.ok) {
-      // Actualizar último envío exitoso
+      enviadas++
       await supabaseRequest(env, 'PATCH',
         `push_subscriptions?id=eq.${sub.id}`,
         { ultimo_envio_ok: new Date().toISOString() }
       )
     } else if (result.expired) {
-      // Suscripción expirada — limpiar
       await supabaseRequest(env, 'DELETE', `push_subscriptions?id=eq.${sub.id}`)
       console.log(`[push] Suscripción expirada eliminada id=${sub.id}`)
     }
+  }
+  return { enviadas, intentadas: subs.length }
+}
+
+// Hora actual en Europe/Madrid → { date: "YYYY-MM-DD", hTotal: minutos desde medianoche }
+function madridNow() {
+  const now   = new Date()
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Madrid',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hour12: false,
+  }).formatToParts(now)
+  const get  = (type) => parts.find(p => p.type === type)?.value ?? '0'
+  const hRaw = parseInt(get('hour'), 10)
+  const h    = hRaw === 24 ? 0 : hRaw   // 'en-CA' nunca devuelve 24, pero por si acaso
+  const m    = parseInt(get('minute'), 10)
+  return {
+    date:   `${get('year')}-${get('month')}-${get('day')}`,
+    hTotal: h * 60 + m,
   }
 }
 
@@ -1152,25 +1172,36 @@ async function handlePushUnsubscribe(request, env) {
 // ── Scheduled: resumen diario de tareas ──────────────────────────────────────
 
 async function handleScheduledDailySummary(env) {
-  const today   = new Date().toISOString().split('T')[0]       // "YYYY-MM-DD"
-  const weekAgo = new Date(Date.now() - 7 * 86_400_000).toISOString().split('T')[0]
+  // ── 1. Comprobar ventana horaria en Europe/Madrid ──────────────────────────
+  const madrid      = madridNow()
+  const digestHora  = (env.DIGEST_HORA || '08:30').trim()
+  const [dh, dm]    = digestHora.split(':').map(Number)
+  const digestTotal = (dh || 0) * 60 + (dm || 0)
 
-  // Verificar si ya se envió el resumen hoy para usuario_id=1
-  // (usuario único; en diseño multi-user, iterar por usuario)
+  if (madrid.hTotal < digestTotal || madrid.hTotal > digestTotal + 14) {
+    console.log(
+      `[cron/daily] Fuera de ventana ${digestHora} Madrid — ` +
+      `hora actual Madrid: ${String(Math.floor(madrid.hTotal / 60)).padStart(2,'0')}:${String(madrid.hTotal % 60).padStart(2,'0')}`
+    )
+    return
+  }
+
+  // ── 2. Anti-duplicados por fecha en hora de Madrid ─────────────────────────
+  const today      = madrid.date   // "YYYY-MM-DD" en zona horaria de Madrid
   const USUARIO_ID = 1
-  const logKey = today
 
   const { data: logRows } = await supabaseRequest(
     env, 'GET',
-    `push_log?usuario_id=eq.${USUARIO_ID}&tipo=eq.daily_summary&clave=eq.${logKey}&select=id`
+    `push_log?usuario_id=eq.${USUARIO_ID}&tipo=eq.daily_summary&clave=eq.${today}&select=id`
   )
   if (Array.isArray(logRows) && logRows.length > 0) {
     console.log('[cron/daily] Resumen ya enviado hoy, omitiendo')
     return
   }
 
-  // Buscar tareas vencidas o de hoy (últimos 7 días) sin completar
-  const params = new URLSearchParams([
+  // ── 3. Buscar tareas vencidas o de hoy ─────────────────────────────────────
+  const weekAgo = new Date(Date.now() - 7 * 86_400_000).toISOString().split('T')[0]
+  const params  = new URLSearchParams([
     ['esta_completada', 'eq.false'],
     ['fecha_limite',    `lte.${today}`],
     ['fecha_limite',    `gte.${weekAgo}`],
@@ -1180,47 +1211,80 @@ async function handleScheduledDailySummary(env) {
     ['limit',           '20'],
   ])
   const url = `${env.SUPABASE_URL}/rest/v1/tareas_table?${params.toString()}`
-  const res = await fetch(url, {
+  const res  = await fetch(url, {
     headers: {
-      apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+      apikey:        env.SUPABASE_SERVICE_ROLE_KEY,
       Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
     },
   })
   const tareas = res.ok ? await res.json() : []
 
   if (!Array.isArray(tareas) || tareas.length === 0) {
+    // No registrar en push_log: podría aparecer tarea más tarde en la misma ventana.
     console.log('[cron/daily] Sin tareas vencidas/hoy, no se envía resumen')
     return
   }
 
-  const hoy = tareas.filter(t => t.fecha_limite === today)
+  // ── 4. Construir mensaje — "Hoy: X vencen, Y vencidas" ────────────────────
+  const hoy      = tareas.filter(t => t.fecha_limite === today)
   const vencidas = tareas.filter(t => t.fecha_limite < today)
 
   const partes = []
+  if (hoy.length > 0)      partes.push(`${hoy.length} vencen`)
   if (vencidas.length > 0) partes.push(`${vencidas.length} vencida${vencidas.length > 1 ? 's' : ''}`)
-  if (hoy.length > 0)      partes.push(`${hoy.length} para hoy`)
-  const resumen = partes.join(' · ')
 
-  const titulo1 = tareas[0].titulo
-  const body = tareas.length === 1
-    ? `"${titulo1}"`
-    : `"${titulo1}" y ${tareas.length - 1} más`
+  const primeros = tareas.slice(0, 3).map(t => `"${t.titulo}"`).join(', ')
+  const bodyText = tareas.length > 3 ? `${primeros}…` : primeros
 
-  await sendPushToUser(env, USUARIO_ID, {
-    title: `📋 ${resumen}`,
-    body,
+  // ── 5. Enviar push ─────────────────────────────────────────────────────────
+  const { enviadas } = await sendPushToUser(env, USUARIO_ID, {
+    title: `📋 Hoy: ${partes.join(', ')}`,
+    body:  bodyText,
     icon:  '/icons/icon-192.png',
     url:   '/',
     tag:   'daily-summary',
   })
 
-  // Registrar en push_log para no reenviar hoy
-  await supabaseRequest(env, 'POST', 'push_log', {
-    usuario_id: USUARIO_ID,
-    tipo:       'daily_summary',
-    clave:      logKey,
+  // Registrar SOLO si al menos una suscripción recibió la notificación
+  if (enviadas > 0) {
+    await supabaseRequest(env, 'POST', 'push_log', {
+      usuario_id: USUARIO_ID,
+      tipo:       'daily_summary',
+      clave:      today,
+    })
+    console.log(`[cron/daily] Resumen enviado (${enviadas} suscripciones): ${partes.join(', ')}`)
+  } else {
+    console.log('[cron/daily] Sin suscripciones activas para enviar el resumen')
+  }
+}
+
+// ── POST /api/push/test — notificación de prueba ──────────────────────────────
+
+async function handlePushTest(request, env) {
+  const auth = await requireAuth(request, env)
+  if (auth.error) return auth.error
+  const usuarioId = await resolveUser(auth.user.sub, env)
+  if (usuarioId === null) return json({ error: 'Usuario no encontrado' }, 404)
+
+  const { enviadas, intentadas } = await sendPushToUser(env, usuarioId, {
+    title: 'MyTaskMyHabit',
+    body:  'Notificación de prueba: todo funciona',
+    icon:  '/icons/icon-192.png',
+    tag:   'push-test',
   })
-  console.log(`[cron/daily] Resumen enviado: ${resumen}`)
+  return json({ data: { intentadas: intentadas ?? 0, enviadas: enviadas ?? 0 } })
+}
+
+// ── GET /api/push/public-key — clave pública VAPID ───────────────────────────
+
+async function handlePushPublicKey(request, env) {
+  const auth = await requireAuth(request, env)
+  if (auth.error) return auth.error
+
+  if (!env.VAPID_PUBLIC_KEY) {
+    return json({ error: 'Notificaciones no configuradas en el servidor' }, 503)
+  }
+  return json({ data: { publicKey: env.VAPID_PUBLIC_KEY } })
 }
 
 // ── Router ────────────────────────────────────────────────────────────────────
@@ -1242,9 +1306,11 @@ async function dispatch(request, env) {
   // Webhooks
   if (pathname === '/webhooks/email' && method === 'POST') return handleWebhookEmail(request, env)
 
-  // Push subscriptions
-  if (pathname === '/api/push/subscribe' && method === 'POST')   return handlePushSubscribe(request, env)
-  if (pathname === '/api/push/subscribe' && method === 'DELETE') return handlePushUnsubscribe(request, env)
+  // Push subscriptions + test + public key
+  if (pathname === '/api/push/subscribe'   && method === 'POST')   return handlePushSubscribe(request, env)
+  if (pathname === '/api/push/subscribe'   && method === 'DELETE') return handlePushUnsubscribe(request, env)
+  if (pathname === '/api/push/test'        && method === 'POST')   return handlePushTest(request, env)
+  if (pathname === '/api/push/public-key'  && method === 'GET')    return handlePushPublicKey(request, env)
 
   // Categorías
   if (pathname === '/api/categorias' && method === 'GET')  return handleGetCategorias(request, env)

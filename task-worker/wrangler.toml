@@ -3,9 +3,11 @@ main            = "src/index.js"
 compatibility_date = "2025-01-01"
 
 # ── Cron triggers ─────────────────────────────────────────────────────────────
-# Resumen diario de tareas vencidas/hoy — 8:00 AM UTC (≈ 9:00 h hora España invierno)
+# Se ejecuta cada 15 min. El Worker comprueba internamente si la hora actual
+# en Europe/Madrid cae en la ventana DIGEST_HORA … DIGEST_HORA+14 min.
+# Esto garantiza la entrega a las 08:30 Madrid independientemente del DST.
 [triggers]
-crons = ["0 8 * * *"]
+crons = ["*/15 * * * *"]
 
 # ── Variables no sensibles ────────────────────────────────────────────────────
 [vars]
@@ -14,6 +16,10 @@ SENDGRID_FROM_EMAIL = ""          # ej. tareas@midominio.com (opcional)
 # Clave pública VAPID (P-256 uncompressed, base64url, 65 bytes → 87 chars).
 # Generar con: node task-worker/scripts/generate-vapid-keys.mjs
 VAPID_PUBLIC_KEY    = ""          # sustituir con el valor del script
+# Hora de envío del resumen diario en Europe/Madrid (formato HH:MM).
+# Para probar: cambiar temporalmente a "unos minutos más adelante" y hacer wrangler deploy.
+# Para restaurar: volver a "08:30" y redesplegar.
+DIGEST_HORA         = "08:30"
 
 # ── Secrets — añadir con: npx wrangler secret put <NAME> ─────────────────────
 # JWT_SECRET                — clave HMAC para firmar/verificar tokens JWT

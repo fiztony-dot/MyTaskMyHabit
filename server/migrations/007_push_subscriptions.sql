@@ -1,10 +1,12 @@
+-- Ejecutar en el proyecto clpowitmhoibiuszetpg (mytaskmyhabit)
+--
 -- Migración 007: Tablas para notificaciones push (Web Push / VAPID)
 --
 -- NO ejecutar automáticamente. Aplicar manualmente en el SQL Editor de Supabase
 -- una sola vez (es idempotente: usa CREATE TABLE IF NOT EXISTS).
 --
 -- Después de aplicar: configurar secrets VAPID en el Worker y desplegar.
--- Ver PROYECTO_PWA.md sección P11 para el orden de despliegue completo.
+-- Ver PROYECTO_PWA.md sección "Pasos manuales — Web Push / VAPID".
 --
 -- Rollback:
 --   DROP TABLE IF EXISTS push_log;

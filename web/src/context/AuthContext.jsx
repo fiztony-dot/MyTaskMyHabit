@@ -2,6 +2,7 @@ import { createContext, useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { login as apiLogin, getMe } from '../api/auth'
 import { setUnauthorizedHandler } from '../api/client'
+import { desuscribirAlLogout } from '../api/push'
 
 const TOKEN_KEY = 'mtmh_token'
 const USER_KEY = 'mtmh_user'
@@ -15,6 +16,7 @@ export function AuthProvider({ children }) {
   const [isLoading, setIsLoading] = useState(true)
 
   const logout = useCallback(() => {
+    desuscribirAlLogout().catch(() => {})  // fire-and-forget: nunca bloquea el logout
     localStorage.removeItem(TOKEN_KEY)
     localStorage.removeItem(USER_KEY)
     setToken(null)
