@@ -192,6 +192,170 @@ const TAREAS_SELECT = [
 const PRIORIDADES = ['ALTA', 'MEDIA', 'BAJA']
 const ORDEN_PRIORIDAD = { ALTA: 1, MEDIA: 2, BAJA: 3 }
 
+// ── Web Push / VAPID (RFC 8291 + RFC 8292 + RFC 8188) ────────────────────────
+
+// Cifra un mensaje con la clave de suscripción push del cliente (RFC 8291 + aes128gcm).
+// Devuelve un Uint8Array con el body listo para enviar al push service.
+async function encryptWebPushMessage(subscription, payload) {
+  const payloadStr = typeof payload === 'string' ? payload : JSON.stringify(payload)
+  const authSecret      = b64url(subscription.auth)
+  const receiverPubBytes = b64url(subscription.p256dh)
+
+  // 1. Par de claves ECDH efímero del servidor de aplicaciones
+  const senderPair = await crypto.subtle.generateKey(
+    { name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveBits']
+  )
+  const senderPubRaw = new Uint8Array(await crypto.subtle.exportKey('raw', senderPair.publicKey))
+
+  // 2. Clave pública del receptor importada para ECDH
+  const receiverPubKey = await crypto.subtle.importKey(
+    'raw', receiverPubBytes, { name: 'ECDH', namedCurve: 'P-256' }, false, []
+  )
+
+  // 3. Secreto compartido ECDH
+  const ecdhSecret = await crypto.subtle.deriveBits(
+    { name: 'ECDH', public: receiverPubKey }, senderPair.privateKey, 256
+  )
+
+  // 4. Salt aleatorio (16 bytes)
+  const salt = crypto.getRandomValues(new Uint8Array(16))
+
+  // 5. IKM según RFC 8291 §3.3:
+  //    PRK = HKDF-Extract(salt=auth_secret, IKM=ecdh_secret)
+  //    IKM = HKDF-Expand(PRK, info="WebPush: info\0" + ua_pub + as_pub, 32)
+  //    → con WebCrypto, HKDF(salt=auth_secret, ikm=ecdh_secret, info=keyInfo, 32)
+  const keyInfoPrefix = new TextEncoder().encode('WebPush: info\x00')
+  const keyInfo = new Uint8Array(keyInfoPrefix.length + receiverPubBytes.length + senderPubRaw.length)
+  keyInfo.set(keyInfoPrefix)
+  keyInfo.set(receiverPubBytes, keyInfoPrefix.length)
+  keyInfo.set(senderPubRaw, keyInfoPrefix.length + receiverPubBytes.length)
+
+  const ecdhKey = await crypto.subtle.importKey('raw', ecdhSecret, 'HKDF', false, ['deriveBits'])
+  const ikm = await crypto.subtle.deriveBits(
+    { name: 'HKDF', salt: authSecret, info: keyInfo, hash: 'SHA-256' }, ecdhKey, 256
+  )
+
+  // 6. CEK (16 bytes) y nonce (12 bytes) según RFC 8188:
+  //    PRK2 = HKDF-Extract(salt=random_salt, IKM=ikm)
+  //    CEK  = HKDF-Expand(PRK2, "Content-Encoding: aes128gcm\0", 16)
+  //    NONCE= HKDF-Expand(PRK2, "Content-Encoding: nonce\0", 12)
+  const ikmKey    = await crypto.subtle.importKey('raw', ikm, 'HKDF', false, ['deriveBits'])
+  const cekInfo   = new TextEncoder().encode('Content-Encoding: aes128gcm\x00')
+  const nonceInfo = new TextEncoder().encode('Content-Encoding: nonce\x00')
+  const cekBits   = await crypto.subtle.deriveBits(
+    { name: 'HKDF', salt, info: cekInfo,   hash: 'SHA-256' }, ikmKey, 128
+  )
+  const nonceBits = await crypto.subtle.deriveBits(
+    { name: 'HKDF', salt, info: nonceInfo, hash: 'SHA-256' }, ikmKey, 96
+  )
+
+  // 7. AES-128-GCM: cifrar payload + byte delimitador 0x02 (último registro RFC 8188)
+  const aesKey = await crypto.subtle.importKey('raw', cekBits, 'AES-GCM', false, ['encrypt'])
+  const ptBytes = new TextEncoder().encode(payloadStr)
+  const padded  = new Uint8Array(ptBytes.length + 1)
+  padded.set(ptBytes)
+  padded[ptBytes.length] = 0x02  // delimiter: last record
+  const ciphertext = new Uint8Array(
+    await crypto.subtle.encrypt({ name: 'AES-GCM', iv: nonceBits }, aesKey, padded)
+  )
+
+  // 8. Header aes128gcm (RFC 8188): salt(16) + rs(4 BE) + idlen(1) + keyid(senderPubRaw)
+  const rs = 4096
+  const header = new Uint8Array(16 + 4 + 1 + senderPubRaw.length)
+  header.set(salt, 0)
+  new DataView(header.buffer).setUint32(16, rs, false)
+  header[20] = senderPubRaw.length  // idlen = 65 (uncompressed P-256)
+  header.set(senderPubRaw, 21)
+
+  const body = new Uint8Array(header.length + ciphertext.length)
+  body.set(header, 0)
+  body.set(ciphertext, header.length)
+  return body
+}
+
+// Firma un JWT ES256 (ECDSA P-256 SHA-256) para VAPID (RFC 8292).
+// privateKeyJwk: objeto JWK con crv:P-256, kty:EC, d (y x, y).
+async function signVapidJwt(claims, privateKeyJwk) {
+  const privateKey = await crypto.subtle.importKey(
+    'jwk', privateKeyJwk,
+    { name: 'ECDSA', namedCurve: 'P-256' }, false, ['sign']
+  )
+  const header  = b64urlEncode(new TextEncoder().encode(JSON.stringify({ typ: 'JWT', alg: 'ES256' })))
+  const payload = b64urlEncode(new TextEncoder().encode(JSON.stringify(claims)))
+  const sigInput = `${header}.${payload}`
+  // WebCrypto devuelve la firma en formato IEEE P1363 (R||S, 64 bytes), que es el formato JWT ES256.
+  const sigBytes = new Uint8Array(
+    await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, privateKey,
+      new TextEncoder().encode(sigInput))
+  )
+  return `${sigInput}.${b64urlEncode(sigBytes)}`
+}
+
+// Envía una notificación push a una suscripción concreta.
+// Devuelve { ok: true } | { expired: true } | { error: string }.
+async function sendWebPush(env, subscription, payload) {
+  let vapidPrivateJwk
+  try { vapidPrivateJwk = JSON.parse(env.VAPID_PRIVATE_KEY_JWK) } catch {
+    return { error: 'VAPID_PRIVATE_KEY_JWK no configurado o inválido' }
+  }
+  if (!env.VAPID_PUBLIC_KEY || !env.VAPID_SUBJECT) {
+    return { error: 'VAPID_PUBLIC_KEY o VAPID_SUBJECT no configurados' }
+  }
+
+  const endpointUrl = new URL(subscription.endpoint)
+  const audience = `${endpointUrl.protocol}//${endpointUrl.host}`
+  const now = Math.floor(Date.now() / 1000)
+  const jwt = await signVapidJwt(
+    { aud: audience, exp: now + 43200, sub: env.VAPID_SUBJECT },
+    vapidPrivateJwk
+  )
+
+  const body = await encryptWebPushMessage(subscription, payload)
+
+  const res = await fetch(subscription.endpoint, {
+    method: 'POST',
+    headers: {
+      Authorization:      `vapid t=${jwt},k=${env.VAPID_PUBLIC_KEY}`,
+      'Content-Type':     'application/octet-stream',
+      'Content-Encoding': 'aes128gcm',
+      TTL:                '86400',
+    },
+    body,
+  })
+
+  if (res.status === 404 || res.status === 410) return { expired: true, status: res.status }
+  if (!res.ok) {
+    const text = await res.text()
+    console.error('[push] Error HTTP del push service:', res.status, text.slice(0, 200))
+    return { error: `HTTP ${res.status}` }
+  }
+  return { ok: true }
+}
+
+// Envía una notificación push a todas las suscripciones de un usuario.
+// Elimina automáticamente las suscripciones expiradas (410 Gone).
+async function sendPushToUser(env, usuarioId, payload) {
+  const { data: subs, error } = await supabaseRequest(
+    env, 'GET', `push_subscriptions?usuario_id=eq.${usuarioId}&select=id,endpoint,p256dh,auth`
+  )
+  if (error || !subs || subs.length === 0) return
+
+  for (const sub of subs) {
+    const result = await sendWebPush(env, sub, payload)
+    if (result.ok) {
+      // Actualizar último envío exitoso
+      await supabaseRequest(env, 'PATCH',
+        `push_subscriptions?id=eq.${sub.id}`,
+        { ultimo_envio_ok: new Date().toISOString() }
+      )
+    } else if (result.expired) {
+      // Suscripción expirada — limpiar
+      await supabaseRequest(env, 'DELETE', `push_subscriptions?id=eq.${sub.id}`)
+      console.log(`[push] Suscripción expirada eliminada id=${sub.id}`)
+    }
+  }
+}
+
 // ── Adjuntos (attachments) ─────────────────────────────────────────────────────
 
 const ADJUNTOS_BUCKET = 'tarea-adjuntos'
@@ -461,6 +625,15 @@ async function handleWebhookEmail(request, env) {
 
     const tareaId = data[0].id
     console.log(`[webhook/email] Tarea id=${tareaId} creada: "${titulo}"`)
+
+    // Notificación push (no bloquea si falla)
+    sendPushToUser(env, 1, {
+      title: '📧 Nueva tarea por email',
+      body:  titulo.length > 80 ? titulo.slice(0, 77) + '…' : titulo,
+      icon:  '/icons/icon-192.png',
+      url:   '/',
+      tag:   `email-task-${tareaId}`,
+    }).catch((err) => console.error('[webhook/email] Error enviando push:', err.message))
 
     if (emailRemitente && env.SENDGRID_API_KEY && env.SENDGRID_FROM_EMAIL) {
       try {
@@ -918,6 +1091,138 @@ async function handleDeleteAdjunto(request, env, tareaIdRaw, adjuntoIdRaw) {
   return json({ data: { deleted: true, id: adjuntoId } })
 }
 
+// ── Push subscription handlers ────────────────────────────────────────────────
+
+async function handlePushSubscribe(request, env) {
+  const auth = await requireAuth(request, env)
+  if (auth.error) return auth.error
+  const usuarioId = await resolveUser(auth.user.sub, env)
+  if (usuarioId === null) return json({ error: 'Usuario no encontrado' }, 404)
+
+  let body
+  try { body = await request.json() } catch { body = {} }
+  const { endpoint, p256dh, auth: authKey, userAgent } = body || {}
+  if (!endpoint || !p256dh || !authKey) {
+    return json({ error: 'Faltan campos: endpoint, p256dh, auth' }, 400)
+  }
+
+  // Upsert: si ya existe el endpoint, actualiza las claves
+  const { data, error } = await supabaseRequest(env, 'POST', 'push_subscriptions', {
+    usuario_id: usuarioId,
+    endpoint,
+    p256dh,
+    auth: authKey,
+    user_agent: userAgent || null,
+  })
+  if (error) {
+    // 409 Conflict = endpoint ya existe: actualizar claves
+    if (error.status === 409 || (error.message && error.message.includes('unique'))) {
+      const { data: upd, error: updErr } = await supabaseRequest(
+        env, 'PATCH',
+        `push_subscriptions?endpoint=eq.${encodeURIComponent(endpoint)}&usuario_id=eq.${usuarioId}`,
+        { p256dh, auth: authKey, user_agent: userAgent || null }
+      )
+      if (updErr) return json({ error: updErr.message }, updErr.status || 500)
+      return json({ data: Array.isArray(upd) ? upd[0] : upd })
+    }
+    return json({ error: error.message }, error.status || 500)
+  }
+  return json({ data: Array.isArray(data) ? data[0] : data }, 201)
+}
+
+async function handlePushUnsubscribe(request, env) {
+  const auth = await requireAuth(request, env)
+  if (auth.error) return auth.error
+  const usuarioId = await resolveUser(auth.user.sub, env)
+  if (usuarioId === null) return json({ error: 'Usuario no encontrado' }, 404)
+
+  let body
+  try { body = await request.json() } catch { body = {} }
+  const { endpoint } = body || {}
+  if (!endpoint) return json({ error: 'Falta endpoint' }, 400)
+
+  const { error } = await supabaseRequest(
+    env, 'DELETE',
+    `push_subscriptions?endpoint=eq.${encodeURIComponent(endpoint)}&usuario_id=eq.${usuarioId}`
+  )
+  if (error) return json({ error: error.message }, error.status || 500)
+  return json({ data: { deleted: true } })
+}
+
+// ── Scheduled: resumen diario de tareas ──────────────────────────────────────
+
+async function handleScheduledDailySummary(env) {
+  const today   = new Date().toISOString().split('T')[0]       // "YYYY-MM-DD"
+  const weekAgo = new Date(Date.now() - 7 * 86_400_000).toISOString().split('T')[0]
+
+  // Verificar si ya se envió el resumen hoy para usuario_id=1
+  // (usuario único; en diseño multi-user, iterar por usuario)
+  const USUARIO_ID = 1
+  const logKey = today
+
+  const { data: logRows } = await supabaseRequest(
+    env, 'GET',
+    `push_log?usuario_id=eq.${USUARIO_ID}&tipo=eq.daily_summary&clave=eq.${logKey}&select=id`
+  )
+  if (Array.isArray(logRows) && logRows.length > 0) {
+    console.log('[cron/daily] Resumen ya enviado hoy, omitiendo')
+    return
+  }
+
+  // Buscar tareas vencidas o de hoy (últimos 7 días) sin completar
+  const params = new URLSearchParams([
+    ['esta_completada', 'eq.false'],
+    ['fecha_limite',    `lte.${today}`],
+    ['fecha_limite',    `gte.${weekAgo}`],
+    ['usuario_id',      `eq.${USUARIO_ID}`],
+    ['select',          'id,titulo,fecha_limite'],
+    ['order',           'fecha_limite.asc'],
+    ['limit',           '20'],
+  ])
+  const url = `${env.SUPABASE_URL}/rest/v1/tareas_table?${params.toString()}`
+  const res = await fetch(url, {
+    headers: {
+      apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+      Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+    },
+  })
+  const tareas = res.ok ? await res.json() : []
+
+  if (!Array.isArray(tareas) || tareas.length === 0) {
+    console.log('[cron/daily] Sin tareas vencidas/hoy, no se envía resumen')
+    return
+  }
+
+  const hoy = tareas.filter(t => t.fecha_limite === today)
+  const vencidas = tareas.filter(t => t.fecha_limite < today)
+
+  const partes = []
+  if (vencidas.length > 0) partes.push(`${vencidas.length} vencida${vencidas.length > 1 ? 's' : ''}`)
+  if (hoy.length > 0)      partes.push(`${hoy.length} para hoy`)
+  const resumen = partes.join(' · ')
+
+  const titulo1 = tareas[0].titulo
+  const body = tareas.length === 1
+    ? `"${titulo1}"`
+    : `"${titulo1}" y ${tareas.length - 1} más`
+
+  await sendPushToUser(env, USUARIO_ID, {
+    title: `📋 ${resumen}`,
+    body,
+    icon:  '/icons/icon-192.png',
+    url:   '/',
+    tag:   'daily-summary',
+  })
+
+  // Registrar en push_log para no reenviar hoy
+  await supabaseRequest(env, 'POST', 'push_log', {
+    usuario_id: USUARIO_ID,
+    tipo:       'daily_summary',
+    clave:      logKey,
+  })
+  console.log(`[cron/daily] Resumen enviado: ${resumen}`)
+}
+
 // ── Router ────────────────────────────────────────────────────────────────────
 
 async function dispatch(request, env) {
@@ -936,6 +1241,10 @@ async function dispatch(request, env) {
 
   // Webhooks
   if (pathname === '/webhooks/email' && method === 'POST') return handleWebhookEmail(request, env)
+
+  // Push subscriptions
+  if (pathname === '/api/push/subscribe' && method === 'POST')   return handlePushSubscribe(request, env)
+  if (pathname === '/api/push/subscribe' && method === 'DELETE') return handlePushUnsubscribe(request, env)
 
   // Categorías
   if (pathname === '/api/categorias' && method === 'GET')  return handleGetCategorias(request, env)
@@ -973,6 +1282,10 @@ async function dispatch(request, env) {
 // ── Entry point ───────────────────────────────────────────────────────────────
 
 export default {
+  async scheduled(_event, env, _ctx) {
+    await handleScheduledDailySummary(env)
+  },
+
   async fetch(request, env) {
     const origin = request.headers.get('Origin') ?? ''
     const cors = corsHeaders(origin)

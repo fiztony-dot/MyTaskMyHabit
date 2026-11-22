@@ -2,6 +2,7 @@ import { useNavigate } from 'react-router-dom'
 import SidebarItem from './SidebarItem'
 import SidebarSeccion from './SidebarSeccion'
 import { getIconColor } from '../../lib/iconColors'
+import { usePushNotifications } from '../../hooks/usePushNotifications'
 import '../../styles/layout.css'
 
 const TIEMPO_ITEMS = [
@@ -30,6 +31,7 @@ export default function Sidebar({
   const navigate = useNavigate()
   const hayBandeja = contadores.bandeja > 0
   const catActivas = categoriasLista.filter((c) => c.activa !== false)
+  const { soportado, suscrito, cargando: pushCargando, suscribir, desuscribir } = usePushNotifications()
 
   return (
     <>
@@ -41,6 +43,20 @@ export default function Sidebar({
           style={{ background: realtimeConectado ? '#22c55e' : '#6b7280' }}
           title={realtimeConectado ? 'Realtime activo' : 'Sin Realtime'}
         />
+        {soportado && (
+          <button
+            className="sidebar-logout-btn"
+            onClick={suscrito ? desuscribir : suscribir}
+            disabled={pushCargando}
+            aria-label={suscrito ? 'Desactivar notificaciones push' : 'Activar notificaciones push'}
+            title={suscrito ? 'Notificaciones activas — pulsa para desactivar' : 'Activar notificaciones push'}
+            style={{ color: suscrito ? '#6366f1' : undefined }}
+          >
+            <span className="material-icons">
+              {suscrito ? 'notifications_active' : 'notifications_none'}
+            </span>
+          </button>
+        )}
         <button
           className="sidebar-logout-btn"
           onClick={onLogout}

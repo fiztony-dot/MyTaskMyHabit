@@ -334,6 +334,67 @@ Pasos para conectar el repositorio la primera vez desde https://dash.cloudflare.
 
 El Worker **no ejecuta migraciones** (a diferencia del antiguo backend Node/Express). Hay que aplicar la tabla una sola vez en el **SQL Editor** de Supabase (Dashboard → SQL Editor → New query), pegando el contenido de `server/migrations/005_create_tarea_adjuntos.sql` y ejecutando. El bucket `tarea-adjuntos` se crea solo en la primera subida. Hasta aplicar la migración, `adjuntos_count` sale 0 y las llamadas de adjuntos devolverán error de tabla inexistente.
 
+## Pasos manuales — Web Push / VAPID
+
+Estos pasos se realizan **una sola vez** para activar las notificaciones push.
+
+### 1) Generar claves VAPID
+
+```bash
+node task-worker/scripts/generate-vapid-keys.mjs
+```
+
+El script imprime las instrucciones para los siguientes pasos.
+
+### 2) Configurar secretos en el Worker (desde `task-worker/`)
+
+```bash
+npx wrangler secret put VAPID_PRIVATE_KEY_JWK
+# Pegar el JSON completo que imprimió el script (una sola línea)
+
+npx wrangler secret put VAPID_SUBJECT
+# Pegar: mailto:tu-email@dominio.com
+```
+
+### 3) Actualizar `task-worker/wrangler.toml`
+
+En la sección `[vars]`, reemplazar:
+```toml
+VAPID_PUBLIC_KEY = ""   # → pegar el valor del script (87 chars base64url)
+```
+
+### 4) Redeployar el Worker
+
+```bash
+cd task-worker
+npx wrangler deploy
+```
+
+### 5) Añadir variable de entorno en Cloudflare Pages
+
+**Cloudflare Dashboard → Pages → mytaskmyhabit → Settings → Environment variables → Production:**
+
+| Variable | Valor |
+|----------|-------|
+| `VITE_VAPID_PUBLIC_KEY` | El valor de 87 caracteres del script (igual que `VAPID_PUBLIC_KEY` en wrangler.toml) |
+
+Después de guardar, forzar un nuevo deploy en Pages (o hacer push).
+
+### 6) Aplicar migración SQL en Supabase
+
+En el **SQL Editor de Supabase** (Dashboard → SQL Editor → New query), pegar el contenido completo de `server/migrations/007_push_subscriptions.sql` y ejecutar.
+
+### Decisiones de diseño — Web Push
+
+- **Sin librería npm:** `web-push` usa el módulo `crypto` de Node.js, no disponible en Cloudflare Workers. Implementación custom con `crypto.subtle` (WebCrypto nativo en CF Workers): ECE aes128gcm (RFC 8291 + RFC 8188) y VAPID JWT ES256 (RFC 8292). Cero dependencias externas en el Worker.
+- **RFC 8291 key derivation:** dos pasos HKDF. Step 1: `HKDF(salt=auth_secret, ikm=ecdh_secret, info=keyInfo, 32)` → IKM. Step 2 (CEK): `HKDF(salt=random_salt, ikm=IKM, info=cekInfo, 16)`. Step 3 (nonce): `HKDF(salt=random_salt, ikm=IKM, info=nonceInfo, 12)`. WebCrypto `deriveBits` hace Extract+Expand en una sola llamada, igual que el RFC.
+- **IEEE P1363 → JWT ES256:** `crypto.subtle.sign('ECDSA', ...)` devuelve R‖S (64 bytes) directamente, que es el formato JWT ES256. Sin conversión DER necesaria.
+- **Dedup daily summary:** `push_log(usuario_id, tipo, clave)` — `tipo='daily_summary'`, `clave='YYYY-MM-DD'`. El cron inserta antes de enviar; si ya existe, omite ese usuario ese día.
+- **SW strategy injectManifest:** permite escribir código propio en `sw.js` (handlers push/notificationclick) manteniendo el precache automático de Workbox. Con `generateSW` no es posible añadir listeners personalizados.
+- **Botón campana en Sidebar:** `usePushNotifications` hook autocontenido dentro del componente. No se pasan props desde `Tareas.jsx`. El estado (`suscrito`) es local al componente — si se recarga la página el hook llama a `pushManager.getSubscription()` para restaurar el estado real.
+
+---
+
 ## Convenciones establecidas
 
 - Nombres de tabla y columna en **snake_case**, en español (coherencia con el código Android existente)
@@ -537,3 +598,4 @@ ALTER TABLE migration_log    DISABLE ROW LEVEL SECURITY;
 | S1 | Activar RLS en Supabase (seguridad) | Noviembre 2026 | **Worker:** nuevo endpoint `GET /auth/realtime-token` (autenticado con JWT propio): genera JWT de Supabase HS256 (1 hora) firmado con `SUPABASE_JWT_SECRET`, claims `role=authenticated`, `sub=String(usuario_id)`, `aud=authenticated`. Secreto gestionado como Worker secret. **PWA:** `api/realtimeToken.js` (nuevo). `useRealtimeTareas.js` reescrito: obtiene el token antes de suscribirse, llama a `supabase.realtime.setAuth(token)`, programa renovación automática 5 min antes de expirar con reintento en 60 s si falla. `wrangler.toml` actualizado con instrucciones de `SUPABASE_JWT_SECRET`. **SQL:** `server/migrations/006_enable_rls.sql` creado (NO ejecutado): activa RLS en las 5 tablas de public, REVOKE ALL de anon en todas, REVOKE INSERT/UPDATE/DELETE de authenticated en tareas_table, política `realtime_select_own` (SELECT para authenticated donde `usuario_id::text = auth.jwt()->>sub`). **Despliegue:** Worker redesplegado (`wrangler deploy`), PWA compilada (`npm run build` OK, 172 módulos). **Pasos manuales pendientes:** (1) configurar `SUPABASE_JWT_SECRET` en el Worker; (2) verificar Realtime con token nuevo; (3) aplicar `006_enable_rls.sql` en SQL Editor de Supabase. Orden de despliegue, verificación post-RLS y rollback documentados en sección "Seguridad — RLS en Supabase". |
 | S2 | Bugfix polling silencioso: sin parpadeo ni recarga visible | Noviembre 2026 | **Causa raíz:** `cargar()` activaba `setIsLoading(true)` y reemplazaba la lista completa cada 30 s, causando parpadeos y pérdida de scroll. **Fixes en `useTareas.js`:** (1) `refetchSilencioso()`: nueva función que hace el fetch sin tocar `isLoading`, y solo actualiza estado si hay cambios reales. (2) `mergeTareas()`: compara por `updated_at`; devuelve la misma referencia de array si nada cambió (cero re-renders); preserva identidad de objetos no modificados (React no repinta esos ítems); preserva `adjuntos_count` en ítems actualizados. (3) `usuarioInteractuando()`: salta el refetch si hay un `<input>`/`<textarea>`/`<select>` enfocado **o** si hay un `[role="dialog"]` abierto en el DOM (cubre TareaForm y CategoriaForm). (4) El polling y el refetch al volver a la pestaña usan `refetchSilencioso` en lugar de `cargar`. (5) Gestión de visibilidad: el intervalo se pausa con `clearInterval` cuando `document.hidden = true` (tab oculta) y se reanuda con un fetch inmediato al volver. Eliminado el listener de `window.focus` (sustituido por `visibilitychange`). (6) El intervalo solo corre mientras `realtimeConectado = false`; al conectar Realtime el `useEffect` hace cleanup y no crea ningún intervalo nuevo. Build OK (173 módulos). |
 | P11 | Suprimir autorrelleno de gestores de contraseñas en formularios | Noviembre 2026 | **Problema:** Dashlane y otros gestores mostraban icono de autorrelleno en campos como "Fecha límite" (y otros no relacionados con credenciales). **Solución:** `src/lib/noFill.js` creado con `NO_FILL` (5 atributos: `autoComplete="off"`, `data-dashlane-ignore`, `data-lpignore`, `data-1p-ignore`, `data-bwignore`) y `NO_FILL_FORM` (solo `autoComplete="off"`). Spread `{...NO_FILL}` aplicado a todos los `<input>`, `<textarea>` y `<select>` que no son de login en: `TareaForm.jsx` (8 campos), `CategoriaForm.jsx` (2 campos), `BuscadorTareas.jsx` (1 campo), `TimePicker.jsx` (1 campo). `{...NO_FILL_FORM}` aplicado a los `<form>` de `TareaForm.jsx` y `CategoriaForm.jsx`. `Login.jsx` no tocado (mantiene `autoComplete="username"` y `autoComplete="current-password"` correctos). Build OK (173 módulos, 502 kB). |
+| P11b | Notificaciones push web (Web Push / VAPID) | Noviembre 2026 | **Objetivo:** PWA recibe push incluso con la app cerrada: (a) al llegar tarea por email, (b) resumen diario a las 8:00 UTC. **SW:** `vite-plugin-pwa` migrado de `generateSW` a `injectManifest`. `web/src/sw.js` creado (workbox-precaching + NetworkFirst para la API + handlers `push` y `notificationclick`). **BD:** `server/migrations/007_push_subscriptions.sql` — tablas `push_subscriptions` y `push_log` con RLS habilitado y REVOKE ALL (a aplicar manualmente en Supabase). **Worker:** 4 funciones auxiliares puras (ECE aes128gcm con WebCrypto, VAPID JWT ES256, sendWebPush, sendPushToUser); handlers `POST/DELETE /api/push/subscribe`; `handleScheduledDailySummary` (consulta tareas vencidas/hoy, agrupa por usuario, manda push); cron trigger `0 8 * * *`. `task-worker/wrangler.toml` actualizado con sección `[triggers]`. **PWA:** `api/push.js` (subscribe/unsubscribe), `hooks/usePushNotifications.js` (permiso + suscripción); botón campana en `Sidebar.jsx` — `notifications_active` indigo si activo, `notifications_none` si no. **Dependencias añadidas:** `workbox-precaching`, `workbox-routing`, `workbox-strategies` v7.4.1 (devDeps). Worker desplegado. Build PWA OK (175 módulos, 519 KiB precacheados). **Pasos manuales pendientes:** ver sección "Pasos manuales — Web Push / VAPID" más abajo. |
