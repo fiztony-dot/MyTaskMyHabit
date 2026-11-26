@@ -12,7 +12,9 @@ crons = ["*/15 * * * *"]
 # ── Variables no sensibles ────────────────────────────────────────────────────
 [vars]
 SUPABASE_URL        = "https://clpowitmhoibiuszetpg.supabase.co"
-SENDGRID_FROM_EMAIL = ""          # ej. tareas@midominio.com (opcional)
+SENDGRID_FROM_EMAIL = ""          # ej. tareas@midominio.com
+# URL de la PWA (usada en el enlace de recuperación de contraseña)
+APP_URL             = "https://mytaskmyhabitpwa.pages.dev"
 # Clave pública VAPID (P-256 uncompressed, base64url, 65 bytes → 87 chars).
 # Generar con: node task-worker/scripts/generate-vapid-keys.mjs
 VAPID_PUBLIC_KEY    = ""          # sustituir con el valor del script
@@ -29,7 +31,8 @@ DIGEST_HORA         = "08:30"
 #                             Se usa para firmar tokens de Realtime (GET /auth/realtime-token)
 #                             Configurar con: npx wrangler secret put SUPABASE_JWT_SECRET
 # WEBHOOK_SECRET            — token de autenticación del email webhook
-# SENDGRID_API_KEY          — API key de SendGrid (opcional, para notificaciones)
+# SENDGRID_API_KEY          — API key de SendGrid (para email de recuperación y confirmaciones)
+#                             Configurar con: npx wrangler secret put SENDGRID_API_KEY
 # VAPID_PRIVATE_KEY_JWK     — Clave privada VAPID como JWK JSON (ES256, P-256)
 #                             Generar con: node task-worker/scripts/generate-vapid-keys.mjs
 #                             Configurar con: npx wrangler secret put VAPID_PRIVATE_KEY_JWK

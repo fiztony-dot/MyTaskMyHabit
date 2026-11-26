@@ -70,6 +70,24 @@ async function requireAuth(request, env) {
 
     if (!valid) return { error: json({ error: 'Token inválido o expirado' }, 401) }
 
+    // Comprueba si el token fue invalidado por un cambio de contraseña.
+    // Si la consulta a Supabase falla, se deja pasar (fail-open): el JWT es
+    // criptográficamente válido y una caída temporal de BD no debe expulsar al usuario.
+    const { data: userData } = await supabaseRequest(
+      env, 'GET',
+      `usuarios?username=eq.${encodeURIComponent(payload.sub)}&select=password_changed_at`
+    )
+    if (Array.isArray(userData) && userData.length > 0) {
+      const pca = userData[0].password_changed_at
+      if (pca) {
+        const pcaSec = Math.floor(new Date(pca).getTime() / 1000)
+        const iat = typeof payload.iat === 'number' ? payload.iat : -1
+        if (iat < pcaSec) {
+          return { error: json({ error: 'Sesión inválida. Vuelve a iniciar sesión.' }, 401) }
+        }
+      }
+    }
+
     return { user: payload }
   } catch {
     return { error: json({ error: 'Token inválido o expirado' }, 401) }
@@ -143,6 +161,80 @@ function b64urlEncode(bytes) {
   const view = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes)
   for (const b of view) binary += String.fromCharCode(b)
   return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+}
+
+// SHA-256 del texto → hex string (para token_hash en password_resets)
+async function sha256hex(text) {
+  const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text))
+  return Array.from(new Uint8Array(bytes)).map((b) => b.toString(16).padStart(2, '0')).join('')
+}
+
+// 32 bytes aleatorios → base64url (43 chars) para tokens de reset
+function generateResetToken() {
+  return b64urlEncode(crypto.getRandomValues(new Uint8Array(32)))
+}
+
+// Envío de email via SendGrid v3 (mismo patrón que handleWebhookEmail)
+async function sendEmail(env, to, subject, text) {
+  if (!env.SENDGRID_API_KEY || !env.SENDGRID_FROM_EMAIL) {
+    throw new Error('SendGrid no configurado (SENDGRID_API_KEY o SENDGRID_FROM_EMAIL)')
+  }
+  const res = await fetch('https://api.sendgrid.com/v3/mail/send', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${env.SENDGRID_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      personalizations: [{ to: [{ email: to }] }],
+      from:    { email: env.SENDGRID_FROM_EMAIL },
+      subject,
+      content: [{ type: 'text/plain', value: text }],
+    }),
+  })
+  if (!res.ok) {
+    const errText = await res.text()
+    throw new Error(`SendGrid ${res.status}: ${errText.slice(0, 200)}`)
+  }
+}
+
+// ── Rate limiting (tabla auth_rate_limits) ────────────────────────────────────
+
+async function isRateLimited(env, clave, maxIntentos, ventanaMinutos) {
+  const { data, error } = await supabaseRequest(
+    env, 'GET',
+    `auth_rate_limits?clave=eq.${encodeURIComponent(clave)}&select=contador,ventana_inicio`
+  )
+  if (error || !data || data.length === 0) return false
+  const row = data[0]
+  const ventanaMs = ventanaMinutos * 60 * 1000
+  if (Date.now() - new Date(row.ventana_inicio).getTime() > ventanaMs) return false
+  return row.contador >= maxIntentos
+}
+
+async function recordFailedAttempt(env, clave, ventanaMinutos) {
+  const { data } = await supabaseRequest(
+    env, 'GET',
+    `auth_rate_limits?clave=eq.${encodeURIComponent(clave)}&select=contador,ventana_inicio`
+  )
+  const row = data?.[0]
+  const ventanaMs = ventanaMinutos * 60 * 1000
+  if (row && Date.now() - new Date(row.ventana_inicio).getTime() <= ventanaMs) {
+    await supabaseRequest(env, 'PATCH',
+      `auth_rate_limits?clave=eq.${encodeURIComponent(clave)}`,
+      { contador: row.contador + 1 })
+  } else if (row) {
+    await supabaseRequest(env, 'PATCH',
+      `auth_rate_limits?clave=eq.${encodeURIComponent(clave)}`,
+      { contador: 1, ventana_inicio: new Date().toISOString() })
+  } else {
+    await supabaseRequest(env, 'POST', 'auth_rate_limits',
+      { clave, contador: 1, ventana_inicio: new Date().toISOString() })
+  }
+}
+
+async function resetFailedAttempts(env, clave) {
+  await supabaseRequest(env, 'DELETE', `auth_rate_limits?clave=eq.${encodeURIComponent(clave)}`)
 }
 
 // Firma un JWT HS256 compatible con jsonwebtoken
@@ -550,12 +642,33 @@ async function handleLogin(request, env) {
     return json({ error: 'Se requieren username y password' }, 400)
   }
 
-  const users = parseUsers(env.AUTH_USERS)
-  const match = users.find((u) => u.username === username)
-  if (!match) return json({ error: 'Usuario o contraseña incorrectos' }, 401)
+  // Consultar BD primero para ver si hay hash guardado en usuarios.
+  // Si la consulta falla (no es "sin resultados") → error 503, sin fallback silencioso.
+  const { data: dbRows, error: dbErr } = await supabaseRequest(
+    env, 'GET',
+    `usuarios?username=eq.${encodeURIComponent(username)}&select=password_hash`
+  )
+  if (dbErr) {
+    console.error('[login] Error consultando Supabase:', dbErr)
+    return json({ error: 'Error interno. Inténtalo de nuevo.' }, 503)
+  }
 
-  const valid = await bcrypt.compare(password, match.passwordHash)
-  if (!valid) return json({ error: 'Usuario o contraseña incorrectos' }, 401)
+  const dbUser = Array.isArray(dbRows) && dbRows.length > 0 ? dbRows[0] : null
+
+  let authenticated = false
+  if (dbUser && dbUser.password_hash) {
+    // Hash en BD: validar contra él
+    authenticated = await bcrypt.compare(password, dbUser.password_hash)
+  } else {
+    // Sin hash en BD: fallback a AUTH_USERS (estado inicial antes del primer cambio)
+    const users = parseUsers(env.AUTH_USERS)
+    const match = users.find((u) => u.username === username)
+    if (match) {
+      authenticated = await bcrypt.compare(password, match.passwordHash)
+    }
+  }
+
+  if (!authenticated) return json({ error: 'Usuario o contraseña incorrectos' }, 401)
 
   const now = Math.floor(Date.now() / 1000)
   const token = await signJWT(
@@ -1287,9 +1400,251 @@ async function handlePushPublicKey(request, env) {
   return json({ data: { publicKey: env.VAPID_PUBLIC_KEY } })
 }
 
+// ── POST /auth/change-password — cambiar contraseña (con sesión) ─────────────
+
+async function handleChangePassword(request, env) {
+  const auth = await requireAuth(request, env)
+  if (auth.error) return auth.error
+
+  const username = auth.user.sub
+
+  let body
+  try { body = await request.json() } catch { body = {} }
+  const { actual, nueva } = body || {}
+
+  if (!actual || !nueva) {
+    return json({ error: 'Se requieren actual y nueva' }, 400)
+  }
+
+  // Rate limit: max 5 intentos fallidos por usuario / 15 min
+  const rateKey = `failed:change:${username}`
+  if (await isRateLimited(env, rateKey, 5, 15)) {
+    return json({ error: 'Demasiados intentos fallidos. Espera 15 minutos.' }, 429)
+  }
+
+  if (nueva.length < 10) {
+    return json({ error: 'La contraseña nueva debe tener al menos 10 caracteres' }, 400)
+  }
+
+  // Obtener hash actual
+  const { data: rows, error: dbErr } = await supabaseRequest(
+    env, 'GET',
+    `usuarios?username=eq.${encodeURIComponent(username)}&select=password_hash`
+  )
+  if (dbErr) return json({ error: 'Error interno' }, 503)
+
+  const dbUser = rows?.[0]
+
+  // Verificar contraseña actual
+  let valid = false
+  if (dbUser?.password_hash) {
+    valid = await bcrypt.compare(actual, dbUser.password_hash)
+  } else {
+    const users = parseUsers(env.AUTH_USERS)
+    const match = users.find((u) => u.username === username)
+    if (match) valid = await bcrypt.compare(actual, match.passwordHash)
+  }
+
+  if (!valid) {
+    await recordFailedAttempt(env, rateKey, 15)
+    return json({ error: 'Contraseña actual incorrecta' }, 401)
+  }
+
+  if (nueva === actual) {
+    return json({ error: 'La contraseña nueva debe ser diferente a la actual' }, 400)
+  }
+
+  // Generar nuevo hash
+  const newHash = await bcrypt.hash(nueva, 10)
+
+  // Guardar en BD y obtener password_changed_at real
+  const nowIso = new Date().toISOString()
+  const { data: updated, error: updateErr } = await supabaseRequest(
+    env, 'PATCH',
+    `usuarios?username=eq.${encodeURIComponent(username)}`,
+    { password_hash: newHash, password_changed_at: nowIso }
+  )
+  if (updateErr) return json({ error: 'Error interno al actualizar la contraseña' }, 503)
+
+  await resetFailedAttempts(env, rateKey)
+
+  // Emitir JWT nuevo con iat = password_changed_at para que supere el filtro de requireAuth
+  const pcaIso = Array.isArray(updated) && updated[0]?.password_changed_at
+    ? updated[0].password_changed_at
+    : nowIso
+  const iatSec = Math.floor(new Date(pcaIso).getTime() / 1000)
+  const token = await signJWT(
+    { sub: username, iat: iatSec, exp: iatSec + 365 * 24 * 3600 },
+    env.JWT_SECRET
+  )
+
+  return json({ ok: true, token })
+}
+
+// ── POST /auth/forgot-password — solicitar enlace de recuperación (sin auth) ─
+
+async function handleForgotPassword(request, env, ctx) {
+  let body
+  try { body = await request.json() } catch { body = {} }
+  const { usuario: username } = body || {}
+
+  // Siempre 200 para no revelar si el usuario existe
+  if (!username) return json({ ok: true })
+
+  // Rate limit por IP: max 10 / hora
+  const ip = request.headers.get('CF-Connecting-IP') || request.headers.get('X-Forwarded-For') || 'unknown'
+  const ipKey = `forgot_ip:${ip}`
+  if (await isRateLimited(env, ipKey, 10, 60)) {
+    return json({ ok: true })  // silencioso
+  }
+
+  // Buscar usuario en BD
+  const { data: rows, error } = await supabaseRequest(
+    env, 'GET',
+    `usuarios?username=eq.${encodeURIComponent(username)}&select=id,email`
+  )
+  if (error || !Array.isArray(rows) || rows.length === 0) return json({ ok: true })
+
+  const dbUser = rows[0]
+  if (!dbUser.email) return json({ ok: true })
+
+  const usuarioId = Number(dbUser.id)
+
+  // Rate limit por usuario: max 3 / hora (contar en password_resets)
+  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString()
+  const { data: recentResets } = await supabaseRequest(
+    env, 'GET',
+    `password_resets?usuario_id=eq.${usuarioId}&creado_en=gte.${oneHourAgo}&select=id`
+  )
+  if (Array.isArray(recentResets) && recentResets.length >= 3) {
+    await recordFailedAttempt(env, ipKey, 60)
+    return json({ ok: true })  // silencioso
+  }
+
+  // Invalidar tokens anteriores sin usar del usuario
+  await supabaseRequest(
+    env, 'PATCH',
+    `password_resets?usuario_id=eq.${usuarioId}&usado_en=is.null`,
+    { usado_en: new Date().toISOString() }
+  )
+
+  // Generar token (en claro solo en memoria) y guardar su SHA-256
+  const token = generateResetToken()
+  const tokenHash = await sha256hex(token)
+  const expiraEn = new Date(Date.now() + 30 * 60 * 1000).toISOString()
+
+  const { error: insertErr } = await supabaseRequest(
+    env, 'POST', 'password_resets',
+    { usuario_id: usuarioId, token_hash: tokenHash, expira_en: expiraEn, ip_address: ip }
+  )
+  if (insertErr) {
+    console.error('[forgot-password] Error insertando token:', insertErr)
+    return json({ ok: true })
+  }
+
+  // Enviar email con ctx.waitUntil para no bloquear la respuesta
+  const appUrl = env.APP_URL || 'https://mytaskmyhabitpwa.pages.dev'
+  const enlace = `${appUrl}/reset-password#token=${token}`
+  const emailText = [
+    'Has solicitado recuperar tu contraseña de MyTaskMyHabit.',
+    '',
+    'Haz clic en el siguiente enlace para crear una contraseña nueva (válido 30 minutos):',
+    '',
+    enlace,
+    '',
+    'Si no lo pediste, ignora este correo. Tu contraseña no cambiará.',
+    '',
+    '— MyTaskMyHabit',
+  ].join('\n')
+
+  ctx.waitUntil(
+    sendEmail(env, dbUser.email, 'Recuperar contraseña de MyTaskMyHabit', emailText)
+      .catch((err) => console.error('[forgot-password] Error enviando email:', err.message))
+  )
+
+  return json({ ok: true })
+}
+
+// ── POST /auth/reset-password — restablecer contraseña con token (sin auth) ──
+
+async function handleResetPassword(request, env) {
+  let body
+  try { body = await request.json() } catch { body = {} }
+  const { token, nueva } = body || {}
+
+  const genericError = json({ error: 'Enlace no válido o caducado' }, 400)
+
+  if (!token || !nueva) return genericError
+
+  // Rate limit: max 5 intentos fallidos por token-hash (primeros 8 chars como clave)
+  const tokenKey = `failed:reset:${token.slice(0, 8)}`
+  if (await isRateLimited(env, tokenKey, 5, 15)) {
+    return json({ error: 'Demasiados intentos. Espera 15 minutos.' }, 429)
+  }
+
+  if (nueva.length < 10) {
+    return json({ error: 'La contraseña debe tener al menos 10 caracteres' }, 400)
+  }
+
+  // Buscar token válido (sin usar, no caducado)
+  const tokenHash = await sha256hex(token)
+  const { data: resetRows, error: resetErr } = await supabaseRequest(
+    env, 'GET',
+    `password_resets?token_hash=eq.${encodeURIComponent(tokenHash)}&usado_en=is.null&select=id,usuario_id,expira_en`
+  )
+  if (resetErr || !Array.isArray(resetRows) || resetRows.length === 0) {
+    await recordFailedAttempt(env, tokenKey, 15)
+    return genericError
+  }
+
+  const reset = resetRows[0]
+  if (new Date(reset.expira_en).getTime() < Date.now()) {
+    await recordFailedAttempt(env, tokenKey, 15)
+    return genericError
+  }
+
+  const usuarioId = Number(reset.usuario_id)
+
+  // Obtener username del usuario (para el JWT)
+  const { data: userRows } = await supabaseRequest(
+    env, 'GET',
+    `usuarios?id=eq.${usuarioId}&select=username`
+  )
+  if (!Array.isArray(userRows) || userRows.length === 0) return genericError
+  const username = userRows[0].username
+
+  // Generar nuevo hash
+  const newHash = await bcrypt.hash(nueva, 10)
+  const nowIso = new Date().toISOString()
+
+  // Actualizar contraseña en usuarios
+  const { error: updateErr } = await supabaseRequest(
+    env, 'PATCH',
+    `usuarios?id=eq.${usuarioId}`,
+    { password_hash: newHash, password_changed_at: nowIso }
+  )
+  if (updateErr) return json({ error: 'Error interno. Inténtalo de nuevo.' }, 503)
+
+  // Marcar token como usado e invalidar el resto de tokens pendientes del usuario
+  await supabaseRequest(
+    env, 'PATCH',
+    `password_resets?id=eq.${reset.id}`,
+    { usado_en: nowIso }
+  )
+  await supabaseRequest(
+    env, 'PATCH',
+    `password_resets?usuario_id=eq.${usuarioId}&usado_en=is.null`,
+    { usado_en: nowIso }
+  )
+
+  await resetFailedAttempts(env, tokenKey)
+
+  return json({ ok: true })
+}
+
 // ── Router ────────────────────────────────────────────────────────────────────
 
-async function dispatch(request, env) {
+async function dispatch(request, env, ctx) {
   const { pathname } = new URL(request.url)
   const method = request.method
   // Split path and drop empty segments: '/api/tareas/42' → ['api','tareas','42']
@@ -1299,9 +1654,12 @@ async function dispatch(request, env) {
   if (pathname === '/health' && (method === 'GET' || method === 'HEAD')) return healthCheck(request, env)
 
   // Auth
-  if (pathname === '/auth/login'           && method === 'POST') return handleLogin(request, env)
-  if (pathname === '/auth/me'              && method === 'GET')  return handleMe(request, env)
-  if (pathname === '/auth/realtime-token'  && method === 'GET')  return handleRealtimeToken(request, env)
+  if (pathname === '/auth/login'            && method === 'POST') return handleLogin(request, env)
+  if (pathname === '/auth/me'               && method === 'GET')  return handleMe(request, env)
+  if (pathname === '/auth/realtime-token'   && method === 'GET')  return handleRealtimeToken(request, env)
+  if (pathname === '/auth/change-password'  && method === 'POST') return handleChangePassword(request, env)
+  if (pathname === '/auth/forgot-password'  && method === 'POST') return handleForgotPassword(request, env, ctx)
+  if (pathname === '/auth/reset-password'   && method === 'POST') return handleResetPassword(request, env)
 
   // Webhooks
   if (pathname === '/webhooks/email' && method === 'POST') return handleWebhookEmail(request, env)
@@ -1352,7 +1710,7 @@ export default {
     await handleScheduledDailySummary(env)
   },
 
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const origin = request.headers.get('Origin') ?? ''
     const cors = corsHeaders(origin)
 
@@ -1362,7 +1720,7 @@ export default {
     }
 
     // Dispatch and inject CORS headers into every response
-    const response = await dispatch(request, env)
+    const response = await dispatch(request, env, ctx)
     const headers = new Headers(response.headers)
     for (const [k, v] of Object.entries(cors)) headers.set(k, v)
     return new Response(response.body, { status: response.status, headers })

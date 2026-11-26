@@ -92,6 +92,11 @@ export function AuthProvider({ children }) {
     [navigate]
   )
 
+  const updateToken = useCallback((newToken) => {
+    localStorage.setItem(TOKEN_KEY, newToken)
+    setToken(newToken)
+  }, [])
+
   return (
     <AuthContext.Provider
       value={{
@@ -101,6 +106,7 @@ export function AuthProvider({ children }) {
         isAuthenticated: user !== null,
         login,
         logout,
+        updateToken,
       }}
     >
       {children}

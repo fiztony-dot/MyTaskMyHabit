@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import Spinner from '../components/Spinner'
 
@@ -72,6 +72,9 @@ export default function Login() {
           >
             {submitting ? 'Iniciando sesión...' : 'Iniciar sesión'}
           </button>
+          <p style={styles.forgot}>
+            <Link to="/forgot-password" style={styles.forgotLink}>¿Olvidaste tu contraseña?</Link>
+          </p>
         </form>
       </div>
     </div>
@@ -136,5 +139,15 @@ const styles = {
     fontWeight: 600,
     cursor: 'pointer',
     marginTop: '.5rem',
+  },
+  forgot: {
+    textAlign: 'center',
+    marginTop: '.75rem',
+    marginBottom: 0,
+    fontSize: '.875rem',
+  },
+  forgotLink: {
+    color: '#6366f1',
+    textDecoration: 'none',
   },
 }

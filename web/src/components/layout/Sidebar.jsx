@@ -65,6 +65,14 @@ export default function Sidebar({
         )}
         <button
           className="sidebar-logout-btn"
+          onClick={() => navigate('/cambiar-password')}
+          aria-label="Cambiar contraseña"
+          title="Cambiar contraseña"
+        >
+          <span className="material-icons">lock_reset</span>
+        </button>
+        <button
+          className="sidebar-logout-btn"
           onClick={onLogout}
           aria-label="Cerrar sesión"
         >
