@@ -10,9 +10,6 @@ import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.lifecycle.lifecycleScope
 import com.example.mistareasapp.core.network.ApiClient
-import com.example.mistareasapp.core.network.TareasApiRepository
-import com.example.mistareasapp.core.voice.VozTaskParser
-import com.example.mistareasapp.data.tasks.Tarea
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -51,31 +48,14 @@ class VozTareasActivity : ComponentActivity() {
 
     private fun procesarTexto(texto: String) {
         lifecycleScope.launch(Dispatchers.IO) {
-            try {
-                val datos = VozTaskParser.parse(texto)
-                TareasApiRepository.insertar(
-                    Tarea(
-                        titulo = datos.titulo,
-                        descripcion = null,
-                        prioridad = datos.prioridad,
-                        fechaLimite = datos.fechaLimite,
-                        horaLimite = datos.horaLimite,
-                        pendienteClasificar = true
-                    )
+            val resultado = ComandoTarea(applicationContext).procesar(texto)
+            withContext(Dispatchers.Main) {
+                val msg = resultado.fold(
+                    onSuccess = { r -> "Tarea añadida: ${r.titulo}" },
+                    onFailure = { e -> "Error: ${e.message}" }
                 )
-                withContext(Dispatchers.Main) {
-                    Toast.makeText(
-                        this@VozTareasActivity,
-                        "Tarea añadida: ${datos.titulo}",
-                        Toast.LENGTH_LONG
-                    ).show()
-                    Handler(Looper.getMainLooper()).postDelayed({ finish() }, 2000)
-                }
-            } catch (e: Exception) {
-                withContext(Dispatchers.Main) {
-                    Toast.makeText(this@VozTareasActivity, "Error: ${e.message}", Toast.LENGTH_LONG).show()
-                    Handler(Looper.getMainLooper()).postDelayed({ finish() }, 2000)
-                }
+                Toast.makeText(this@VozTareasActivity, msg, Toast.LENGTH_LONG).show()
+                Handler(Looper.getMainLooper()).postDelayed({ finish() }, 2000)
             }
         }
     }
