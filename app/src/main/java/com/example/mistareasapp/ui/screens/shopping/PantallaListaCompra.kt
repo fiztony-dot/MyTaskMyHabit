@@ -13,6 +13,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -21,11 +23,13 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.ShoppingCart
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.material3.*
 import androidx.compose.material3.LocalMinimumInteractiveComponentSize
@@ -143,35 +147,47 @@ fun PantallaListaCompra(
     Scaffold(
         modifier = modifier,
         snackbarHost = { SnackbarHost(snackbarHostState) },
-        floatingActionButton = {
-            Column(horizontalAlignment = Alignment.End) {
-                if (hayComprados && lugarActivoId != null) {
-                    ExtendedFloatingActionButton(
-                        onClick = {
-                            vm.finalizarCompra(lugarActivoId!!)
-                            scope.launch { snackbarHostState.showSnackbar("Compra finalizada ✓") }
-                        },
-                        containerColor = MaterialTheme.colorScheme.secondary,
-                        text = { Text("Finalizar compra") },
-                        icon = { Icon(Icons.Default.ShoppingCart, null) },
-                        modifier = Modifier.padding(bottom = 12.dp)
-                    )
-                }
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    SmallFloatingActionButton(onClick = { lanzarVoz() }) {
-                        Icon(Icons.Default.Mic, contentDescription = "Añadir por voz")
+        contentWindowInsets = WindowInsets(0)
+    ) { padding ->
+        Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+
+            // Fila de controles
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
+                        IconButton(onClick = { lanzarVoz() }, modifier = Modifier.size(40.dp)) {
+                            Icon(Icons.Default.Mic, contentDescription = "Añadir por voz", modifier = Modifier.size(22.dp))
+                        }
+                        Spacer(Modifier.width(4.dp))
+                        IconButton(onClick = { mostrarBottomSheet = true }, modifier = Modifier.size(40.dp)) {
+                            Icon(Icons.Default.Add, contentDescription = "Añadir ítem", modifier = Modifier.size(22.dp))
+                        }
                     }
-                    FloatingActionButton(onClick = { mostrarBottomSheet = true }) {
-                        Icon(Icons.Default.Add, contentDescription = "Añadir ítem")
+                }
+                CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
+                    OutlinedButton(
+                        onClick = {
+                            lugarActivoId?.let {
+                                vm.finalizarCompra(it)
+                                scope.launch { snackbarHostState.showSnackbar("Compra finalizada ✓") }
+                            }
+                        },
+                        enabled = hayComprados && lugarActivoId != null,
+                        modifier = Modifier.height(36.dp),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
+                    ) {
+                        Icon(Icons.Default.ShoppingCart, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("Finalizar compra", style = MaterialTheme.typography.labelMedium)
                     }
                 }
             }
-        }
-    ) { padding ->
-        Column(modifier = Modifier.fillMaxSize().padding(padding)) {
 
             // Selector de lugares
             LazyRow(
@@ -216,7 +232,7 @@ fun PantallaListaCompra(
             } else {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(bottom = if (hayComprados) 220.dp else 120.dp)
+                    contentPadding = PaddingValues(bottom = 16.dp)
                 ) {
                     grupos.forEachIndexed { index, grupo ->
                         item(key = "header_${index}_${grupo.categoria?.id ?: "null"}") {
@@ -313,9 +329,13 @@ private fun FilaItem(
     onCrearCategoria: suspend (String, String) -> Long
 ) {
     val item = itemConProducto.item
+    var mostrarConfirmacionEliminar by remember { mutableStateOf(false) }
     val dismissState = rememberSwipeToDismissBoxState(
         confirmValueChange = { value ->
-            if (value == SwipeToDismissBoxValue.EndToStart) { onEliminar(); true } else false
+            if (value == SwipeToDismissBoxValue.EndToStart) {
+                mostrarConfirmacionEliminar = true
+                false
+            } else false
         },
         positionalThreshold = { it * 0.4f }
     )
@@ -448,6 +468,21 @@ private fun FilaItem(
         HorizontalDivider(modifier = Modifier.padding(start = 16.dp))
     }
 
+    if (mostrarConfirmacionEliminar) {
+        AlertDialog(
+            onDismissRequest = { mostrarConfirmacionEliminar = false },
+            title = { Text("¿Eliminar ${itemConProducto.nombreProducto}?") },
+            confirmButton = {
+                TextButton(onClick = { mostrarConfirmacionEliminar = false; onEliminar() }) {
+                    Text("Eliminar", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { mostrarConfirmacionEliminar = false }) { Text("Cancelar") }
+            }
+        )
+    }
+
     if (mostrarDialogoCategoria) {
         DialogoAsignarCategoria(
             categorias = categorias,
@@ -552,155 +587,165 @@ private fun BottomSheetAnadirItem(
 
     ModalBottomSheet(
         onDismissRequest = { vm.setBusqueda(""); onDismiss() },
-        sheetState = sheetState
+        sheetState = sheetState,
+        modifier = Modifier.imePadding()
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 20.dp)
-                .padding(bottom = 36.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Text("Añadir producto", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f, fill = false)
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 20.dp)
+                    .padding(top = 4.dp, bottom = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text("Añadir producto", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
 
-            OutlinedTextField(
-                value = campoTexto,
-                onValueChange = { texto ->
-                    campoTexto = texto
-                    productoSeleccionadoId = null
-                    vm.setBusqueda(texto)
-                },
-                modifier = Modifier.fillMaxWidth().focusRequester(focusRequester),
-                label = { Text("Nombre del producto") },
-                leadingIcon = { Icon(Icons.Default.Search, null) },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(
-                    capitalization = KeyboardCapitalization.Sentences,
-                    imeAction = ImeAction.Next
+                OutlinedTextField(
+                    value = campoTexto,
+                    onValueChange = { texto ->
+                        campoTexto = texto
+                        productoSeleccionadoId = null
+                        vm.setBusqueda(texto)
+                    },
+                    modifier = Modifier.fillMaxWidth().focusRequester(focusRequester),
+                    label = { Text("Nombre del producto") },
+                    leadingIcon = { Icon(Icons.Default.Search, null) },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(
+                        capitalization = KeyboardCapitalization.Sentences,
+                        imeAction = ImeAction.Next
+                    )
                 )
-            )
 
-            if (sugerencias.isNotEmpty() && productoSeleccionadoId == null) {
-                Card(
-                    modifier = Modifier.fillMaxWidth().heightIn(max = 180.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-                    shape = RoundedCornerShape(8.dp)
-                ) {
-                    LazyColumn {
-                        items(sugerencias) { prod ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        productoSeleccionadoId = prod.id
-                                        categoriaSeleccionada = prod.categoriaId
-                                        campoTexto = prod.nombre
-                                        vm.setBusqueda("")
-                                    }
-                                    .padding(horizontal = 16.dp, vertical = 12.dp)
-                            ) {
-                                Text(prod.nombre, style = MaterialTheme.typography.bodyMedium)
+                if (sugerencias.isNotEmpty() && productoSeleccionadoId == null) {
+                    Card(
+                        modifier = Modifier.fillMaxWidth().heightIn(max = 180.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        LazyColumn {
+                            items(sugerencias) { prod ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            productoSeleccionadoId = prod.id
+                                            categoriaSeleccionada = prod.categoriaId
+                                            campoTexto = prod.nombre
+                                            vm.setBusqueda("")
+                                        }
+                                        .padding(horizontal = 16.dp, vertical = 12.dp)
+                                ) {
+                                    Text(prod.nombre, style = MaterialTheme.typography.bodyMedium)
+                                }
+                                HorizontalDivider()
                             }
-                            HorizontalDivider()
                         }
                     }
                 }
-            }
 
-            OutlinedTextField(
-                value = cantidad,
-                onValueChange = { cantidad = it },
-                modifier = Modifier.fillMaxWidth(),
-                label = { Text("Cantidad (opcional)") },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(
-                    keyboardType = KeyboardType.Decimal,
-                    imeAction = ImeAction.Next
-                )
-            )
-
-            Text(
-                "Unidad (opcional)",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                items(UNIDADES_PREDEFINIDAS) { unidad ->
-                    val seleccionado = !mostrarCampoOtraUnidad && unidadSeleccionada == unidad
-                    FilterChip(
-                        selected = seleccionado,
-                        onClick = {
-                            mostrarCampoOtraUnidad = false
-                            unidadSeleccionada = if (seleccionado) null else unidad
-                        },
-                        label = { Text(unidad) }
-                    )
-                }
-                item {
-                    FilterChip(
-                        selected = mostrarCampoOtraUnidad,
-                        onClick = {
-                            mostrarCampoOtraUnidad = !mostrarCampoOtraUnidad
-                            if (mostrarCampoOtraUnidad) unidadSeleccionada = null
-                        },
-                        label = { Text("Otra") }
-                    )
-                }
-            }
-
-            if (mostrarCampoOtraUnidad) {
                 OutlinedTextField(
-                    value = otraUnidad,
-                    onValueChange = { otraUnidad = it },
+                    value = cantidad,
+                    onValueChange = { cantidad = it },
                     modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Escribe la unidad") },
+                    label = { Text("Cantidad (opcional)") },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(
-                        capitalization = KeyboardCapitalization.None,
-                        imeAction = ImeAction.Done
-                    ),
-                    keyboardActions = KeyboardActions(onDone = { doAnadir() })
+                        keyboardType = KeyboardType.Decimal,
+                        imeAction = ImeAction.Next
+                    )
                 )
-            }
 
-            // Selector de categoría — solo para productos del catálogo
-            if (productoSeleccionadoId != null && categorias.isNotEmpty()) {
                 Text(
-                    "Categoría",
+                    "Unidad (opcional)",
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                ChipsCategoriasConNueva(
-                    categorias = categorias,
-                    seleccionada = categoriaSeleccionada,
-                    onSeleccionar = { categoriaSeleccionada = it },
-                    onCrearCategoria = vm::crearCategoriaYObtenerID
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    items(UNIDADES_PREDEFINIDAS) { unidad ->
+                        val seleccionado = !mostrarCampoOtraUnidad && unidadSeleccionada == unidad
+                        FilterChip(
+                            selected = seleccionado,
+                            onClick = {
+                                mostrarCampoOtraUnidad = false
+                                unidadSeleccionada = if (seleccionado) null else unidad
+                            },
+                            label = { Text(unidad) }
+                        )
+                    }
+                    item {
+                        FilterChip(
+                            selected = mostrarCampoOtraUnidad,
+                            onClick = {
+                                mostrarCampoOtraUnidad = !mostrarCampoOtraUnidad
+                                if (mostrarCampoOtraUnidad) unidadSeleccionada = null
+                            },
+                            label = { Text("Otra") }
+                        )
+                    }
+                }
+
+                if (mostrarCampoOtraUnidad) {
+                    OutlinedTextField(
+                        value = otraUnidad,
+                        onValueChange = { otraUnidad = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("Escribe la unidad") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(
+                            capitalization = KeyboardCapitalization.None,
+                            imeAction = ImeAction.Done
+                        ),
+                        keyboardActions = KeyboardActions(onDone = { doAnadir() })
+                    )
+                }
+
+                // Selector de categoría — solo para productos del catálogo
+                if (productoSeleccionadoId != null && categorias.isNotEmpty()) {
+                    Text(
+                        "Categoría",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    ChipsCategoriasConNueva(
+                        categorias = categorias,
+                        seleccionada = categoriaSeleccionada,
+                        onSeleccionar = { categoriaSeleccionada = it },
+                        onCrearCategoria = vm::crearCategoriaYObtenerID
+                    )
+                }
+
+                Text(
+                    "Tipo",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(
+                        selected = tipoSeleccionado == TipoItemCompra.URGENTE,
+                        onClick = { tipoSeleccionado = TipoItemCompra.URGENTE },
+                        label = { Text("Urgente") }
+                    )
+                    FilterChip(
+                        selected = tipoSeleccionado == TipoItemCompra.PLANIFICADO,
+                        onClick = { tipoSeleccionado = TipoItemCompra.PLANIFICADO },
+                        label = { Text("Planificado") }
+                    )
+                }
             }
 
-            Text(
-                "Tipo",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilterChip(
-                    selected = tipoSeleccionado == TipoItemCompra.URGENTE,
-                    onClick = { tipoSeleccionado = TipoItemCompra.URGENTE },
-                    label = { Text("Urgente") }
-                )
-                FilterChip(
-                    selected = tipoSeleccionado == TipoItemCompra.PLANIFICADO,
-                    onClick = { tipoSeleccionado = TipoItemCompra.PLANIFICADO },
-                    label = { Text("Planificado") }
-                )
-            }
-
-            Spacer(Modifier.height(4.dp))
+            HorizontalDivider()
 
             Button(
                 onClick = { doAnadir() },
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 12.dp),
                 enabled = campoTexto.isNotBlank()
             ) {
                 Text("Añadir")
